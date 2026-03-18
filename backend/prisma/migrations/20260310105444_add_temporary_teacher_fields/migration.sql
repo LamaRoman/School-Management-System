@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "teacher_assignments" ADD COLUMN     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "expires_at" TIMESTAMP(3),
+ADD COLUMN     "is_temporary" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

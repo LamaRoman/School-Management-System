@@ -1,0 +1,222 @@
+import { Router } from "express";
+import { z } from "zod";
+import prisma from "../utils/prisma";
+import { authenticate, authorize } from "../middleware/auth";
+import { AppError } from "../middleware/errorHandler";
+
+const router = Router();
+
+// ─── CATEGORIES ─────────────────────────────────────────
+
+// GET /api/observations/categories?gradeId=xxx
+router.get("/categories", authenticate, async (req, res) => {
+  const { gradeId } = req.query;
+  if (!gradeId) throw new AppError("gradeId is required");
+
+  const categories = await prisma.observationCategory.findMany({
+    where: { gradeId: String(gradeId), isActive: true },
+    orderBy: { displayOrder: "asc" },
+  });
+
+  res.json({ data: categories });
+});
+
+// POST /api/observations/categories
+router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    nameNp: z.string().optional(),
+    gradeId: z.string().min(1),
+    displayOrder: z.number().int().default(0),
+  });
+
+  const data = schema.parse(req.body);
+  const category = await prisma.observationCategory.create({ data });
+  res.status(201).json({ data: category });
+});
+
+// POST /api/observations/categories/bulk
+router.post("/categories/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schema = z.object({
+    gradeId: z.string().min(1),
+    categories: z.array(z.object({
+      name: z.string().min(1),
+      nameNp: z.string().optional(),
+      displayOrder: z.number().int().default(0),
+    })),
+  });
+
+  const { gradeId, categories } = schema.parse(req.body);
+
+  const created = await prisma.$transaction(
+    categories.map((cat, i) =>
+      prisma.observationCategory.create({
+        data: {
+          name: cat.name,
+          nameNp: cat.nameNp || null,
+          gradeId,
+          displayOrder: cat.displayOrder || i,
+        },
+      })
+    )
+  );
+
+  res.status(201).json({ data: created });
+});
+
+// PUT /api/observations/categories/:id
+router.put("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    nameNp: z.string().optional(),
+    displayOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+  });
+
+  const data = schema.parse(req.body);
+  const category = await prisma.observationCategory.update({
+    where: { id: req.params.id },
+    data,
+  });
+
+  res.json({ data: category });
+});
+
+// DELETE /api/observations/categories/:id
+router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  await prisma.observationCategory.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  });
+  res.json({ data: { message: "Category deactivated" } });
+});
+
+// ─── RESULTS ────────────────────────────────────────────
+
+// GET /api/observations/results?sectionId=xxx&examTypeId=xxx
+router.get("/results", authenticate, async (req, res) => {
+  const { sectionId, examTypeId } = req.query;
+  if (!sectionId || !examTypeId) throw new AppError("sectionId and examTypeId are required");
+
+  const section = await prisma.section.findUniqueOrThrow({
+    where: { id: String(sectionId) },
+    include: { grade: true },
+  });
+
+  const categories = await prisma.observationCategory.findMany({
+    where: { gradeId: section.gradeId, isActive: true },
+    orderBy: { displayOrder: "asc" },
+  });
+
+  const students = await prisma.student.findMany({
+    where: { sectionId: String(sectionId), isActive: true },
+    orderBy: { rollNo: "asc" },
+  });
+
+  const results = await prisma.observationResult.findMany({
+    where: {
+      examTypeId: String(examTypeId),
+      studentId: { in: students.map((s) => s.id) },
+      categoryId: { in: categories.map((c) => c.id) },
+    },
+  });
+
+  // Build a map: studentId -> categoryId -> grade
+  const resultMap: Record<string, Record<string, string>> = {};
+  for (const r of results) {
+    if (!resultMap[r.studentId]) resultMap[r.studentId] = {};
+    resultMap[r.studentId][r.categoryId] = r.grade;
+  }
+
+  res.json({
+    data: {
+      categories,
+      students: students.map((s) => ({
+        id: s.id,
+        name: s.name,
+        rollNo: s.rollNo,
+        grades: resultMap[s.id] || {},
+      })),
+    },
+  });
+});
+
+// POST /api/observations/results/bulk
+router.post("/results/bulk", authenticate, async (req, res) => {
+  const schema = z.object({
+    examTypeId: z.string().min(1),
+    academicYearId: z.string().min(1),
+    entries: z.array(z.object({
+      studentId: z.string().min(1),
+      categoryId: z.string().min(1),
+      grade: z.string().min(1),
+    })),
+  });
+
+  const { examTypeId, academicYearId, entries } = schema.parse(req.body);
+
+  await prisma.$transaction(
+    entries.map((entry) =>
+      prisma.observationResult.upsert({
+        where: {
+          studentId_categoryId_examTypeId_academicYearId: {
+            studentId: entry.studentId,
+            categoryId: entry.categoryId,
+            examTypeId,
+            academicYearId,
+          },
+        },
+        update: { grade: entry.grade },
+        create: {
+          studentId: entry.studentId,
+          categoryId: entry.categoryId,
+          examTypeId,
+          academicYearId,
+          grade: entry.grade,
+        },
+      })
+    )
+  );
+
+  res.json({ data: { message: `${entries.length} observations saved` } });
+});
+
+// GET /api/observations/student/:studentId/:examTypeId — for report card
+router.get("/student/:studentId/:examTypeId", authenticate, async (req, res) => {
+  const { studentId, examTypeId } = req.params;
+
+  const student = await prisma.student.findUniqueOrThrow({
+    where: { id: studentId },
+    include: { section: { include: { grade: true } } },
+  });
+
+  const categories = await prisma.observationCategory.findMany({
+    where: { gradeId: student.section.gradeId, isActive: true },
+    orderBy: { displayOrder: "asc" },
+  });
+
+  if (categories.length === 0) {
+    return res.json({ data: null }); // No observations for this grade
+  }
+
+  const results = await prisma.observationResult.findMany({
+    where: {
+      studentId,
+      examTypeId,
+      categoryId: { in: categories.map((c) => c.id) },
+    },
+  });
+
+  const observations = categories.map((cat) => {
+    const result = results.find((r) => r.categoryId === cat.id);
+    return {
+      categoryName: cat.name,
+      categoryNameNp: cat.nameNp,
+      grade: result?.grade || "—",
+    };
+  });
+
+  res.json({ data: observations });
+});
+
+export default router;

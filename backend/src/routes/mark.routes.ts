@@ -1,0 +1,93 @@
+import { Router } from "express";
+import { z } from "zod";
+import prisma from "../utils/prisma";
+import { authenticate, authorize } from "../middleware/auth";
+import { AppError } from "../middleware/errorHandler";
+
+const router = Router();
+
+// GET /api/marks?sectionId=xxx&subjectId=xxx&examTypeId=xxx
+router.get("/", authenticate, async (req, res) => {
+  const { sectionId, subjectId, examTypeId, studentId } = req.query;
+  const where: any = {};
+  if (studentId) where.studentId = String(studentId);
+  if (subjectId) where.subjectId = String(subjectId);
+  if (examTypeId) where.examTypeId = String(examTypeId);
+  if (sectionId) where.student = { sectionId: String(sectionId) };
+
+  const marks = await prisma.mark.findMany({
+    where,
+    include: {
+      student: { select: { id: true, name: true, rollNo: true } },
+      subject: { select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true } },
+      examType: { select: { id: true, name: true } },
+    },
+    orderBy: { student: { rollNo: "asc" } },
+  });
+  res.json({ data: marks });
+});
+
+// POST /api/marks/bulk — teacher enters marks for entire class + subject + exam
+router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
+  const schema = z.object({
+    subjectId: z.string().min(1),
+    examTypeId: z.string().min(1),
+    academicYearId: z.string().min(1),
+    marks: z.array(
+      z.object({
+        studentId: z.string().min(1),
+        theoryMarks: z.number().min(0).nullable().optional(),
+        practicalMarks: z.number().min(0).nullable().optional(),
+        isAbsent: z.boolean().default(false),
+      })
+    ),
+  });
+
+  const { subjectId, examTypeId, academicYearId, marks } = schema.parse(req.body);
+
+  // Validate marks don't exceed full marks
+  const subject = await prisma.subject.findUniqueOrThrow({ where: { id: subjectId } });
+
+  for (const m of marks) {
+    if (m.theoryMarks != null && m.theoryMarks > subject.fullTheoryMarks) {
+      throw new AppError(`Theory marks (${m.theoryMarks}) exceed full marks (${subject.fullTheoryMarks}) for student ${m.studentId}`);
+    }
+    if (m.practicalMarks != null && m.practicalMarks > subject.fullPracticalMarks) {
+      throw new AppError(`Practical marks (${m.practicalMarks}) exceed full marks (${subject.fullPracticalMarks}) for student ${m.studentId}`);
+    }
+  }
+
+  // Upsert each mark
+  const results = await prisma.$transaction(
+    marks.map((m) =>
+      prisma.mark.upsert({
+        where: {
+          studentId_subjectId_examTypeId_academicYearId: {
+            studentId: m.studentId,
+            subjectId,
+            examTypeId,
+            academicYearId,
+          },
+        },
+        update: {
+          theoryMarks: m.isAbsent ? null : m.theoryMarks,
+          practicalMarks: m.isAbsent ? null : m.practicalMarks,
+          isAbsent: m.isAbsent,
+        },
+        create: {
+          studentId: m.studentId,
+          subjectId,
+          examTypeId,
+          academicYearId,
+          theoryMarks: m.isAbsent ? null : m.theoryMarks,
+          practicalMarks: m.isAbsent ? null : m.practicalMarks,
+          isAbsent: m.isAbsent,
+        },
+      })
+    )
+  );
+
+  res.json({ data: results });
+});
+
+export default router;
