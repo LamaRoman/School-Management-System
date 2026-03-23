@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1a3a5c;
+  --color-primary-light: #2d5f8a;
+  --color-primary-dark: #0f2540;
+  --color-accent: #c8102e;
+  --color-accent-light: #e8384f;
+  --color-accent-dark: #a00d24;
+  --color-surface: #faf9f6;
+  --color-surface-alt: #f4f1eb;
+  --font-display: 'Noto Serif', Georgia, serif;
+  --font-body: 'Noto Sans', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    @apply text-gray-800 bg-surface antialiased;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-white hover:bg-primary-dark shadow-sm hover:shadow-md;
+  }
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed bg-accent text-white hover:bg-accent-dark shadow-sm hover:shadow-md;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border-2 border-primary text-primary hover:bg-primary hover:text-white;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 hover:bg-gray-100;
+  }
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+  .table-header {
+    @apply bg-primary text-white text-xs font-semibold uppercase tracking-wider;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}
