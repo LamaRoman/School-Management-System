@@ -162,6 +162,7 @@ model ExamType {
   observationResults ObservationResult[]
   examRoutines   ExamRoutine[]
   seatAllocations SeatAllocation[]
+  feeStructures  FeeStructure[]
 
   @@unique([name, academicYearId])
   @@map("exam_types")
@@ -508,14 +509,16 @@ model FeeStructure {
   academicYearId  String   @map("academic_year_id")
   amount          Float
   frequency       String   @default("MONTHLY")  // MONTHLY, QUARTERLY, YEARLY, ONE_TIME
+  examTypeId      String?  @map("exam_type_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @default(now()) @map("updated_at")
 
   feeCategory   FeeCategory  @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
   grade         Grade        @relation(fields: [gradeId], references: [id], onDelete: Cascade)
   academicYear  AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  examType      ExamType?    @relation(fields: [examTypeId], references: [id], onDelete: SetNull)
 
-  @@unique([feeCategoryId, gradeId, academicYearId])
+  @@unique([feeCategoryId, gradeId, academicYearId, examTypeId])
   @@map("fee_structures")
 }
 
@@ -525,6 +528,8 @@ model StudentFeeOverride {
   feeCategoryId   String   @map("fee_category_id")
   academicYearId  String   @map("academic_year_id")
   overrideAmount  Float    @map("override_amount")
+  discountType    String   @default("FLAT") @map("discount_type")   // FLAT, PERCENTAGE
+  discountPercent Float?   @map("discount_percent")
   reason          String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @default(now()) @map("updated_at")
