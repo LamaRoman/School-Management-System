@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
+import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
@@ -52,6 +53,14 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/sections/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const section = await prisma.section.findUniqueOrThrow({ where: { id: req.params.id } });
+
+  // Prevent deleting the last section of a grade
+  const sectionCount = await prisma.section.count({ where: { gradeId: section.gradeId } });
+  if (sectionCount <= 1) {
+    throw new AppError("Cannot delete the last section. Every grade must have at least one section.");
+  }
+
   await prisma.section.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Section deleted" } });
 });

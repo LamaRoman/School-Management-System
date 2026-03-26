@@ -94,13 +94,19 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
     });
     gradeIdMap[grade.id] = newGrade.id;
 
-    // Copy sections
-    for (const section of grade.sections) {
+    // Copy sections — if source has sections, copy them; otherwise auto-create "A"
+    if (grade.sections.length > 0) {
+      for (const section of grade.sections) {
+        await prisma.section.create({
+          data: {
+            name: section.name,
+            gradeId: newGrade.id,
+          },
+        });
+      }
+    } else {
       await prisma.section.create({
-        data: {
-          name: section.name,
-          gradeId: newGrade.id,
-        },
+        data: { name: "A", gradeId: newGrade.id },
       });
     }
 

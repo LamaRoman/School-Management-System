@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, Users, CalendarDays, BookOpen } from "lucide-react";
+import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, Users, CalendarDays, BookOpen, Megaphone } from "lucide-react";
 
 const allowedRoles = ["TEACHER", "ADMIN"];
 
@@ -38,16 +38,19 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   }
 
   const tabs = [
+    // ── All teachers ──
     { href: "/teacher/marks", label: "Marks Entry", icon: ClipboardList },
     { href: "/teacher/homework", label: "Homework", icon: BookOpen },
+    { href: "/teacher/exam-routine", label: "Exam Routine", icon: CalendarDays },
+    { href: "/teacher/notices", label: "Notices", icon: Megaphone },
+    // ── Class teachers only ──
     ...(isClassTeacher
       ? [
           { href: "/teacher/my-class", label: "My Class", icon: FileText },
+          { href: "/teacher/students", label: "My Students", icon: Users },
           { href: "/teacher/grade-sheet", label: "Grade Sheet", icon: Table },
           { href: "/teacher/attendance", label: "Attendance", icon: CalendarCheck },
           { href: "/teacher/observations", label: "Observations", icon: ClipboardList },
-          { href: "/teacher/students", label: "My Students", icon: Users },
-          { href: "/teacher/exam-routine", label: "Exam Routine", icon: CalendarDays },
         ]
       : []),
   ];

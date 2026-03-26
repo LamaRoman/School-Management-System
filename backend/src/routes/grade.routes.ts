@@ -43,8 +43,24 @@ router.get("/:id", async (req, res) => {
 // POST /api/grades
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = gradeSchema.parse(req.body);
+
+  // Create grade and auto-create default section "A"
   const grade = await prisma.grade.create({ data });
-  res.status(201).json({ data: grade });
+
+  await prisma.section.create({
+    data: { name: "A", gradeId: grade.id },
+  });
+
+  // Return grade with sections included
+  const gradeWithSections = await prisma.grade.findUniqueOrThrow({
+    where: { id: grade.id },
+    include: {
+      sections: { orderBy: { name: "asc" } },
+      _count: { select: { subjects: true, sections: true } },
+    },
+  });
+
+  res.status(201).json({ data: gradeWithSections });
 });
 
 // PUT /api/grades/:id
