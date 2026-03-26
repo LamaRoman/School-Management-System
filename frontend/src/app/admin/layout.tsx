@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
+  { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
   { href: "/admin", label: "Dashboard", icon: LayoutGrid },
   { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
   { href: "/admin/grades", label: "Grades & Sections", icon: Layers },

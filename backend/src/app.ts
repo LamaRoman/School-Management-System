@@ -7,6 +7,7 @@ import pdfRoutes from "./routes/pdf.routes";
 import { closeBrowser } from "./services/pdf.service";
 
 // Routes
+import accountantReportRoutes from "./routes/accountantReport.routes";
 import parentRoutes from "./routes/parent.routes";
 import admissionRoutes from "./routes/admission.routes";
 import noticeRoutes from "./routes/notice.routes";
@@ -51,6 +52,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Routes
+app.use("/api/accountant-reports", accountantReportRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/fees", feeRoutes);
 app.use("/api/seating", seatingRoutes);
