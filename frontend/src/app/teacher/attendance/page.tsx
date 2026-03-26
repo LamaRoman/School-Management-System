@@ -4,6 +4,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import {
+  getTodayBS,
+  getPreviousDayBS,
+  getNextDayBS,
+  isFutureBS,
+  isTodayBS,
+  formatBSDateLong,
+} from "@/lib/bsDate";
 
 interface ClassTeacherSection {
   assignmentId: string;
@@ -21,16 +29,6 @@ interface AttendanceRecord {
   status: "PRESENT" | "ABSENT" | null;
   remarks: string | null;
   isMarked: boolean;
-}
-
-function getTodayBS(): string {
-  // Simple placeholder — in production use a proper BS date library
-  // For now return a formatted string that the teacher can adjust
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}/${month}/${day}`;
 }
 
 export default function AttendancePage() {
@@ -96,6 +94,13 @@ export default function AttendancePage() {
 
   const handleSave = async () => {
     if (!selectedSection) return;
+
+    // Prevent saving attendance for future dates
+    if (isFutureBS(date)) {
+      toast.error("Cannot save attendance for future dates");
+      return;
+    }
+
     setSaving(true);
     try {
       await api.post("/daily-attendance/bulk", {
@@ -114,6 +119,19 @@ export default function AttendancePage() {
       toast.error(err.message);
     } finally { setSaving(false); }
   };
+
+  const handlePreviousDay = () => {
+    setDate(getPreviousDayBS(date));
+  };
+
+  const handleNextDay = () => {
+    const nextDay = getNextDayBS(date);
+    // Don't allow navigating to future dates
+    if (isFutureBS(nextDay)) return;
+    setDate(nextDay);
+  };
+
+  const isNextDisabled = isTodayBS(date) || isFutureBS(date);
 
   const presentCount = records.filter((r) => r.status === "PRESENT").length;
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
@@ -168,37 +186,34 @@ export default function AttendancePage() {
       <div className="card p-3 mb-4">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => {
-              const parts = date.split("/");
-              const day = parseInt(parts[2]) - 1;
-              if (day > 0) setDate(`${parts[0]}/${parts[1]}/${String(day).padStart(2, "0")}`);
-            }}
+            onClick={handlePreviousDay}
             className="p-2 hover:bg-gray-100 rounded-lg"
           >
             <ChevronLeft size={20} className="text-gray-600" />
           </button>
           <div className="text-center">
-            <input
-              type="text"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="text-center font-semibold text-primary text-lg bg-transparent border-none focus:outline-none w-40"
-              placeholder="YYYY/MM/DD"
-            />
-            <p className="text-xs text-gray-400">B.S. Date</p>
+            <p className="font-semibold text-primary text-lg">{formatBSDateLong(date)}</p>
+            <p className="text-xs text-gray-400">{date}</p>
+            {isTodayBS(date) && (
+              <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">Today</span>
+            )}
           </div>
           <button
-            onClick={() => {
-              const parts = date.split("/");
-              const day = parseInt(parts[2]) + 1;
-              if (day <= 32) setDate(`${parts[0]}/${parts[1]}/${String(day).padStart(2, "0")}`);
-            }}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            onClick={handleNextDay}
+            disabled={isNextDisabled}
+            className={`p-2 rounded-lg ${isNextDisabled ? "opacity-30 cursor-not-allowed" : "hover:bg-gray-100"}`}
           >
             <ChevronRight size={20} className="text-gray-600" />
           </button>
         </div>
       </div>
+
+      {/* Future date warning */}
+      {isFutureBS(date) && (
+        <div className="card p-3 mb-4 border-amber-300 bg-amber-50 text-center text-sm text-amber-700">
+          Cannot mark attendance for future dates.
+        </div>
+      )}
 
       {/* Stats Bar */}
       <div className="flex gap-3 mb-4">
@@ -218,12 +233,12 @@ export default function AttendancePage() {
 
       {/* Quick Actions */}
       <div className="flex gap-2 mb-4">
-        <button onClick={markAllPresent} className="btn-ghost text-xs flex-1">
+        <button onClick={markAllPresent} disabled={isFutureBS(date)} className="btn-ghost text-xs flex-1">
           <Check size={14} /> All Present
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !hasChanges}
+          disabled={saving || !hasChanges || isFutureBS(date)}
           className="btn-primary text-xs flex-1"
         >
           <Save size={14} /> {saving ? "Saving..." : "Save Attendance"}
@@ -238,8 +253,10 @@ export default function AttendancePage() {
           records.map((r) => (
             <div
               key={r.studentId}
-              onClick={() => toggleStatus(r.studentId)}
-              className={`card p-3 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all select-none ${
+              onClick={() => !isFutureBS(date) && toggleStatus(r.studentId)}
+              className={`card p-3 flex items-center justify-between transition-all select-none ${
+                isFutureBS(date) ? "opacity-50 cursor-not-allowed" : "cursor-pointer active:scale-[0.98]"
+              } ${
                 r.status === "ABSENT" ? "border-red-200 bg-red-50/50" : "border-emerald-200 bg-emerald-50/30"
               }`}
             >
@@ -262,7 +279,7 @@ export default function AttendancePage() {
       </div>
 
       {/* Sticky Save Button for Mobile */}
-      {hasChanges && (
+      {hasChanges && !isFutureBS(date) && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-lg">
           <button
             onClick={handleSave}
@@ -275,7 +292,7 @@ export default function AttendancePage() {
       )}
 
       {/* Bottom spacer when sticky button is visible */}
-      {hasChanges && <div className="h-20" />}
+      {hasChanges && !isFutureBS(date) && <div className="h-20" />}
     </div>
   );
 }
