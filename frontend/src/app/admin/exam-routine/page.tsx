@@ -30,11 +30,14 @@ export default function ExamRoutinePage() {
   const [saving, setSaving] = useState(false);
   const [showCopy, setShowCopy] = useState(false);
   const [copyTargetGrade, setCopyTargetGrade] = useState("");
+  const [school, setSchool] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const year = await api.get<any>("/academic-years/active");
+        const schoolData = await api.get<any>("/school").catch(() => null);
+        setSchool(schoolData);
         if (year) {
           const [g, et] = await Promise.all([
             api.get<Grade[]>(`/grades?academicYearId=${year.id}`),
@@ -80,7 +83,6 @@ export default function ExamRoutinePage() {
           endTime: r.endTime || "",
         })));
       } else {
-        // Pre-fill with subjects, empty dates
         setEntries(subjects.map((s) => ({
           subjectId: s.id,
           subjectName: s.name,
@@ -161,7 +163,67 @@ export default function ExamRoutinePage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const validEntries = entries.filter((e) => e.subjectId && e.examDate);
+    if (validEntries.length === 0) return;
+
+    const rows = validEntries.map((e, i) => {
+      const subjectName = e.subjectName || subjects.find((s) => s.id === e.subjectId)?.name || "—";
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${subjectName}</td>
+        <td>${e.examDate}</td>
+        <td>${e.dayName || "—"}</td>
+        <td>${e.startTime || "—"}</td>
+        <td>${e.endTime || "—"}</td>
+      </tr>`;
+    }).join("");
+
+    const schoolName = school?.nameNp || school?.name || "School";
+    const schoolAddr = school?.address || "";
+    const schoolPhone = school?.phone ? ` • ${school.phone}` : "";
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Exam Routine — ${selectedExamName} — ${selectedGradeName}</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; color: #222; max-width: 700px; margin: 0 auto; padding: 20px; }
+  .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 16px; }
+  .header h1 { font-size: 16px; margin-bottom: 2px; }
+  .header h2 { font-size: 13px; font-weight: 400; color: #555; margin-bottom: 2px; }
+  .header p { font-size: 10px; color: #777; }
+  .title { text-align: center; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 4px; }
+  .subtitle { text-align: center; font-size: 12px; color: #555; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; font-size: 12px; text-align: left; }
+  th { background: #f5f5f5; font-weight: 600; }
+  .footer { text-align: center; margin-top: 30px; font-size: 9px; color: #999; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 40px; }
+  .sig { text-align: center; font-size: 10px; }
+  .sig-line { width: 100px; border-top: 1px solid #555; margin: 0 auto 3px; }
+  @page { size: A4; margin: 15mm; }
+</style></head><body>
+<div class="header">
+  <h1>${schoolName}</h1>
+  <h2>${school?.name || ""}</h2>
+  <p>${schoolAddr}${schoolPhone}</p>
+</div>
+<div class="title">${selectedExamName} — Exam Routine</div>
+<div class="subtitle">Class: ${selectedGradeName}</div>
+<table>
+  <thead><tr><th>SN</th><th>Subject</th><th>Date (BS)</th><th>Day</th><th>Start Time</th><th>End Time</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="signatures">
+  <div class="sig"><div class="sig-line"></div>Exam Coordinator</div>
+  <div class="sig"><div class="sig-line"></div>Principal</div>
+</div>
+<div class="footer">Computer generated document</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) { alert("Please allow popups to print."); return; }
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => win.print();
   };
 
   const selectedGradeName = grades.find((g) => g.id === selectedGrade)?.name || "";
@@ -171,7 +233,7 @@ export default function ExamRoutinePage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 no-print">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-primary">Exam Routine</h1>
           <p className="text-sm text-gray-500 mt-1">Create and manage exam schedules per grade</p>
@@ -191,7 +253,7 @@ export default function ExamRoutinePage() {
       </div>
 
       {/* Selectors */}
-      <div className="flex gap-4 mb-4 no-print">
+      <div className="flex gap-4 mb-4">
         <div className="flex-1">
           <label className="label">Exam Type</label>
           <select className="input" value={selectedExam} onChange={(e) => handleExamChange(e.target.value)}>
@@ -214,7 +276,7 @@ export default function ExamRoutinePage() {
 
       {/* Copy to grade */}
       {showCopy && (
-        <div className="card p-4 mb-4 no-print">
+        <div className="card p-4 mb-4">
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium text-primary">Copy routine to:</span>
             <select className="input w-48" value={copyTargetGrade} onChange={(e) => setCopyTargetGrade(e.target.value)}>
@@ -233,12 +295,6 @@ export default function ExamRoutinePage() {
       {/* Routine table */}
       {selectedExam && selectedGrade && (
         <>
-          {/* Printable header */}
-          <div className="hidden print:block text-center mb-4">
-            <h2 className="text-lg font-bold text-primary">{selectedExamName} — Exam Routine</h2>
-            <p className="text-sm">{selectedGradeName}</p>
-          </div>
-
           <div className="card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -249,14 +305,14 @@ export default function ExamRoutinePage() {
                   <th className="text-left px-3 py-2 min-w-[100px]">Day</th>
                   <th className="text-left px-3 py-2 min-w-[90px]">Start Time</th>
                   <th className="text-left px-3 py-2 min-w-[90px]">End Time</th>
-                  <th className="text-center px-3 py-2 no-print">Actions</th>
+                  <th className="text-center px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry, i) => (
                   <tr key={i} className="border-t border-gray-100 hover:bg-surface transition-colors">
                     <td className="px-3 py-2 text-gray-400">{i + 1}</td>
-                    <td className="px-3 py-2 no-print">
+                    <td className="px-3 py-2">
                       <select
                         value={entry.subjectId}
                         onChange={(e) => handleEntryChange(i, "subjectId", e.target.value)}
@@ -268,31 +324,26 @@ export default function ExamRoutinePage() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2 print:block hidden font-medium">
-                      {entry.subjectName || subjects.find((s) => s.id === entry.subjectId)?.name || "—"}
-                    </td>
                     <td className="px-3 py-2">
                       <input
                         type="text"
                         value={entry.examDate}
                         onChange={(e) => handleEntryChange(i, "examDate", e.target.value)}
                         placeholder="2081/09/15"
-                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30 no-print"
+                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
-                      <span className="hidden print:inline">{entry.examDate}</span>
                     </td>
                     <td className="px-3 py-2">
                       <select
                         value={entry.dayName}
                         onChange={(e) => handleEntryChange(i, "dayName", e.target.value)}
-                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30 no-print"
+                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
                       >
                         <option value="">—</option>
                         {dayNames.map((d) => (
                           <option key={d} value={d}>{d}</option>
                         ))}
                       </select>
-                      <span className="hidden print:inline">{entry.dayName}</span>
                     </td>
                     <td className="px-3 py-2">
                       <input
@@ -300,9 +351,8 @@ export default function ExamRoutinePage() {
                         value={entry.startTime}
                         onChange={(e) => handleEntryChange(i, "startTime", e.target.value)}
                         placeholder="11:00 AM"
-                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30 no-print"
+                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
-                      <span className="hidden print:inline">{entry.startTime}</span>
                     </td>
                     <td className="px-3 py-2">
                       <input
@@ -310,11 +360,10 @@ export default function ExamRoutinePage() {
                         value={entry.endTime}
                         onChange={(e) => handleEntryChange(i, "endTime", e.target.value)}
                         placeholder="2:00 PM"
-                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30 no-print"
+                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
-                      <span className="hidden print:inline">{entry.endTime}</span>
                     </td>
-                    <td className="px-3 py-2 text-center no-print">
+                    <td className="px-3 py-2 text-center">
                       <button onClick={() => handleRemoveEntry(i)} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-all">
                         <Trash2 size={14} />
                       </button>
@@ -332,7 +381,7 @@ export default function ExamRoutinePage() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-between mt-4 no-print">
+          <div className="flex items-center justify-between mt-4">
             <button onClick={handleAddEntry} className="btn-ghost text-xs">
               <Plus size={14} /> Add Row
             </button>

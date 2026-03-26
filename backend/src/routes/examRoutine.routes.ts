@@ -36,7 +36,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     dayName: z.string().optional(),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
-    roomInfo: z.string().optional(),
   });
 
   const data = schema.parse(req.body);
@@ -49,7 +48,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       dayName: data.dayName || null,
       startTime: data.startTime || null,
       endTime: data.endTime || null,
-      roomInfo: data.roomInfo || null,
     },
     include: {
       subject: { select: { id: true, name: true, nameNp: true } },
@@ -72,7 +70,6 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
       dayName: z.string().optional(),
       startTime: z.string().optional(),
       endTime: z.string().optional(),
-      roomInfo: z.string().optional(),
     })),
   });
 
@@ -94,7 +91,6 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
           dayName: entry.dayName || null,
           startTime: entry.startTime || null,
           endTime: entry.endTime || null,
-          roomInfo: entry.roomInfo || null,
         },
       })
     )
@@ -110,7 +106,6 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     dayName: z.string().optional(),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
-    roomInfo: z.string().optional(),
   });
 
   const data = schema.parse(req.body);
@@ -177,7 +172,6 @@ router.post("/copy", authenticate, authorize("ADMIN"), async (req, res) => {
           dayName: entry.dayName,
           startTime: entry.startTime,
           endTime: entry.endTime,
-          roomInfo: entry.roomInfo,
         },
       });
       copied++;
