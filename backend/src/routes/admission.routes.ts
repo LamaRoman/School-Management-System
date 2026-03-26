@@ -7,6 +7,8 @@ import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
+const ADMIN_OR_ACCOUNTANT = authorize("ADMIN", "ACCOUNTANT");
+
 // Schema reference:
 //   Admission { id, studentName, studentNameNp?, dateOfBirth?, gender?, fatherName?, motherName?,
 //     guardianName?, guardianPhone?, address?, previousSchool?, applyingForGradeId, academicYearId,
@@ -14,7 +16,7 @@ const router = Router();
 //   Relations: applyingForGrade -> Grade, academicYear -> AcademicYear, reviewedBy -> User?
 
 // GET /api/admissions?status=xxx&academicYearId=xxx&gradeId=xxx
-router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
+router.get("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const { status, academicYearId, gradeId } = req.query;
   const where: any = {};
   if (status) where.status = String(status);
@@ -35,7 +37,7 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // GET /api/admissions/:id
-router.get("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+router.get("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const admission = await prisma.admission.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {
@@ -48,7 +50,7 @@ router.get("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // POST /api/admissions — create new admission application
-router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+router.post("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
     studentName: z.string().min(1),
     studentNameNp: z.string().optional(),
@@ -95,7 +97,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // PUT /api/admissions/:id — update admission details
-router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+router.put("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
     studentName: z.string().min(1).optional(),
     studentNameNp: z.string().nullable().optional(),
@@ -126,7 +128,7 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // POST /api/admissions/:id/approve — approve an admission
-router.post("/:id/approve", authenticate, authorize("ADMIN"), async (req, res) => {
+router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
     reviewedDate: z.string().min(1),
     remarks: z.string().optional(),
@@ -161,7 +163,7 @@ router.post("/:id/approve", authenticate, authorize("ADMIN"), async (req, res) =
 });
 
 // POST /api/admissions/:id/reject — reject an admission
-router.post("/:id/reject", authenticate, authorize("ADMIN"), async (req, res) => {
+router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
     reviewedDate: z.string().min(1),
     remarks: z.string().optional(),
@@ -192,7 +194,7 @@ router.post("/:id/reject", authenticate, authorize("ADMIN"), async (req, res) =>
 });
 
 // POST /api/admissions/:id/enroll — convert approved admission to student
-router.post("/:id/enroll", authenticate, authorize("ADMIN"), async (req, res) => {
+router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
     sectionId: z.string().min(1),
   });
@@ -274,7 +276,7 @@ router.post("/:id/enroll", authenticate, authorize("ADMIN"), async (req, res) =>
 });
 
 // DELETE /api/admissions/:id
-router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+router.delete("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const admission = await prisma.admission.findUniqueOrThrow({
     where: { id: req.params.id },
   });

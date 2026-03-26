@@ -19,6 +19,7 @@ enum StudentStatus {
 enum UserRole {
   SYSTEM_ADMIN
   ADMIN
+  ACCOUNTANT
   TEACHER
   STUDENT
   PARENT

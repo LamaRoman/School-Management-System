@@ -12,7 +12,7 @@ const router = Router();
 
 // ─── ADMIN/TEACHER — MANAGE NOTICES ─────────────────────
 
-// GET /api/notices — admin/teacher sees all, students see filtered
+// GET /api/notices — admin sees all, others see filtered
 router.get("/", authenticate, async (req, res) => {
   const user = (req as any).user;
   const { type, audience, gradeId } = req.query;
@@ -44,8 +44,8 @@ router.get("/", authenticate, async (req, res) => {
       ];
       delete where.OR;
     }
-  } else if (user.role === "TEACHER") {
-    // Teachers see ALL + TEACHERS targeted notices, plus ones they created
+  } else if (user.role === "TEACHER" || user.role === "ACCOUNTANT") {
+    // Teachers and accountants see ALL + TEACHERS targeted notices, plus ones they created
     where.OR = [
       { targetAudience: "ALL" },
       { targetAudience: "TEACHERS" },
@@ -91,7 +91,7 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/notices — admin or teacher can create
 router.post("/", authenticate, async (req, res) => {
   const user = (req as any).user;
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && user.role !== "TEACHER") {
+  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && user.role !== "TEACHER" && user.role !== "ACCOUNTANT") {
     throw new AppError("Not authorized to create notices", 403);
   }
 
@@ -110,9 +110,9 @@ router.post("/", authenticate, async (req, res) => {
 
   const data = schema.parse(req.body);
 
-  // Teachers can only create notices for ALL or STUDENTS
-  if (user.role === "TEACHER" && data.targetAudience === "TEACHERS") {
-    throw new AppError("Teachers cannot create notices targeted only at teachers", 403);
+  // Teachers and accountants can only create notices for ALL or STUDENTS
+  if ((user.role === "TEACHER" || user.role === "ACCOUNTANT") && data.targetAudience === "TEACHERS") {
+    throw new AppError("You cannot create notices targeted only at teachers", 403);
   }
 
   const notice = await prisma.notice.create({

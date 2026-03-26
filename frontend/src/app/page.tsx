@@ -15,9 +15,11 @@ export default function Home() {
       router.replace("/system-admin");
     } else if (user.role === "ADMIN") {
       router.replace("/admin");
+    } else if (user.role === "ACCOUNTANT") {
+      router.replace("/accountant");
     } else if (user.role === "TEACHER") {
       router.replace("/teacher/marks");
-    }  else if (user.role === "PARENT") {
+    } else if (user.role === "PARENT") {
       router.replace("/parent");
     } else {
       router.replace("/student/report");

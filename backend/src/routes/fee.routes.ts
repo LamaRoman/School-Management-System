@@ -134,7 +134,7 @@ router.get("/payments", authenticate, async (req, res) => {
   res.json({ data: payments });
 });
 
-router.post("/payments/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
+router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schema = z.object({
     studentId: z.string().min(1), academicYearId: z.string().min(1), paymentDate: z.string().min(1),
     paymentMethod: z.string().optional(), remarks: z.string().optional(),
