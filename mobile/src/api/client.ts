@@ -4,8 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Change this to your backend IP when testing on a physical device
 // e.g. 'http://192.168.1.100:4000/api'
 // For Expo Go on simulator: 'http://localhost:4000/api'
-const API_BASE = 'http://localhost:4000/api';
-
+const API_BASE = 'http://192.168.1.65:4000/api';
 const client = axios.create({
   baseURL: API_BASE,
   timeout: 15000,
