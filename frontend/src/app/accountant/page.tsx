@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { Receipt, UserPlus, Users, AlertTriangle } from "lucide-react";
 import { getTodayBS, formatBSDateLong } from "@/lib/bsDate";
@@ -19,27 +20,24 @@ export default function AccountantDashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-        // Fetch stats from multiple endpoints
-        const [admissions, students] = await Promise.all([
-          api.get<any[]>("/admissions").catch(() => []),
-          api.get<any>("/students?count=true").catch(() => ({ data: [] })),
+        const year = await api.get<any>("/academic-years/active").catch(() => null);
+
+        const [admissions, cashbook, defaulters] = await Promise.all([
+          year ? api.get<any[]>(`/admissions?academicYearId=${year.id}`).catch(() => []) : Promise.resolve([]),
+          year ? api.get<any>(`/accountant-reports/daily-cashbook?date=${encodeURIComponent(getTodayBS())}&academicYearId=${year.id}`).catch(() => null) : Promise.resolve(null),
+          year ? api.get<any>(`/accountant-reports/defaulters?academicYearId=${year.id}`).catch(() => null) : Promise.resolve(null),
         ]);
 
         const pendingAdmissions = Array.isArray(admissions)
           ? admissions.filter((a: any) => a.status === "PENDING").length
           : 0;
 
-        const studentList = Array.isArray(students) ? students : (students?.data || []);
-        const totalActiveStudents = Array.isArray(studentList)
-          ? studentList.filter((s: any) => s.isActive !== false).length
-          : 0;
-
         setStats({
-          todayCollections: 0, // Will be fetched from fee reports when built
-          todayReceipts: 0,
+          todayCollections: cashbook?.grandTotal ?? 0,
+          todayReceipts: cashbook?.totalReceipts ?? 0,
           pendingAdmissions,
-          totalActiveStudents,
-          totalDefaulters: 0, // Will be fetched from fee reports when built
+          totalActiveStudents: defaulters?.summary?.totalStudents ?? 0,
+          totalDefaulters: defaulters?.summary?.totalDefaulters ?? 0,
         });
       } catch {
         setStats(null);
@@ -119,22 +117,22 @@ export default function AccountantDashboardPage() {
       <div className="card p-5">
         <h2 className="font-semibold text-primary mb-3">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <a href="/accountant/admissions" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+          <Link href="/accountant/admissions" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
             <UserPlus size={24} className="mx-auto mb-2 text-primary" />
             <p className="text-sm font-medium text-gray-700">New Admission</p>
-          </a>
-          <a href="/accountant/fees" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+          </Link>
+          <Link href="/accountant/fees" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
             <Receipt size={24} className="mx-auto mb-2 text-primary" />
             <p className="text-sm font-medium text-gray-700">Collect Fee</p>
-          </a>
-          <a href="/accountant/students" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+          </Link>
+          <Link href="/accountant/students" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
             <Users size={24} className="mx-auto mb-2 text-primary" />
             <p className="text-sm font-medium text-gray-700">Find Student</p>
-          </a>
-          <a href="/accountant/reports" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+          </Link>
+          <Link href="/accountant/reports" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
             <Receipt size={24} className="mx-auto mb-2 text-primary" />
             <p className="text-sm font-medium text-gray-700">Reports</p>
-          </a>
+          </Link>
         </div>
       </div>
     </div>

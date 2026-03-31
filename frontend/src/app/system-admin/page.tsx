@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Shield, Building, Users, X } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Stats {
   schools: number;
@@ -30,6 +31,7 @@ interface School {
 }
 
 export default function SystemAdminPage() {
+  const confirm = useConfirm();
   const [stats, setStats] = useState<Stats | null>(null);
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
@@ -79,6 +81,15 @@ export default function SystemAdminPage() {
   };
 
   const handleToggleAdmin = async (id: string, isActive: boolean) => {
+    const confirmed = await confirm({
+      title: isActive ? "Deactivate admin" : "Activate admin",
+      message: isActive
+        ? "This admin will no longer be able to log in."
+        : "This admin will be able to log in again.",
+      confirmLabel: isActive ? "Deactivate" : "Activate",
+      variant: isActive ? "warning" : "info",
+    });
+    if (!confirmed) return;
     try {
       await api.put(`/system/admins/${id}`, { isActive: !isActive });
       toast.success(isActive ? "Admin deactivated" : "Admin activated");
