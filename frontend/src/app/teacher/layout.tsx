@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +10,8 @@ import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, U
 
 const allowedRoles = ["TEACHER", "ADMIN"];
 
-export default function TeacherLayout({ children }: { children: React.ReactNode }) {
+export default function TeacherLayout({
+  const [showChangePassword, setShowChangePassword] = useState(false); children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -66,6 +69,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-white/70">{user.teacher?.name || user.email}</span>
+            <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password"><KeyRound size={16} className="text-white/60" /></button>
             <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg">
               <LogOut size={16} />
             </button>
@@ -91,6 +95,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       {children}
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
   );
 }

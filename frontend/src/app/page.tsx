@@ -11,8 +11,6 @@ export default function Home() {
     if (loading) return;
     if (!user) {
       router.replace("/login");
-    } else if (user.role === "SYSTEM_ADMIN") {
-      router.replace("/system-admin");
     } else if (user.role === "ADMIN") {
       router.replace("/admin");
     } else if (user.role === "ACCOUNTANT") {

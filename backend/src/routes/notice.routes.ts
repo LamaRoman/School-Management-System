@@ -53,14 +53,14 @@ router.get("/", authenticate, async (req, res) => {
     ];
     where.isPublished = true;
   }
-  // ADMIN and SYSTEM_ADMIN see everything — no filter
+  // ADMIN sees everything — no filter
 
   // Additional query filters
   if (type) where.type = String(type);
-  if (audience && (user.role === "ADMIN" || user.role === "SYSTEM_ADMIN")) {
+  if (audience && (user.role === "ADMIN")) {
     where.targetAudience = String(audience);
   }
-  if (gradeId && (user.role === "ADMIN" || user.role === "SYSTEM_ADMIN")) {
+  if (gradeId && (user.role === "ADMIN")) {
     where.gradeId = String(gradeId);
   }
 
@@ -91,7 +91,7 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/notices — admin or teacher can create
 router.post("/", authenticate, async (req, res) => {
   const user = req.user!;
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && user.role !== "TEACHER" && user.role !== "ACCOUNTANT") {
+  if (user.role !== "ADMIN" && user.role !== "TEACHER" && user.role !== "ACCOUNTANT") {
     throw new AppError("Not authorized to create notices", 403);
   }
 
@@ -137,7 +137,7 @@ router.put("/:id", authenticate, async (req, res) => {
   const notice = await prisma.notice.findUniqueOrThrow({ where: { id: req.params.id } });
 
   // Only creator or admin can edit
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && notice.createdById !== user.userId) {
+  if (user.role !== "ADMIN" && notice.createdById !== user.userId) {
     throw new AppError("You can only edit notices you created", 403);
   }
 
@@ -173,7 +173,7 @@ router.delete("/:id", authenticate, async (req, res) => {
   const user = req.user!;
   const notice = await prisma.notice.findUniqueOrThrow({ where: { id: req.params.id } });
 
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && notice.createdById !== user.userId) {
+  if (user.role !== "ADMIN" && notice.createdById !== user.userId) {
     throw new AppError("You can only delete notices you created", 403);
   }
 

@@ -2,19 +2,19 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, Trash2, Edit2, X, Save, Search } from "lucide-react";
+import { Plus, Trash2, Edit2, X, Save, Search, Camera } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Student {
   id: string; name: string; nameNp?: string; rollNo?: number;
   dateOfBirth?: string; gender?: string; fatherName?: string; motherName?: string;
-  guardianPhone?: string; address?: string; isActive: boolean;
+  guardianPhone?: string; address?: string; isActive: boolean; photo?: string;
   section: { name: string; grade: { name: string } };
 }
 interface Grade { id: string; name: string; sections: { id: string; name: string }[] }
 
-const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "" };
+const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "", photo: "" };
 
 export default function StudentsPage() {
   const confirm = useConfirm();
@@ -75,7 +75,7 @@ export default function StudentsPage() {
   };
 
   const startEdit = (s: Student) => {
-    setForm({ name: s.name, nameNp: s.nameNp || "", rollNo: s.rollNo, dateOfBirth: s.dateOfBirth || "", gender: s.gender || "", fatherName: s.fatherName || "", motherName: s.motherName || "", guardianPhone: s.guardianPhone || "", address: s.address || "", sectionId: selectedSection });
+    setForm({ name: s.name, nameNp: s.nameNp || "", rollNo: s.rollNo, dateOfBirth: s.dateOfBirth || "", gender: s.gender || "", fatherName: s.fatherName || "", motherName: s.motherName || "", guardianPhone: s.guardianPhone || "", address: s.address || "", sectionId: selectedSection, photo: s.photo || "" });
     setEditId(s.id); setShowForm(true);
   };
 
@@ -147,6 +147,37 @@ export default function StudentsPage() {
             <div><label className="label">Mother's Name</label><input className="input" value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} /></div>
             <div><label className="label">Guardian Phone</label><input className="input" value={form.guardianPhone} onChange={(e) => setForm({ ...form, guardianPhone: e.target.value })} /></div>
             <div><label className="label">Address</label><input className="input" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+            <div className="col-span-full">
+              <label className="label">Photo</label>
+              <div className="flex items-center gap-3">
+                {form.photo ? (
+                  <img src={form.photo} alt="Student" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200">
+                    <Camera size={20} className="text-gray-400" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input type="file" accept="image/*" className="hidden" id="photo-upload"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 500 * 1024) { alert("Photo must be under 500KB"); return; }
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setForm({ ...form, photo: ev.target?.result as string });
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <label htmlFor="photo-upload" className="btn-outline text-xs cursor-pointer inline-flex items-center gap-2">
+                    <Camera size={14} /> {form.photo ? "Change Photo" : "Upload Photo"}
+                  </label>
+                  {form.photo && (
+                    <button type="button" onClick={() => setForm({ ...form, photo: "" })} className="ml-2 text-xs text-red-500 hover:underline">Remove</button>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">Max 500KB. JPG or PNG.</p>
+                </div>
+              </div>
+            </div>
             <div className="col-span-full flex justify-end"><button type="submit" className="btn-primary"><Save size={16} /> {editId ? "Update" : "Save"}</button></div>
           </form>
         </div>
@@ -177,8 +208,19 @@ export default function StudentsPage() {
               <tr key={s.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
                 <td className="px-5 py-3 text-gray-400 font-medium">{s.rollNo || "—"}</td>
                 <td className="px-5 py-3">
-                  <div className="font-medium text-primary">{s.name}</div>
-                  {s.nameNp && <div className="text-xs text-gray-400">{s.nameNp}</div>}
+                  <div className="flex items-center gap-2">
+                    {s.photo ? (
+                      <img src={s.photo} alt={s.name} className="w-7 h-7 rounded-full object-cover border border-gray-200 shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-bold text-primary">{s.name[0]}</span>
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-medium text-primary">{s.name}</div>
+                      {s.nameNp && <div className="text-xs text-gray-400">{s.nameNp}</div>}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-5 py-3 text-gray-500">{s.dateOfBirth || "—"}</td>
                 <td className="px-5 py-3 text-gray-500">{s.gender || "—"}</td>

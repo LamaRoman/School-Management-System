@@ -92,6 +92,26 @@ export default function MarksEntryPage() {
     if (!currentAssignment || !selectedExam) return;
     setSaving(true);
     try {
+      // Validate marks don't exceed full marks
+      const overTheory = Object.values(marks).filter(m =>
+        !m.isAbsent && m.theoryMarks !== null && currentAssignment &&
+        m.theoryMarks > currentAssignment.fullTheoryMarks
+      );
+      const overPractical = Object.values(marks).filter(m =>
+        !m.isAbsent && m.practicalMarks !== null && currentAssignment &&
+        m.practicalMarks > currentAssignment.fullPracticalMarks
+      );
+      if (overTheory.length > 0) {
+        toast.error(`Theory marks exceed full marks (${currentAssignment?.fullTheoryMarks}) for ${overTheory.length} student(s)`);
+        setSaving(false);
+        return;
+      }
+      if (overPractical.length > 0) {
+        toast.error(`Practical marks exceed full marks (${currentAssignment?.fullPracticalMarks}) for ${overPractical.length} student(s)`);
+        setSaving(false);
+        return;
+      }
+
       const marksArray = Object.values(marks).map((m) => ({
         studentId: m.studentId,
         theoryMarks: m.isAbsent ? null : m.theoryMarks,
@@ -222,7 +242,7 @@ export default function MarksEntryPage() {
                       <td className="px-4 py-2 text-center">
                         <input
                           type="number" min={0} max={currentAssignment?.fullTheoryMarks}
-                          className="input w-20 text-center py-1 mx-auto"
+                          className={`input w-20 text-center py-1 mx-auto ${!m.isAbsent && m.theoryMarks !== null && currentAssignment && m.theoryMarks > currentAssignment.fullTheoryMarks ? "border-red-400 bg-red-50 focus:ring-red-300" : ""}`}
                           value={m.theoryMarks ?? ""}
                           disabled={m.isAbsent}
                           onChange={(e) => updateMark(s.id, "theoryMarks", e.target.value ? parseFloat(e.target.value) : null)}
@@ -232,7 +252,7 @@ export default function MarksEntryPage() {
                         <td className="px-4 py-2 text-center">
                           <input
                             type="number" min={0} max={currentAssignment?.fullPracticalMarks}
-                            className="input w-20 text-center py-1 mx-auto"
+                            className={`input w-20 text-center py-1 mx-auto ${!m.isAbsent && m.practicalMarks !== null && currentAssignment && m.practicalMarks > currentAssignment.fullPracticalMarks ? "border-red-400 bg-red-50 focus:ring-red-300" : ""}`}
                             value={m.practicalMarks ?? ""}
                             disabled={m.isAbsent}
                             onChange={(e) => updateMark(s.id, "practicalMarks", e.target.value ? parseFloat(e.target.value) : null)}

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { GraduationCap, Calendar, Receipt } from "lucide-react";
+import { GraduationCap, Calendar, Receipt, Megaphone, Pin } from "lucide-react";
 
 interface Child {
   id: string;
@@ -37,7 +37,8 @@ export default function ParentDashboard() {
   const [reportData, setReportData] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"report" | "attendance" | "fees">("report");
+  const [tab, setTab] = useState<"report" | "attendance" | "fees" | "notices">("report");
+  const [notices, setNotices] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -59,13 +60,15 @@ export default function ParentDashboard() {
 
   const loadChildData = async (studentId: string) => {
     try {
-      const [feeData, attData, year] = await Promise.all([
+      const [feeData, attData, year, noticeData] = await Promise.all([
         api.get<FeeData>(`/parents/child/${studentId}/fees`),
         api.get<AttendanceData>(`/parents/child/${studentId}/attendance`),
         api.get<any>("/academic-years/active"),
+        api.get<any[]>("/notices").catch(() => []),
       ]);
       setFees(feeData);
       setAttendance(attData);
+      setNotices(Array.isArray(noticeData) ? noticeData : []);
 
       if (year) {
         const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
@@ -153,6 +156,7 @@ export default function ParentDashboard() {
                 { key: "report", label: "Report Card", icon: GraduationCap },
                 { key: "attendance", label: "Attendance", icon: Calendar },
                 { key: "fees", label: "Fee Status", icon: Receipt },
+                { key: "notices", label: "Notices", icon: Megaphone },
               ] as { key: typeof tab; label: string; icon: any }[]).map((t) => (
                 <button key={t.key} onClick={() => setTab(t.key)}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all border-b-2 ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>
@@ -279,6 +283,32 @@ export default function ParentDashboard() {
                 })() : (
                   <div className="card p-8 text-center text-gray-400">No attendance data available.</div>
                 )}
+              </div>
+            )}
+
+            {/* Notices Tab */}
+            {tab === "notices" && (
+              <div className="space-y-3">
+                {notices.length === 0 ? (
+                  <div className="card p-8 text-center text-gray-400">No notices at this time.</div>
+                ) : notices.map((notice: any) => (
+                  <div key={notice.id} className={`card p-4 ${notice.priority === "URGENT" ? "border-l-4 border-l-red-500" : notice.priority === "IMPORTANT" ? "border-l-4 border-l-amber-400" : ""}`}>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {notice.isPinned && <Pin size={14} className="text-primary" />}
+                      <h3 className="font-semibold text-primary text-sm">{notice.title}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        notice.type === "EXAM" ? "bg-purple-50 text-purple-700" :
+                        notice.type === "EVENT" ? "bg-emerald-50 text-emerald-700" :
+                        notice.type === "HOLIDAY" ? "bg-amber-50 text-amber-700" :
+                        notice.type === "FEE" ? "bg-red-50 text-red-700" :
+                        "bg-blue-50 text-blue-700"
+                      }`}>{notice.type}</span>
+                      {notice.priority === "URGENT" && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">URGENT</span>}
+                    </div>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">{notice.content}</p>
+                    <p className="text-xs text-gray-400">{notice.publishDate}</p>
+                  </div>
+                ))}
               </div>
             )}
 

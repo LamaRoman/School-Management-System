@@ -59,7 +59,7 @@ router.get("/", authenticate, async (req, res) => {
     // Teachers see homework they created
     where.assignedById = user.userId;
   }
-  // ADMIN and SYSTEM_ADMIN see all (no extra filter)
+  // ADMIN sees all (no extra filter)
 
   const homework = await prisma.homework.findMany({
     where,
@@ -95,7 +95,7 @@ router.get("/:id", authenticate, async (req, res) => {
 router.post("/", authenticate, async (req, res) => {
   const user = req.user!;
 
-  if (user.role !== "TEACHER" && user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN") {
+  if (user.role !== "TEACHER" && user.role !== "ADMIN") {
     throw new AppError("Only teachers and admins can create homework", 403);
   }
 
@@ -147,7 +147,7 @@ router.put("/:id", authenticate, async (req, res) => {
   const user = req.user!;
   const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
 
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && existing.assignedById !== user.userId) {
+  if (user.role !== "ADMIN" && existing.assignedById !== user.userId) {
     throw new AppError("You can only edit homework you created", 403);
   }
 
@@ -181,7 +181,7 @@ router.delete("/:id", authenticate, async (req, res) => {
   const user = req.user!;
   const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
 
-  if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && existing.assignedById !== user.userId) {
+  if (user.role !== "ADMIN" && existing.assignedById !== user.userId) {
     throw new AppError("You can only delete homework you created", 403);
   }
 

@@ -48,7 +48,7 @@ async function isClassTeacherOf(teacherId: string, sectionId: string): Promise<b
 }
 
 async function authorizeForSection(user: any, sectionId: string): Promise<void> {
-  if (user.role === "SYSTEM_ADMIN" || user.role === "ADMIN") return;
+  if (user.role === "ADMIN") return;
 
   if (user.role === "TEACHER") {
     const teacherId = await getTeacherId(user.id);
@@ -119,7 +119,7 @@ router.get("/:id", authenticate, async (req, res) => {
 });
 
 // POST /api/students — Admin only. Creates student + user account + admission paper trail.
-router.post("/", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, res) => {
+router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = studentSchema.parse(req.body);
 
   // Resolve section → grade → academic year for the admission record
@@ -169,7 +169,7 @@ router.post("/", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, r
 });
 
 // POST /api/students/bulk — create multiple + auto-create user accounts
-router.post("/bulk", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, res) => {
+router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   const schema = z.object({
     sectionId: z.string().min(1),
     students: z.array(studentSchema.omit({ sectionId: true })),
@@ -258,7 +258,7 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
 });
 
 // DELETE /api/students/:id (soft delete — admin only)
-router.delete("/:id", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, res) => {
+router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   await prisma.student.update({
     where: { id: req.params.id },
     data: { isActive: false },

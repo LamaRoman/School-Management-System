@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -19,6 +21,8 @@ import {
   Megaphone,
   UserPlus,
   Users2,
+,
+  KeyRound,
 } from "lucide-react";
 
 const navGroups = [
@@ -74,6 +78,7 @@ const navGroups = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -146,6 +151,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <p className="text-white/90 font-medium truncate">{user.email}</p>
               <p className="text-white/40 uppercase text-[10px]">{user.role}</p>
             </div>
+            <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password"><KeyRound size={16} className="text-white/60" /></button>
             <button
               onClick={logout}
               className="p-2 hover:bg-white/10 rounded-lg transition-all shrink-0"
@@ -162,6 +168,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {children}
         </div>
       </main>
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
   );
 }
