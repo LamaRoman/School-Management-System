@@ -239,15 +239,10 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
   // Auto-create user account for the student
   try {
     const baseName = admission.studentName.toLowerCase().trim().replace(/\s+/g, ".");
-    let email = `${baseName}@school.edu.np`;
-    let attempts = 0;
-    while (attempts < 100) {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (!existing) break;
-      attempts++;
-      email = `${baseName}${attempts}@school.edu.np`;
-    }
-    const hashedPassword = await bcrypt.hash("student123", 10);
+    // Use studentId suffix to guarantee uniqueness — no DB loop needed
+    const email = `${baseName}.${student.id.slice(-6)}@school.edu.np`;
+    const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     await prisma.user.create({
       data: {
         email,

@@ -118,26 +118,58 @@ router.get("/:id", authenticate, async (req, res) => {
   res.json({ data: student });
 });
 
-// POST /api/students — create student + auto-create user account
-router.post("/", authenticate, async (req, res) => {
+// POST /api/students — Admin only. Creates student + user account + admission paper trail.
+router.post("/", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, res) => {
   const data = studentSchema.parse(req.body);
-  const user = req.user!;
 
-  await authorizeForSection(user, data.sectionId);
+  // Resolve section → grade → academic year for the admission record
+  const section = await prisma.section.findUniqueOrThrow({
+    where: { id: data.sectionId },
+    include: { grade: { include: { academicYear: true } } },
+  });
 
   const student = await prisma.student.create({ data });
 
+  // Auto-create login account
   try {
     await autoCreateStudentUser(student.id, student.name);
   } catch (err) {
     console.error("Failed to auto-create student user:", err);
   }
 
+  // Auto-create admission record so there is always a paper trail
+  try {
+    const today = new Date();
+    const todayBS = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
+    await prisma.admission.create({
+      data: {
+        studentName: student.name,
+        studentNameNp: student.nameNp || null,
+        dateOfBirth: student.dateOfBirth || null,
+        gender: student.gender || null,
+        fatherName: student.fatherName || null,
+        motherName: student.motherName || null,
+        guardianName: student.guardianName || null,
+        guardianPhone: student.guardianPhone || null,
+        address: student.address || null,
+        applyingForGradeId: section.grade.id,
+        academicYearId: section.grade.academicYearId,
+        status: "ENROLLED",
+        appliedDate: todayBS,
+        reviewedById: req.user!.userId,
+        reviewedDate: todayBS,
+        remarks: "Added directly by admin",
+      },
+    });
+  } catch (err) {
+    console.error("Failed to auto-create admission record:", err);
+  }
+
   res.status(201).json({ data: student });
 });
 
 // POST /api/students/bulk — create multiple + auto-create user accounts
-router.post("/bulk", authenticate, async (req, res) => {
+router.post("/bulk", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, res) => {
   const schema = z.object({
     sectionId: z.string().min(1),
     students: z.array(studentSchema.omit({ sectionId: true })),

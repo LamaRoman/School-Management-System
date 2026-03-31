@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
-import { Plus, Save, X, Hash, UserPlus } from "lucide-react";
+import { Save, X, Hash } from "lucide-react";
 
 interface ClassTeacherSection {
   sectionId: string;
@@ -36,13 +36,6 @@ export default function TeacherStudentsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Add student form
-  const [showAdd, setShowAdd] = useState(false);
-  const [newStudent, setNewStudent] = useState({
-    name: "", nameNp: "", dateOfBirth: "", gender: "",
-    fatherName: "", motherName: "", guardianName: "", guardianPhone: "", address: "",
-  });
-
   // Edit student
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Student>>({});
@@ -62,7 +55,6 @@ export default function TeacherStudentsPage() {
 
   const handleSectionSelect = async (section: ClassTeacherSection) => {
     setSelectedSection(section);
-    setShowAdd(false);
     setEditingId(null);
     setShowRolls(false);
     await fetchStudents(section.sectionId);
@@ -75,33 +67,6 @@ export default function TeacherStudentsPage() {
     } catch {
       setStudents([]);
     }
-  };
-
-  // Add student
-  const handleAdd = async () => {
-    if (!newStudent.name.trim() || !selectedSection) return;
-    setSaving(true);
-    try {
-      await api.post("/students", {
-        ...newStudent,
-        name: newStudent.name.trim(),
-        nameNp: newStudent.nameNp.trim() || undefined,
-        dateOfBirth: newStudent.dateOfBirth || undefined,
-        gender: newStudent.gender || undefined,
-        fatherName: newStudent.fatherName.trim() || undefined,
-        motherName: newStudent.motherName.trim() || undefined,
-        guardianName: newStudent.guardianName.trim() || undefined,
-        guardianPhone: newStudent.guardianPhone.trim() || undefined,
-        address: newStudent.address.trim() || undefined,
-        sectionId: selectedSection.sectionId,
-      });
-      toast.success("Student added");
-      setNewStudent({ name: "", nameNp: "", dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianName: "", guardianPhone: "", address: "" });
-      setShowAdd(false);
-      await fetchStudents(selectedSection.sectionId);
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally { setSaving(false); }
   };
 
   // Edit student
@@ -146,7 +111,6 @@ export default function TeacherStudentsPage() {
   // Roll number assignment
   const handleOpenRolls = () => {
     setShowRolls(true);
-    setShowAdd(false);
     setEditingId(null);
     const initial: Record<string, number> = {};
     students.forEach((s, i) => {
@@ -200,7 +164,7 @@ export default function TeacherStudentsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-display font-bold text-primary">My Students</h1>
-          <p className="text-sm text-gray-500 mt-1">Add, edit, and assign roll numbers to students in your section</p>
+          <p className="text-sm text-gray-500 mt-1">View, edit, and assign roll numbers to students in your section</p>
         </div>
       </div>
 
@@ -218,73 +182,11 @@ export default function TeacherStudentsPage() {
         <>
           {/* Action buttons */}
           <div className="flex gap-2 mb-4">
-            <button onClick={() => { setShowAdd(!showAdd); setShowRolls(false); setEditingId(null); }}
-              className={`btn-${showAdd ? "primary" : "outline"} text-xs`}>
-              <UserPlus size={14} /> Add Student
-            </button>
             <button onClick={handleOpenRolls}
               className={`btn-${showRolls ? "primary" : "outline"} text-xs`}>
               <Hash size={14} /> Assign Roll Numbers
             </button>
           </div>
-
-          {/* Add student form */}
-          {showAdd && (
-            <div className="card p-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-primary">Add New Student</h3>
-                <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">Name (English) *</label>
-                  <input className="input" value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} placeholder="Full name" />
-                </div>
-                <div>
-                  <label className="label">Name (Nepali)</label>
-                  <input className="input" value={newStudent.nameNp} onChange={(e) => setNewStudent({ ...newStudent, nameNp: e.target.value })} placeholder="पूरा नाम" />
-                </div>
-                <div>
-                  <label className="label">Date of Birth</label>
-                  <input className="input" value={newStudent.dateOfBirth} onChange={(e) => setNewStudent({ ...newStudent, dateOfBirth: e.target.value })} placeholder="2068/05/15" />
-                </div>
-                <div>
-                  <label className="label">Gender</label>
-                  <select className="input" value={newStudent.gender} onChange={(e) => setNewStudent({ ...newStudent, gender: e.target.value })}>
-                    <option value="">Select</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Father&apos;s Name</label>
-                  <input className="input" value={newStudent.fatherName} onChange={(e) => setNewStudent({ ...newStudent, fatherName: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Mother&apos;s Name</label>
-                  <input className="input" value={newStudent.motherName} onChange={(e) => setNewStudent({ ...newStudent, motherName: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Guardian Name</label>
-                  <input className="input" value={newStudent.guardianName} onChange={(e) => setNewStudent({ ...newStudent, guardianName: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Guardian Phone</label>
-                  <input className="input" value={newStudent.guardianPhone} onChange={(e) => setNewStudent({ ...newStudent, guardianPhone: e.target.value })} placeholder="98XXXXXXXX" />
-                </div>
-                <div>
-                  <label className="label">Address</label>
-                  <input className="input" value={newStudent.address} onChange={(e) => setNewStudent({ ...newStudent, address: e.target.value })} />
-                </div>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button onClick={handleAdd} disabled={saving || !newStudent.name.trim()} className="btn-primary text-xs">
-                  <Plus size={14} /> {saving ? "Adding..." : "Add Student"}
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Roll number assignment mode */}
           {showRolls && (
@@ -390,7 +292,7 @@ export default function TeacherStudentsPage() {
                 ))}
                 {students.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">No students in this section yet. Click &quot;Add Student&quot; to start.</td>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">No students in this section yet. Students are added by the admin office.</td>
                   </tr>
                 )}
               </tbody>
