@@ -1,0 +1,78 @@
+From 89c28d7112e2294b6e1963ea5d6882c34c955781 Mon Sep 17 00:00:00 2001
+From: Dev <dev@school.local>
+Date: Tue, 31 Mar 2026 10:58:26 +0000
+Subject: [PATCH] Fix: use correct BS date in auto-created admission record,
+ add nepali-date-converter to backend
+
+---
+ backend/package-lock.json            | 10 ++++++++++
+ backend/package.json                 |  1 +
+ backend/src/routes/student.routes.ts |  5 +++--
+ 3 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index e01d74d..9a425eb 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -17,6 +17,7 @@
+         "express-rate-limit": "^8.3.2",
+         "helmet": "^8.1.0",
+         "jsonwebtoken": "^9.0.3",
++        "nepali-date-converter": "^3.4.0",
+         "puppeteer": "^24.39.1",
+         "zod": "^3.23.8"
+       },
+@@ -2029,6 +2030,15 @@
+         "node": ">= 0.6"
+       }
+     },
++    "node_modules/nepali-date-converter": {
++      "version": "3.4.0",
++      "resolved": "https://registry.npmjs.org/nepali-date-converter/-/nepali-date-converter-3.4.0.tgz",
++      "integrity": "sha512-hBojNXCQN69I533CnxNubl72uNx2Zcow9t2bOML3CxXv227s7NKA2kStUGO5xysg0SwsubTTxAO6tcg9IhS61w==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/netmask": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/netmask/-/netmask-2.0.2.tgz",
+diff --git a/backend/package.json b/backend/package.json
+index 837e879..5458c96 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -22,6 +22,7 @@
+     "express-rate-limit": "^8.3.2",
+     "helmet": "^8.1.0",
+     "jsonwebtoken": "^9.0.3",
++    "nepali-date-converter": "^3.4.0",
+     "puppeteer": "^24.39.1",
+     "zod": "^3.23.8"
+   },
+diff --git a/backend/src/routes/student.routes.ts b/backend/src/routes/student.routes.ts
+index 9779863..f9bf84e 100644
+--- a/backend/src/routes/student.routes.ts
++++ b/backend/src/routes/student.routes.ts
+@@ -1,6 +1,7 @@
+ import { Router } from "express";
+ import bcrypt from "bcryptjs";
+ import { z } from "zod";
++import NepaliDate from "nepali-date-converter";
+ import prisma from "../utils/prisma";
+ import { authenticate, authorize } from "../middleware/auth";
+ import { AppError } from "../middleware/errorHandler";
+@@ -139,8 +140,8 @@ router.post("/", authenticate, authorize("ADMIN", "SYSTEM_ADMIN"), async (req, r
+ 
+   // Auto-create admission record so there is always a paper trail
+   try {
+-    const today = new Date();
+-    const todayBS = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
++    const nd = new NepaliDate(new Date());
++    const todayBS = `${nd.getYear()}/${String(nd.getMonth() + 1).padStart(2, "0")}/${String(nd.getDate()).padStart(2, "0")}`;
+     await prisma.admission.create({
+       data: {
+         studentName: student.name,
+-- 
+2.43.0
+
