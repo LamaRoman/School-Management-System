@@ -195,10 +195,11 @@ async function main() {
     // ─── Teacher ──────────────────────────────────
     const tData = teacherData.find(t => t.gradeName === gradeName);
     if (tData) {
+      const teacherId = `teacher-${tData.email.split("@")[0]}`;
       const teacher = await prisma.teacher.upsert({
-        where: { email: tData.email },
+        where: { id: teacherId },
         update: {},
-        create: { name: tData.name, email: tData.email, phone: "98XXXXXXXX" },
+        create: { id: teacherId, name: tData.name, email: tData.email, phone: "98XXXXXXXX" },
       });
 
       await prisma.user.upsert({
