@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, X, Eye, EyeOff } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Grade { id: string; name: string; displayOrder: number }
 interface Category { id: string; name: string; nameNp?: string; displayOrder: number; isActive: boolean }
@@ -13,6 +14,7 @@ const defaultCategories = [
 ];
 
 export default function ObservationsPage() {
+  const confirm = useConfirm();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -97,7 +99,7 @@ export default function ObservationsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remove this category?")) return;
+    if (!await confirm({ title: "Remove category", message: "This observation category and all its results will be removed.", confirmLabel: "Remove", variant: "danger" })) return;
     try {
       await api.delete(`/observations/categories/${id}`);
       toast.success("Removed");

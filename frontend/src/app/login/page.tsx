@@ -67,11 +67,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 p-3 bg-surface rounded-lg text-xs text-gray-500">
-            <p className="font-semibold mb-1">Default Admin:</p>
-            <p>Email: admin@school.edu.np</p>
-            <p>Password: admin123</p>
-          </div>
+
         </div>
       </div>
     </div>

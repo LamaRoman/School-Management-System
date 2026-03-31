@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Check, X, UserPlus, Trash2 } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
 interface Admission {
@@ -35,6 +36,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function AdmissionPage() {
+  const confirm = useConfirm();
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
@@ -167,7 +169,7 @@ export default function AdmissionPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this admission application?")) return;
+    if (!await confirm({ title: "Delete application", message: "This admission application will be permanently deleted.", confirmLabel: "Delete", variant: "danger" })) return;
     try {
       await api.delete(`/admissions/${id}`);
       toast.success("Deleted");

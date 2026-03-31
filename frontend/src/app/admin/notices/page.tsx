@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Pin, Trash2, Edit2, X, Megaphone } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Grade { id: string; name: string }
 interface Notice {
@@ -42,6 +43,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function NoticeBoardPage() {
+  const confirm = useConfirm();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,7 +139,7 @@ export default function NoticeBoardPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this notice?")) return;
+    if (!await confirm({ title: "Delete notice", message: "This notice will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
     try {
       await api.delete(`/notices/${id}`);
       toast.success("Notice deleted");

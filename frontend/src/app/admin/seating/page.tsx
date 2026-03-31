@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Shuffle, X } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface ExamType { id: string; name: string }
 interface Grade { id: string; name: string; displayOrder: number }
@@ -22,6 +23,7 @@ interface RoomAllocation {
 }
 
 export default function SeatingPage() {
+  const confirm = useConfirm();
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -111,7 +113,7 @@ export default function SeatingPage() {
   };
 
   const handleDeleteRoom = async (id: string) => {
-    if (!confirm("Remove this room?")) return;
+    if (!await confirm({ title: "Remove room", message: "This exam room will be removed from seating arrangements.", confirmLabel: "Remove", variant: "danger" })) return;
     try {
       await api.delete(`/seating/rooms/${id}`);
       setRooms((prev) => prev.filter((r) => r.id !== id));
@@ -147,7 +149,7 @@ export default function SeatingPage() {
 
   const handleClear = async () => {
     if (!selectedExam || !activeYear) return;
-    if (!confirm("Clear all seating allocations for this exam?")) return;
+    if (!await confirm({ title: "Clear seating", message: "All seat allocations for this exam will be cleared.", confirmLabel: "Clear", variant: "warning" })) return;
     try {
       await api.delete(`/seating/allocations?examTypeId=${selectedExam}&academicYearId=${activeYear.id}`);
       setAllocations([]);

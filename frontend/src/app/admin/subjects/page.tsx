@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Subject {
   id: string; name: string; nameNp?: string;
@@ -15,6 +16,7 @@ interface Grade { id: string; name: string; displayOrder: number }
 const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, isOptional: false, displayOrder: 0, gradeId: "" };
 
 export default function SubjectsPage() {
+  const confirm = useConfirm();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("");
@@ -65,7 +67,7 @@ export default function SubjectsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this subject?")) return;
+    if (!await confirm({ title: "Delete subject", message: "This subject and all related marks will be removed.", confirmLabel: "Delete", variant: "danger" })) return;
     try { await api.delete(`/subjects/${id}`); toast.success("Deleted"); fetchSubjects(); } catch (err: any) { toast.error(err.message); }
   };
 

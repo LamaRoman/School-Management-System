@@ -3,11 +3,13 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Section { id: string; name: string; _count: { students: number } }
 interface Grade { id: string; name: string; displayOrder: number; sections: Section[]; _count: { subjects: number; sections: number } }
 
 export default function GradesPage() {
+  const confirm = useConfirm();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -58,12 +60,12 @@ export default function GradesPage() {
   };
 
   const deleteGrade = async (id: string) => {
-    if (!confirm("Delete this grade and all its sections, subjects, and student data?")) return;
+    if (!await confirm({ title: "Delete grade", message: "This grade and all its sections, subjects, and student data will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
     try { await api.delete(`/grades/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
   };
 
   const deleteSection = async (id: string) => {
-    if (!confirm("Delete this section and all its students?")) return;
+    if (!await confirm({ title: "Delete section", message: "This section and all its students will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
     try { await api.delete(`/sections/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
   };
 

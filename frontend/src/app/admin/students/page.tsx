@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save, Search } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Student {
   id: string; name: string; nameNp?: string; rollNo?: number;
@@ -16,6 +17,7 @@ interface Grade { id: string; name: string; sections: { id: string; name: string
 const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "" };
 
 export default function StudentsPage() {
+  const confirm = useConfirm();
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedSection, setSelectedSection] = useState("");
@@ -78,7 +80,7 @@ export default function StudentsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Deactivate this student?")) return;
+    if (!await confirm({ title: "Deactivate student", message: "The student will be deactivated and will not appear in active lists.", confirmLabel: "Deactivate", variant: "warning" })) return;
     try { await api.delete(`/students/${id}`); toast.success("Student deactivated"); api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents); } catch (err: any) { toast.error(err.message); }
   };
 
@@ -91,9 +93,17 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-display font-bold text-primary">Students</h1>
           <p className="text-sm text-gray-500 mt-1">Manage student records by class and section</p>
         </div>
-        <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); }} className="btn-primary">
-          <Plus size={16} /> Add Student
-        </button>
+        <div className="flex items-center gap-3">
+          {selectedSection && (
+            <span className="text-sm text-gray-500">
+              {filtered.length} student{filtered.length !== 1 ? "s" : ""}
+              {search && students.length !== filtered.length ? ` of ${students.length}` : ""}
+            </span>
+          )}
+          <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); }} className="btn-primary">
+            <Plus size={16} /> Add Student
+          </button>
+        </div>
       </div>
 
       {/* Grade + Section selector */}

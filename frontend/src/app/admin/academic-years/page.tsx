@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Star } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface AcademicYear {
   id: string;
@@ -14,6 +15,7 @@ interface AcademicYear {
 }
 
 export default function AcademicYearsPage() {
+  const confirm = useConfirm();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ yearBS: "", startDate: "", endDate: "" });
@@ -49,7 +51,7 @@ export default function AcademicYearsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this academic year? All related data will be removed.")) return;
+    if (!await confirm({ title: "Delete academic year", message: "All related data including grades, students, and marks will be removed. This cannot be undone.", confirmLabel: "Delete", variant: "danger" })) return;
     try {
       await api.delete(`/academic-years/${id}`);
       toast.success("Deleted");

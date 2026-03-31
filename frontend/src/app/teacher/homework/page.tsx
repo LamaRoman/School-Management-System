@@ -5,6 +5,7 @@ import { formatGradeSection } from "@/lib/bsDate";
 import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Assignment {
   sectionId: string;
@@ -27,6 +28,7 @@ interface Homework {
 }
 
 export default function TeacherHomeworkPage() {
+  const confirm = useConfirm();
   const { user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
@@ -122,7 +124,7 @@ export default function TeacherHomeworkPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remove this homework?")) return;
+    if (!await confirm({ title: "Remove homework", message: "This homework assignment will be removed for all students.", confirmLabel: "Remove", variant: "danger" })) return;
     try {
       await api.delete(`/homework/${id}`);
       toast.success("Homework removed");

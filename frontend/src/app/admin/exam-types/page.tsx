@@ -3,10 +3,12 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2 } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface ExamType { id: string; name: string; displayOrder: number; paperSize: string; showRank: boolean }
 
 export default function ExamTypesPage() {
+  const confirm = useConfirm();
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
@@ -47,7 +49,7 @@ export default function ExamTypesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this exam type?")) return;
+    if (!await confirm({ title: "Delete exam type", message: "This exam type and all associated marks will be removed.", confirmLabel: "Delete", variant: "danger" })) return;
     try { await api.delete(`/exam-types/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
   };
 

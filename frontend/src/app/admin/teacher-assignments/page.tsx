@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Clock, Shield, BookOpen, X } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Teacher { id: string; name: string; nameNp?: string; email?: string; phone?: string }
 interface Grade { id: string; name: string; displayOrder: number; sections: { id: string; name: string }[] }
@@ -18,6 +19,7 @@ interface Assignment {
 }
 
 export default function TeacherAssignmentsPage() {
+  const confirm = useConfirm();
     const [assignments, setAssignments] = useState<Assignment[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [grades, setGrades] = useState<Grade[]>([]);
@@ -117,8 +119,8 @@ export default function TeacherAssignmentsPage() {
     };
 
     const handleDelete = async (id: string, isTemp: boolean) => {
-        const msg = isTemp ? "Revoke this temporary access?" : "Remove this assignment?";
-        if (!confirm(msg)) return;
+        const confirmed = await confirm({ title: isTemp ? "Revoke temporary access" : "Remove assignment", message: isTemp ? "This teacher's temporary access will be revoked." : "This teacher assignment will be removed.", confirmLabel: isTemp ? "Revoke" : "Remove", variant: "danger" });
+        if (!confirmed) return;
         try {
             if (isTemp) {
                 await api.post(`/teacher-assignments/${id}/revoke`, {});

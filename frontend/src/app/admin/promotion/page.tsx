@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { ArrowRight, Copy, GraduationCap, ArrowLeftRight } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface AcademicYear { id: string; yearBS: string; isActive: boolean }
 interface Grade { id: string; name: string; displayOrder: number; sections: Section[] }
@@ -27,6 +28,7 @@ function getMaxDisplayOrder(grades: Grade[]): number {
 }
 
 export default function PromotionPage() {
+  const confirm = useConfirm();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [sourceYear, setSourceYear] = useState("");
   const [targetYear, setTargetYear] = useState("");
@@ -77,7 +79,7 @@ export default function PromotionPage() {
 
   const handleCopyStructure = async () => {
     if (!sourceYear || !targetYear) return;
-    if (!confirm("This will copy all grades, sections, subjects, exam types, and grading policies to the target year. Continue?")) return;
+    if (!await confirm({ title: "Copy academic structure", message: "This will copy all grades, sections, subjects, exam types, and grading policies to the target year.", confirmLabel: "Copy", variant: "warning" })) return;
     setCopying(true);
     try {
       const result = await api.post<any>("/promotion/copy-structure", { sourceYearId: sourceYear, targetYearId: targetYear });
@@ -133,7 +135,7 @@ export default function PromotionPage() {
       toast.error("Target year has no grades. Copy structure first.");
       return;
     }
-    if (!confirm(`This will promote/retain/graduate ${students.length} students. This action cannot be easily undone. Continue?`)) return;
+    if (!await confirm({ title: "Confirm promotion", message: `This will promote, retain, or graduate ${students.length} students. This action cannot be easily undone.`, confirmLabel: "Proceed", variant: "warning" })) return;
 
     setPromoting(true);
     try {

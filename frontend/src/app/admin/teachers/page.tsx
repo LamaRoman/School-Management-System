@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Edit2, Trash2, X, KeyRound, UserCheck, UserX } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Assignment {
   id: string;
@@ -59,6 +60,7 @@ function buildAssignmentSummary(assignments: Assignment[]): string[] {
 }
 
 export default function AdminTeachersPage() {
+  const confirm = useConfirm();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -134,7 +136,7 @@ export default function AdminTeachersPage() {
   };
 
   const handleDeactivate = async (id: string, name: string) => {
-    if (!confirm(`Deactivate ${name}? They will not be able to login.`)) return;
+    if (!await confirm({ title: "Deactivate teacher", message: `${name} will be deactivated and will not be able to log in.`, confirmLabel: "Deactivate", variant: "warning" })) return;
     try {
       await api.delete(`/teachers/${id}`);
       toast.success(`${name} deactivated`);

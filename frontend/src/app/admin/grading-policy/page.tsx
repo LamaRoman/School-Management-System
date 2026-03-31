@@ -3,12 +3,14 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface ExamType { id: string; name: string; displayOrder: number }
 interface Grade { id: string; name: string; displayOrder: number }
 interface Policy { id: string; examTypeId: string; weightagePercent: number; examType: { name: string } }
 
 export default function GradingPolicyPage() {
+  const confirm = useConfirm();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("");
@@ -59,7 +61,7 @@ export default function GradingPolicyPage() {
 
   const applyToAll = async () => {
     if (Math.abs(total - 100) > 0.01) return toast.error("Fix current grade first — total must be 100%");
-    if (!confirm("Apply this weightage to ALL grades?")) return;
+    if (!await confirm({ title: "Apply to all grades", message: "This weightage will be applied to every grade in the active academic year.", confirmLabel: "Apply", variant: "warning" })) return;
     try {
       for (const g of grades) {
         await api.post("/grading-policy/bulk", {

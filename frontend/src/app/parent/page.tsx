@@ -223,22 +223,60 @@ export default function ParentDashboard() {
             {/* Attendance Tab */}
             {tab === "attendance" && (
               <div>
-                {attendance ? (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="card p-4 text-center">
-                      <p className="text-2xl font-bold text-primary">{attendance.totalDays}</p>
-                      <p className="text-xs text-gray-500">Total Working Days</p>
+                {attendance ? (() => {
+                  const rate = attendance.totalDays > 0
+                    ? Math.round((attendance.presentDays / attendance.totalDays) * 100)
+                    : 0;
+                  const color = rate >= 90 ? "#16a34a" : rate >= 75 ? "#d97706" : "#dc2626";
+                  const circumference = 2 * Math.PI * 40;
+                  const dash = (rate / 100) * circumference;
+                  return (
+                    <div className="card p-6">
+                      {/* Ring + stats */}
+                      <div className="flex items-center gap-8">
+                        {/* SVG ring */}
+                        <div className="shrink-0">
+                          <svg width="100" height="100" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="10" />
+                            <circle
+                              cx="50" cy="50" r="40" fill="none"
+                              stroke={color} strokeWidth="10"
+                              strokeLinecap="round"
+                              strokeDasharray={`${dash} ${circumference}`}
+                              transform="rotate(-90 50 50)"
+                              style={{ transition: "stroke-dasharray 0.6s ease" }}
+                            />
+                            <text x="50" y="46" textAnchor="middle" fontSize="18" fontWeight="700" fill={color}>{rate}%</text>
+                            <text x="50" y="60" textAnchor="middle" fontSize="9" fill="#9ca3af">attendance</text>
+                          </svg>
+                        </div>
+                        {/* Stats */}
+                        <div className="flex-1 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">Total working days</span>
+                            <span className="text-sm font-bold text-gray-800">{attendance.totalDays}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">Present</span>
+                            <span className="text-sm font-bold text-emerald-600">{attendance.presentDays} days</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">Absent</span>
+                            <span className="text-sm font-bold text-red-500">{attendance.absentDays} days</span>
+                          </div>
+                          <div className="pt-2 border-t border-gray-100">
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${rate}%`, backgroundColor: color }} />
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {rate >= 90 ? "Excellent attendance" : rate >= 75 ? "Satisfactory attendance" : "Attendance needs improvement"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="card p-4 text-center">
-                      <p className="text-2xl font-bold text-emerald-600">{attendance.presentDays}</p>
-                      <p className="text-xs text-gray-500">Present Days</p>
-                    </div>
-                    <div className="card p-4 text-center">
-                      <p className="text-2xl font-bold text-red-600">{attendance.absentDays}</p>
-                      <p className="text-xs text-gray-500">Absent Days</p>
-                    </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div className="card p-8 text-center text-gray-400">No attendance data available.</div>
                 )}
               </div>

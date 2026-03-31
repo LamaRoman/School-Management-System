@@ -1,0 +1,774 @@
+From ef9491daaaa4203bca546077c12c011ebcf2a54d Mon Sep 17 00:00:00 2001
+From: Dev <dev@school.local>
+Date: Tue, 31 Mar 2026 10:01:51 +0000
+Subject: [PATCH] Polish: ConfirmDialog component, remove login credentials,
+ student count, parent attendance ring
+
+---
+ .../src/app/admin/academic-years/page.tsx     |   4 +-
+ frontend/src/app/admin/admissions/page.tsx    |   4 +-
+ frontend/src/app/admin/exam-types/page.tsx    |   4 +-
+ frontend/src/app/admin/fees/page.tsx          |   8 +-
+ frontend/src/app/admin/grades/page.tsx        |   6 +-
+ .../src/app/admin/grading-policy/page.tsx     |   4 +-
+ frontend/src/app/admin/notices/page.tsx       |   4 +-
+ frontend/src/app/admin/observations/page.tsx  |   4 +-
+ frontend/src/app/admin/promotion/page.tsx     |   6 +-
+ frontend/src/app/admin/seating/page.tsx       |   6 +-
+ frontend/src/app/admin/students/page.tsx      |  18 ++-
+ frontend/src/app/admin/subjects/page.tsx      |   4 +-
+ .../app/admin/teacher-assignments/page.tsx    |   6 +-
+ frontend/src/app/admin/teachers/page.tsx      |   4 +-
+ frontend/src/app/layout.tsx                   |   2 +
+ frontend/src/app/login/page.tsx               |   6 +-
+ frontend/src/app/parent/page.tsx              |  68 +++++++---
+ frontend/src/app/teacher/homework/page.tsx    |   4 +-
+ frontend/src/components/ui/ConfirmDialog.tsx  | 125 ++++++++++++++++++
+ 19 files changed, 244 insertions(+), 43 deletions(-)
+ create mode 100644 frontend/src/components/ui/ConfirmDialog.tsx
+
+diff --git a/frontend/src/app/admin/academic-years/page.tsx b/frontend/src/app/admin/academic-years/page.tsx
+index 9029116..5393ce2 100644
+--- a/frontend/src/app/admin/academic-years/page.tsx
++++ b/frontend/src/app/admin/academic-years/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Star } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface AcademicYear {
+   id: string;
+@@ -14,6 +15,7 @@ interface AcademicYear {
+ }
+ 
+ export default function AcademicYearsPage() {
++  const confirm = useConfirm();
+   const [years, setYears] = useState<AcademicYear[]>([]);
+   const [showForm, setShowForm] = useState(false);
+   const [form, setForm] = useState({ yearBS: "", startDate: "", endDate: "" });
+@@ -49,7 +51,7 @@ export default function AcademicYearsPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Delete this academic year? All related data will be removed.")) return;
++    if (!await confirm({ title: "Delete academic year", message: "All related data including grades, students, and marks will be removed. This cannot be undone.", confirmLabel: "Delete", variant: "danger" })) return;
+     try {
+       await api.delete(`/academic-years/${id}`);
+       toast.success("Deleted");
+diff --git a/frontend/src/app/admin/admissions/page.tsx b/frontend/src/app/admin/admissions/page.tsx
+index b3e8812..395555f 100644
+--- a/frontend/src/app/admin/admissions/page.tsx
++++ b/frontend/src/app/admin/admissions/page.tsx
+@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Check, X, UserPlus, Trash2 } from "lucide-react";
+ import BSDatePicker from "@/components/ui/BSDatePicker";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
+ interface Admission {
+@@ -35,6 +36,7 @@ const statusColors: Record<string, string> = {
+ };
+ 
+ export default function AdmissionPage() {
++  const confirm = useConfirm();
+   const [admissions, setAdmissions] = useState<Admission[]>([]);
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [activeYear, setActiveYear] = useState<any>(null);
+@@ -167,7 +169,7 @@ export default function AdmissionPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Delete this admission application?")) return;
++    if (!await confirm({ title: "Delete application", message: "This admission application will be permanently deleted.", confirmLabel: "Delete", variant: "danger" })) return;
+     try {
+       await api.delete(`/admissions/${id}`);
+       toast.success("Deleted");
+diff --git a/frontend/src/app/admin/exam-types/page.tsx b/frontend/src/app/admin/exam-types/page.tsx
+index 2095c62..c8164fa 100644
+--- a/frontend/src/app/admin/exam-types/page.tsx
++++ b/frontend/src/app/admin/exam-types/page.tsx
+@@ -3,10 +3,12 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2 } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface ExamType { id: string; name: string; displayOrder: number; paperSize: string; showRank: boolean }
+ 
+ export default function ExamTypesPage() {
++  const confirm = useConfirm();
+   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+   const [activeYear, setActiveYear] = useState<any>(null);
+   const [showForm, setShowForm] = useState(false);
+@@ -47,7 +49,7 @@ export default function ExamTypesPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Delete this exam type?")) return;
++    if (!await confirm({ title: "Delete exam type", message: "This exam type and all associated marks will be removed.", confirmLabel: "Delete", variant: "danger" })) return;
+     try { await api.delete(`/exam-types/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
+   };
+ 
+diff --git a/frontend/src/app/admin/fees/page.tsx b/frontend/src/app/admin/fees/page.tsx
+index c32c371..a5ef672 100644
+--- a/frontend/src/app/admin/fees/page.tsx
++++ b/frontend/src/app/admin/fees/page.tsx
+@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
+ import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
+ import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
+ import BSDatePicker from "@/components/ui/BSDatePicker";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface FeeCategory { id: string; name: string; description?: string }
+ interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
+@@ -26,6 +27,7 @@ const nepaliMonths = ["Baisakh","Jestha","Ashadh","Shrawan","Bhadra","Ashwin","K
+ type Tab = "categories" | "structure" | "collection" | "discounts";
+ 
+ export default function FeeManagementPage() {
++  const confirm = useConfirm();
+   const [tab, setTab] = useState<Tab>("categories");
+   const [activeYear, setActiveYear] = useState<any>(null);
+   const [categories, setCategories] = useState<FeeCategory[]>([]);
+@@ -81,7 +83,7 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
+   const handleAdd = async () => { if (!name.trim()) return; try { await api.post("/fees/categories", { name: name.trim(), description: description.trim() || undefined }); toast.success("Added"); setName(""); setDescription(""); setShowForm(false); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+   const handleStartEdit = (cat: FeeCategory) => { setEditingId(cat.id); setEditName(cat.name); setEditDesc(cat.description || ""); };
+   const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await api.put(`/fees/categories/${editingId}`, { name: editName.trim(), description: editDesc.trim() || undefined }); toast.success("Updated"); setEditingId(null); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+-  const handleDelete = async (id: string) => { if (!confirm("Remove?")) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
++  const handleDelete = async (id: string) => { if (!await confirm({ title: "Remove category", message: "This fee category will be removed.", confirmLabel: "Remove", variant: "danger" })) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+ 
+   return (
+     <div>
+@@ -110,6 +112,7 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
+ // ─── STRUCTURE TAB ──────────────────────────────────────
+ 
+ function StructureTab({ activeYear, categories, grades, examTypes }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; examTypes: ExamType[] }) {
++  const confirm = useConfirm();
+   const [selectedGrade, setSelectedGrade] = useState("");
+   const [entries, setEntries] = useState<{ feeCategoryId: string; amount: number; frequency: string; examTypeId?: string }[]>([]);
+   const [saving, setSaving] = useState(false);
+@@ -122,7 +125,8 @@ function StructureTab({ activeYear, categories, grades, examTypes }: { activeYea
+   const handleAddRow = () => { setEntries((p) => [...p, { feeCategoryId: "", amount: 0, frequency: "PER_EXAM", examTypeId: "" }]); };
+   const handleRemoveRow = (i: number) => { setEntries((p) => p.filter((_, idx) => idx !== i)); };
+   const handleSave = async () => { if (!selectedGrade) return; const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); setSaving(true); try { await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: selectedGrade, entries: valid }); toast.success(valid.length > 0 ? "Saved" : "Cleared"); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
+-  const handleCopyToAll = async () => { if (!selectedGrade || !confirm("Copy to ALL grades?")) return; setSaving(true); try { const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); for (const g of grades) { if (g.id !== selectedGrade) await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: g.id, entries: valid }); } toast.success(`Copied to ${grades.length - 1} grades`); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
++  const handleCopyToAll = async () => { if (!selectedGrade) return;
++  if (!await confirm({ title: "Copy to all grades", message: "This fee structure will be copied to all other grades in the active year.", confirmLabel: "Copy", variant: "warning" })) return; setSaving(true); try { const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); for (const g of grades) { if (g.id !== selectedGrade) await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: g.id, entries: valid }); } toast.success(`Copied to ${grades.length - 1} grades`); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
+   const calcAnnual = (e: { amount: number; frequency: string }) => e.frequency === "MONTHLY" ? e.amount * 12 : e.amount;
+ 
+   return (
+diff --git a/frontend/src/app/admin/grades/page.tsx b/frontend/src/app/admin/grades/page.tsx
+index 9a85337..df57b5a 100644
+--- a/frontend/src/app/admin/grades/page.tsx
++++ b/frontend/src/app/admin/grades/page.tsx
+@@ -3,11 +3,13 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Section { id: string; name: string; _count: { students: number } }
+ interface Grade { id: string; name: string; displayOrder: number; sections: Section[]; _count: { subjects: number; sections: number } }
+ 
+ export default function GradesPage() {
++  const confirm = useConfirm();
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [activeYear, setActiveYear] = useState<any>(null);
+   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+@@ -58,12 +60,12 @@ export default function GradesPage() {
+   };
+ 
+   const deleteGrade = async (id: string) => {
+-    if (!confirm("Delete this grade and all its sections, subjects, and student data?")) return;
++    if (!await confirm({ title: "Delete grade", message: "This grade and all its sections, subjects, and student data will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
+     try { await api.delete(`/grades/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
+   };
+ 
+   const deleteSection = async (id: string) => {
+-    if (!confirm("Delete this section and all its students?")) return;
++    if (!await confirm({ title: "Delete section", message: "This section and all its students will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
+     try { await api.delete(`/sections/${id}`); toast.success("Deleted"); fetchData(); } catch (err: any) { toast.error(err.message); }
+   };
+ 
+diff --git a/frontend/src/app/admin/grading-policy/page.tsx b/frontend/src/app/admin/grading-policy/page.tsx
+index c50f034..f55464a 100644
+--- a/frontend/src/app/admin/grading-policy/page.tsx
++++ b/frontend/src/app/admin/grading-policy/page.tsx
+@@ -3,12 +3,14 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Save } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface ExamType { id: string; name: string; displayOrder: number }
+ interface Grade { id: string; name: string; displayOrder: number }
+ interface Policy { id: string; examTypeId: string; weightagePercent: number; examType: { name: string } }
+ 
+ export default function GradingPolicyPage() {
++  const confirm = useConfirm();
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+   const [selectedGrade, setSelectedGrade] = useState("");
+@@ -59,7 +61,7 @@ export default function GradingPolicyPage() {
+ 
+   const applyToAll = async () => {
+     if (Math.abs(total - 100) > 0.01) return toast.error("Fix current grade first — total must be 100%");
+-    if (!confirm("Apply this weightage to ALL grades?")) return;
++    if (!await confirm({ title: "Apply to all grades", message: "This weightage will be applied to every grade in the active academic year.", confirmLabel: "Apply", variant: "warning" })) return;
+     try {
+       for (const g of grades) {
+         await api.post("/grading-policy/bulk", {
+diff --git a/frontend/src/app/admin/notices/page.tsx b/frontend/src/app/admin/notices/page.tsx
+index f9e3abf..9a60e76 100644
+--- a/frontend/src/app/admin/notices/page.tsx
++++ b/frontend/src/app/admin/notices/page.tsx
+@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Pin, Trash2, Edit2, X, Megaphone } from "lucide-react";
+ import BSDatePicker from "@/components/ui/BSDatePicker";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Grade { id: string; name: string }
+ interface Notice {
+@@ -42,6 +43,7 @@ const priorityColors: Record<string, string> = {
+ };
+ 
+ export default function NoticeBoardPage() {
++  const confirm = useConfirm();
+   const [notices, setNotices] = useState<Notice[]>([]);
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [loading, setLoading] = useState(true);
+@@ -137,7 +139,7 @@ export default function NoticeBoardPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Delete this notice?")) return;
++    if (!await confirm({ title: "Delete notice", message: "This notice will be permanently removed.", confirmLabel: "Delete", variant: "danger" })) return;
+     try {
+       await api.delete(`/notices/${id}`);
+       toast.success("Notice deleted");
+diff --git a/frontend/src/app/admin/observations/page.tsx b/frontend/src/app/admin/observations/page.tsx
+index bd9efea..952d2ef 100644
+--- a/frontend/src/app/admin/observations/page.tsx
++++ b/frontend/src/app/admin/observations/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, X, Eye, EyeOff } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Grade { id: string; name: string; displayOrder: number }
+ interface Category { id: string; name: string; nameNp?: string; displayOrder: number; isActive: boolean }
+@@ -13,6 +14,7 @@ const defaultCategories = [
+ ];
+ 
+ export default function ObservationsPage() {
++  const confirm = useConfirm();
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [selectedGrade, setSelectedGrade] = useState("");
+   const [categories, setCategories] = useState<Category[]>([]);
+@@ -97,7 +99,7 @@ export default function ObservationsPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Remove this category?")) return;
++    if (!await confirm({ title: "Remove category", message: "This observation category and all its results will be removed.", confirmLabel: "Remove", variant: "danger" })) return;
+     try {
+       await api.delete(`/observations/categories/${id}`);
+       toast.success("Removed");
+diff --git a/frontend/src/app/admin/promotion/page.tsx b/frontend/src/app/admin/promotion/page.tsx
+index f8831b5..7edf2d4 100644
+--- a/frontend/src/app/admin/promotion/page.tsx
++++ b/frontend/src/app/admin/promotion/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { ArrowRight, Copy, GraduationCap, ArrowLeftRight } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface AcademicYear { id: string; yearBS: string; isActive: boolean }
+ interface Grade { id: string; name: string; displayOrder: number; sections: Section[] }
+@@ -27,6 +28,7 @@ function getMaxDisplayOrder(grades: Grade[]): number {
+ }
+ 
+ export default function PromotionPage() {
++  const confirm = useConfirm();
+   const [years, setYears] = useState<AcademicYear[]>([]);
+   const [sourceYear, setSourceYear] = useState("");
+   const [targetYear, setTargetYear] = useState("");
+@@ -77,7 +79,7 @@ export default function PromotionPage() {
+ 
+   const handleCopyStructure = async () => {
+     if (!sourceYear || !targetYear) return;
+-    if (!confirm("This will copy all grades, sections, subjects, exam types, and grading policies to the target year. Continue?")) return;
++    if (!await confirm({ title: "Copy academic structure", message: "This will copy all grades, sections, subjects, exam types, and grading policies to the target year.", confirmLabel: "Copy", variant: "warning" })) return;
+     setCopying(true);
+     try {
+       const result = await api.post<any>("/promotion/copy-structure", { sourceYearId: sourceYear, targetYearId: targetYear });
+@@ -133,7 +135,7 @@ export default function PromotionPage() {
+       toast.error("Target year has no grades. Copy structure first.");
+       return;
+     }
+-    if (!confirm(`This will promote/retain/graduate ${students.length} students. This action cannot be easily undone. Continue?`)) return;
++    if (!await confirm({ title: "Confirm promotion", message: `This will promote, retain, or graduate ${students.length} students. This action cannot be easily undone.`, confirmLabel: "Proceed", variant: "warning" })) return;
+ 
+     setPromoting(true);
+     try {
+diff --git a/frontend/src/app/admin/seating/page.tsx b/frontend/src/app/admin/seating/page.tsx
+index ffae67d..dae9851 100644
+--- a/frontend/src/app/admin/seating/page.tsx
++++ b/frontend/src/app/admin/seating/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Printer, Shuffle, X } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface ExamType { id: string; name: string }
+ interface Grade { id: string; name: string; displayOrder: number }
+@@ -22,6 +23,7 @@ interface RoomAllocation {
+ }
+ 
+ export default function SeatingPage() {
++  const confirm = useConfirm();
+   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [rooms, setRooms] = useState<Room[]>([]);
+@@ -111,7 +113,7 @@ export default function SeatingPage() {
+   };
+ 
+   const handleDeleteRoom = async (id: string) => {
+-    if (!confirm("Remove this room?")) return;
++    if (!await confirm({ title: "Remove room", message: "This exam room will be removed from seating arrangements.", confirmLabel: "Remove", variant: "danger" })) return;
+     try {
+       await api.delete(`/seating/rooms/${id}`);
+       setRooms((prev) => prev.filter((r) => r.id !== id));
+@@ -147,7 +149,7 @@ export default function SeatingPage() {
+ 
+   const handleClear = async () => {
+     if (!selectedExam || !activeYear) return;
+-    if (!confirm("Clear all seating allocations for this exam?")) return;
++    if (!await confirm({ title: "Clear seating", message: "All seat allocations for this exam will be cleared.", confirmLabel: "Clear", variant: "warning" })) return;
+     try {
+       await api.delete(`/seating/allocations?examTypeId=${selectedExam}&academicYearId=${activeYear.id}`);
+       setAllocations([]);
+diff --git a/frontend/src/app/admin/students/page.tsx b/frontend/src/app/admin/students/page.tsx
+index 6a50164..474e2b4 100644
+--- a/frontend/src/app/admin/students/page.tsx
++++ b/frontend/src/app/admin/students/page.tsx
+@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Edit2, X, Save, Search } from "lucide-react";
+ import BSDatePicker from "@/components/ui/BSDatePicker";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Student {
+   id: string; name: string; nameNp?: string; rollNo?: number;
+@@ -16,6 +17,7 @@ interface Grade { id: string; name: string; sections: { id: string; name: string
+ const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "" };
+ 
+ export default function StudentsPage() {
++  const confirm = useConfirm();
+   const [students, setStudents] = useState<Student[]>([]);
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [selectedSection, setSelectedSection] = useState("");
+@@ -78,7 +80,7 @@ export default function StudentsPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Deactivate this student?")) return;
++    if (!await confirm({ title: "Deactivate student", message: "The student will be deactivated and will not appear in active lists.", confirmLabel: "Deactivate", variant: "warning" })) return;
+     try { await api.delete(`/students/${id}`); toast.success("Student deactivated"); api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents); } catch (err: any) { toast.error(err.message); }
+   };
+ 
+@@ -91,9 +93,17 @@ export default function StudentsPage() {
+           <h1 className="text-2xl font-display font-bold text-primary">Students</h1>
+           <p className="text-sm text-gray-500 mt-1">Manage student records by class and section</p>
+         </div>
+-        <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); }} className="btn-primary">
+-          <Plus size={16} /> Add Student
+-        </button>
++        <div className="flex items-center gap-3">
++          {selectedSection && (
++            <span className="text-sm text-gray-500">
++              {filtered.length} student{filtered.length !== 1 ? "s" : ""}
++              {search && students.length !== filtered.length ? ` of ${students.length}` : ""}
++            </span>
++          )}
++          <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); }} className="btn-primary">
++            <Plus size={16} /> Add Student
++          </button>
++        </div>
+       </div>
+ 
+       {/* Grade + Section selector */}
+diff --git a/frontend/src/app/admin/subjects/page.tsx b/frontend/src/app/admin/subjects/page.tsx
+index 9af8c5d..6f8fe4a 100644
+--- a/frontend/src/app/admin/subjects/page.tsx
++++ b/frontend/src/app/admin/subjects/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Subject {
+   id: string; name: string; nameNp?: string;
+@@ -15,6 +16,7 @@ interface Grade { id: string; name: string; displayOrder: number }
+ const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, isOptional: false, displayOrder: 0, gradeId: "" };
+ 
+ export default function SubjectsPage() {
++  const confirm = useConfirm();
+   const [subjects, setSubjects] = useState<Subject[]>([]);
+   const [grades, setGrades] = useState<Grade[]>([]);
+   const [selectedGrade, setSelectedGrade] = useState("");
+@@ -65,7 +67,7 @@ export default function SubjectsPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Delete this subject?")) return;
++    if (!await confirm({ title: "Delete subject", message: "This subject and all related marks will be removed.", confirmLabel: "Delete", variant: "danger" })) return;
+     try { await api.delete(`/subjects/${id}`); toast.success("Deleted"); fetchSubjects(); } catch (err: any) { toast.error(err.message); }
+   };
+ 
+diff --git a/frontend/src/app/admin/teacher-assignments/page.tsx b/frontend/src/app/admin/teacher-assignments/page.tsx
+index 3efffa7..98ea5e5 100644
+--- a/frontend/src/app/admin/teacher-assignments/page.tsx
++++ b/frontend/src/app/admin/teacher-assignments/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Clock, Shield, BookOpen, X } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Teacher { id: string; name: string; nameNp?: string; email?: string; phone?: string }
+ interface Grade { id: string; name: string; displayOrder: number; sections: { id: string; name: string }[] }
+@@ -18,6 +19,7 @@ interface Assignment {
+ }
+ 
+ export default function TeacherAssignmentsPage() {
++  const confirm = useConfirm();
+     const [assignments, setAssignments] = useState<Assignment[]>([]);
+     const [teachers, setTeachers] = useState<Teacher[]>([]);
+     const [grades, setGrades] = useState<Grade[]>([]);
+@@ -117,8 +119,8 @@ export default function TeacherAssignmentsPage() {
+     };
+ 
+     const handleDelete = async (id: string, isTemp: boolean) => {
+-        const msg = isTemp ? "Revoke this temporary access?" : "Remove this assignment?";
+-        if (!confirm(msg)) return;
++        const confirmed = await confirm({ title: isTemp ? "Revoke temporary access" : "Remove assignment", message: isTemp ? "This teacher's temporary access will be revoked." : "This teacher assignment will be removed.", confirmLabel: isTemp ? "Revoke" : "Remove", variant: "danger" });
++        if (!confirmed) return;
+         try {
+             if (isTemp) {
+                 await api.post(`/teacher-assignments/${id}/revoke`, {});
+diff --git a/frontend/src/app/admin/teachers/page.tsx b/frontend/src/app/admin/teachers/page.tsx
+index 7ce68ca..2d5668f 100644
+--- a/frontend/src/app/admin/teachers/page.tsx
++++ b/frontend/src/app/admin/teachers/page.tsx
+@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
+ import { api } from "@/lib/api";
+ import toast from "react-hot-toast";
+ import { Plus, Edit2, Trash2, X, KeyRound, UserCheck, UserX } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Assignment {
+   id: string;
+@@ -59,6 +60,7 @@ function buildAssignmentSummary(assignments: Assignment[]): string[] {
+ }
+ 
+ export default function AdminTeachersPage() {
++  const confirm = useConfirm();
+   const [teachers, setTeachers] = useState<Teacher[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [showForm, setShowForm] = useState(false);
+@@ -134,7 +136,7 @@ export default function AdminTeachersPage() {
+   };
+ 
+   const handleDeactivate = async (id: string, name: string) => {
+-    if (!confirm(`Deactivate ${name}? They will not be able to login.`)) return;
++    if (!await confirm({ title: "Deactivate teacher", message: `${name} will be deactivated and will not be able to log in.`, confirmLabel: "Deactivate", variant: "warning" })) return;
+     try {
+       await api.delete(`/teachers/${id}`);
+       toast.success(`${name} deactivated`);
+diff --git a/frontend/src/app/layout.tsx b/frontend/src/app/layout.tsx
+index 66e6d48..3f3b99e 100644
+--- a/frontend/src/app/layout.tsx
++++ b/frontend/src/app/layout.tsx
+@@ -1,6 +1,7 @@
+ import type { Metadata } from "next";
+ import { Toaster } from "react-hot-toast";
+ import { AuthProvider } from "@/hooks/useAuth";
++import { ConfirmDialogMount } from "@/components/ui/ConfirmDialog";
+ import "./globals.css";
+ 
+ export const metadata: Metadata = {
+@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode })
+       <body>
+         <AuthProvider>
+           {children}
++          <ConfirmDialogMount />
+           <Toaster
+             position="top-right"
+             toastOptions={{
+diff --git a/frontend/src/app/login/page.tsx b/frontend/src/app/login/page.tsx
+index 47c884d..f22e87b 100644
+--- a/frontend/src/app/login/page.tsx
++++ b/frontend/src/app/login/page.tsx
+@@ -67,11 +67,7 @@ export default function LoginPage() {
+             </button>
+           </form>
+ 
+-          <div className="mt-6 p-3 bg-surface rounded-lg text-xs text-gray-500">
+-            <p className="font-semibold mb-1">Default Admin:</p>
+-            <p>Email: admin@school.edu.np</p>
+-            <p>Password: admin123</p>
+-          </div>
++
+         </div>
+       </div>
+     </div>
+diff --git a/frontend/src/app/parent/page.tsx b/frontend/src/app/parent/page.tsx
+index e8ef13d..3758b5e 100644
+--- a/frontend/src/app/parent/page.tsx
++++ b/frontend/src/app/parent/page.tsx
+@@ -223,22 +223,60 @@ export default function ParentDashboard() {
+             {/* Attendance Tab */}
+             {tab === "attendance" && (
+               <div>
+-                {attendance ? (
+-                  <div className="grid grid-cols-3 gap-4">
+-                    <div className="card p-4 text-center">
+-                      <p className="text-2xl font-bold text-primary">{attendance.totalDays}</p>
+-                      <p className="text-xs text-gray-500">Total Working Days</p>
++                {attendance ? (() => {
++                  const rate = attendance.totalDays > 0
++                    ? Math.round((attendance.presentDays / attendance.totalDays) * 100)
++                    : 0;
++                  const color = rate >= 90 ? "#16a34a" : rate >= 75 ? "#d97706" : "#dc2626";
++                  const circumference = 2 * Math.PI * 40;
++                  const dash = (rate / 100) * circumference;
++                  return (
++                    <div className="card p-6">
++                      {/* Ring + stats */}
++                      <div className="flex items-center gap-8">
++                        {/* SVG ring */}
++                        <div className="shrink-0">
++                          <svg width="100" height="100" viewBox="0 0 100 100">
++                            <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="10" />
++                            <circle
++                              cx="50" cy="50" r="40" fill="none"
++                              stroke={color} strokeWidth="10"
++                              strokeLinecap="round"
++                              strokeDasharray={`${dash} ${circumference}`}
++                              transform="rotate(-90 50 50)"
++                              style={{ transition: "stroke-dasharray 0.6s ease" }}
++                            />
++                            <text x="50" y="46" textAnchor="middle" fontSize="18" fontWeight="700" fill={color}>{rate}%</text>
++                            <text x="50" y="60" textAnchor="middle" fontSize="9" fill="#9ca3af">attendance</text>
++                          </svg>
++                        </div>
++                        {/* Stats */}
++                        <div className="flex-1 space-y-3">
++                          <div className="flex items-center justify-between">
++                            <span className="text-sm text-gray-500">Total working days</span>
++                            <span className="text-sm font-bold text-gray-800">{attendance.totalDays}</span>
++                          </div>
++                          <div className="flex items-center justify-between">
++                            <span className="text-sm text-gray-500">Present</span>
++                            <span className="text-sm font-bold text-emerald-600">{attendance.presentDays} days</span>
++                          </div>
++                          <div className="flex items-center justify-between">
++                            <span className="text-sm text-gray-500">Absent</span>
++                            <span className="text-sm font-bold text-red-500">{attendance.absentDays} days</span>
++                          </div>
++                          <div className="pt-2 border-t border-gray-100">
++                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
++                              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${rate}%`, backgroundColor: color }} />
++                            </div>
++                            <p className="text-xs text-gray-400 mt-1">
++                              {rate >= 90 ? "Excellent attendance" : rate >= 75 ? "Satisfactory attendance" : "Attendance needs improvement"}
++                            </p>
++                          </div>
++                        </div>
++                      </div>
+                     </div>
+-                    <div className="card p-4 text-center">
+-                      <p className="text-2xl font-bold text-emerald-600">{attendance.presentDays}</p>
+-                      <p className="text-xs text-gray-500">Present Days</p>
+-                    </div>
+-                    <div className="card p-4 text-center">
+-                      <p className="text-2xl font-bold text-red-600">{attendance.absentDays}</p>
+-                      <p className="text-xs text-gray-500">Absent Days</p>
+-                    </div>
+-                  </div>
+-                ) : (
++                  );
++                })() : (
+                   <div className="card p-8 text-center text-gray-400">No attendance data available.</div>
+                 )}
+               </div>
+diff --git a/frontend/src/app/teacher/homework/page.tsx b/frontend/src/app/teacher/homework/page.tsx
+index 9b560a9..d193c28 100644
+--- a/frontend/src/app/teacher/homework/page.tsx
++++ b/frontend/src/app/teacher/homework/page.tsx
+@@ -5,6 +5,7 @@ import { formatGradeSection } from "@/lib/bsDate";
+ import { useAuth } from "@/hooks/useAuth";
+ import toast from "react-hot-toast";
+ import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
++import { useConfirm } from "@/components/ui/ConfirmDialog";
+ 
+ interface Assignment {
+   sectionId: string;
+@@ -27,6 +28,7 @@ interface Homework {
+ }
+ 
+ export default function TeacherHomeworkPage() {
++  const confirm = useConfirm();
+   const { user } = useAuth();
+   const [assignments, setAssignments] = useState<Assignment[]>([]);
+   const [homework, setHomework] = useState<Homework[]>([]);
+@@ -122,7 +124,7 @@ export default function TeacherHomeworkPage() {
+   };
+ 
+   const handleDelete = async (id: string) => {
+-    if (!confirm("Remove this homework?")) return;
++    if (!await confirm({ title: "Remove homework", message: "This homework assignment will be removed for all students.", confirmLabel: "Remove", variant: "danger" })) return;
+     try {
+       await api.delete(`/homework/${id}`);
+       toast.success("Homework removed");
+diff --git a/frontend/src/components/ui/ConfirmDialog.tsx b/frontend/src/components/ui/ConfirmDialog.tsx
+new file mode 100644
+index 0000000..40d61de
+--- /dev/null
++++ b/frontend/src/components/ui/ConfirmDialog.tsx
+@@ -0,0 +1,125 @@
++"use client";
++import { useState, useCallback, useRef, useEffect } from "react";
++import { AlertTriangle, Trash2, AlertCircle } from "lucide-react";
++
++type Variant = "danger" | "warning" | "info";
++
++interface ConfirmOptions {
++  title: string;
++  message: string;
++  confirmLabel?: string;
++  variant?: Variant;
++}
++
++interface DialogState extends ConfirmOptions {
++  resolve: (value: boolean) => void;
++}
++
++// ─── Singleton event bus ──────────────────────────────────
++type Listener = (state: DialogState | null) => void;
++let _listener: Listener | null = null;
++
++function emit(state: DialogState | null) {
++  _listener?.(state);
++}
++
++// ─── Hook — call this in any component ───────────────────
++export function useConfirm() {
++  return useCallback((options: ConfirmOptions): Promise<boolean> => {
++    return new Promise((resolve) => {
++      emit({ ...options, resolve });
++    });
++  }, []);
++}
++
++// ─── Dialog mount — add once to root layout ──────────────
++export function ConfirmDialogMount() {
++  const [dialog, setDialog] = useState<DialogState | null>(null);
++  const confirmRef = useRef<HTMLButtonElement>(null);
++
++  useEffect(() => {
++    _listener = setDialog;
++    return () => { _listener = null; };
++  }, []);
++
++  // Focus confirm button when dialog opens
++  useEffect(() => {
++    if (dialog) setTimeout(() => confirmRef.current?.focus(), 50);
++  }, [dialog]);
++
++  // Close on Escape
++  useEffect(() => {
++    if (!dialog) return;
++    const handler = (e: KeyboardEvent) => {
++      if (e.key === "Escape") { dialog.resolve(false); setDialog(null); }
++    };
++    document.addEventListener("keydown", handler);
++    return () => document.removeEventListener("keydown", handler);
++  }, [dialog]);
++
++  if (!dialog) return null;
++
++  const variant = dialog.variant ?? "danger";
++
++  const variantStyles = {
++    danger: {
++      icon: <Trash2 size={20} className="text-red-600" />,
++      iconBg: "bg-red-50",
++      confirmBtn: "bg-red-600 hover:bg-red-700 text-white",
++    },
++    warning: {
++      icon: <AlertTriangle size={20} className="text-amber-600" />,
++      iconBg: "bg-amber-50",
++      confirmBtn: "bg-amber-600 hover:bg-amber-700 text-white",
++    },
++    info: {
++      icon: <AlertCircle size={20} className="text-blue-600" />,
++      iconBg: "bg-blue-50",
++      confirmBtn: "bg-primary hover:bg-primary-dark text-white",
++    },
++  }[variant];
++
++  const handleConfirm = () => { dialog.resolve(true); setDialog(null); };
++  const handleCancel = () => { dialog.resolve(false); setDialog(null); };
++
++  return (
++    <div
++      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
++      onMouseDown={(e) => { if (e.target === e.currentTarget) handleCancel(); }}
++    >
++      {/* Overlay */}
++      <div className="absolute inset-0 bg-black/30" />
++
++      {/* Dialog */}
++      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in zoom-in-95 duration-150">
++        {/* Icon + Title */}
++        <div className="flex items-start gap-4 mb-3">
++          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${variantStyles.iconBg}`}>
++            {variantStyles.icon}
++          </div>
++          <div>
++            <h3 className="font-semibold text-gray-900 text-base leading-tight">{dialog.title}</h3>
++            <p className="text-sm text-gray-500 mt-1 leading-relaxed">{dialog.message}</p>
++          </div>
++        </div>
++
++        {/* Actions */}
++        <div className="flex justify-end gap-2 mt-5">
++          <button
++            onClick={handleCancel}
++            className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
++          >
++            Cancel
++          </button>
++          <button
++            ref={confirmRef}
++            onClick={handleConfirm}
++            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${variantStyles.confirmBtn}`}
++          >
++            {dialog.confirmLabel ?? "Confirm"}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
+-- 
+2.43.0
+
