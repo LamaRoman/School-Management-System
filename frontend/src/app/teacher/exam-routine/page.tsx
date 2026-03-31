@@ -38,7 +38,7 @@ export default function TeacherExamRoutinePage() {
       try {
         const data = await api.get<any>("/teacher-assignments/my");
         setSections(data.classTeacherSections || []);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

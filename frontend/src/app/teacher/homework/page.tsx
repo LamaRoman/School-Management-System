@@ -48,7 +48,7 @@ export default function TeacherHomeworkPage() {
         setAssignments(data.subjectAssignments || []);
         const hw = await api.get<Homework[]>("/homework");
         setHomework(hw);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

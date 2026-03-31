@@ -46,7 +46,7 @@ export default function FeeManagementPage() {
           year ? api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`) : Promise.resolve([]),
         ]);
         setCategories(cats); setGrades(g); setExamTypes(et);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

@@ -78,7 +78,7 @@ export default function AdminDashboard() {
         ]);
         setSchool(schoolData);
         setAnalytics(analyticsData);
-      } catch {}
+      } catch (err) { console.error(err); }
       finally { setLoading(false); }
     })();
   }, []);

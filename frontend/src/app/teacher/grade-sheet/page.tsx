@@ -30,7 +30,7 @@ export default function TeacherGradeSheetPage() {
         if (sections.length > 0) {
           setSelectedSection(sections[0]);
         }
-      } catch {}
+      } catch (err) { console.error(err); }
       finally { setLoading(false); }
     })();
   }, []);

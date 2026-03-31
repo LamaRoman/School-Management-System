@@ -27,7 +27,7 @@ export default function AdminGradeSheetPage() {
           setGrades(g);
           setExamTypes(et);
         }
-      } catch {}
+      } catch (err) { console.error(err); }
       finally { setLoading(false); }
     })();
   }, []);

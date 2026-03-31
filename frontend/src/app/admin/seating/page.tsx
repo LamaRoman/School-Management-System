@@ -55,7 +55,7 @@ export default function SeatingPage() {
           setGrades(g);
           setRooms(r);
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

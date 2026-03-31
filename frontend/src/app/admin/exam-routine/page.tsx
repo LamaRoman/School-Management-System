@@ -47,7 +47,7 @@ export default function ExamRoutinePage() {
           setGrades(g);
           setExamTypes(et);
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

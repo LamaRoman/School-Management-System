@@ -54,7 +54,7 @@ export default function PromotionPage() {
       try {
         const y = await api.get<AcademicYear[]>("/academic-years");
         setYears(y);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -174,7 +174,7 @@ export default function PromotionPage() {
         });
         setAllSections(secs);
       }
-    } catch {}
+    } catch (err) { console.error(err); }
   };
 
   const handleTransfer = async () => {

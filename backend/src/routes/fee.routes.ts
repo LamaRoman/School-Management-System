@@ -535,7 +535,9 @@ router.get("/invoices-bulk", authenticate, async (req, res) => {
       });
       const json = await response.json();
       if (json.data) invoices.push(json.data);
-    } catch {}
+    } catch (err) {
+      console.error(`[invoices-bulk] Failed to generate invoice for student ${student.id}:`, err);
+    }
   }
 
   res.json({ data: invoices });

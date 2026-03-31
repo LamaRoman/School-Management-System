@@ -42,7 +42,7 @@ export default function StudentExamRoutinePage() {
             setGradeName(student.section.grade.name);
           }
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, [user]);
 

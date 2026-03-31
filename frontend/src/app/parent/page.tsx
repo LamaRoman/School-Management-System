@@ -47,7 +47,7 @@ export default function ParentDashboard() {
         if (data.length > 0) {
           setSelectedChild(data[0]);
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -71,7 +71,7 @@ export default function ParentDashboard() {
         const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
         setExamTypes(et);
       }
-    } catch {}
+    } catch (err) { console.error(err); }
   };
 
   const loadReport = async (examTypeId: string) => {

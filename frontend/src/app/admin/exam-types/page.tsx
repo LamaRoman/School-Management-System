@@ -23,7 +23,7 @@ export default function ExamTypesPage() {
         const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
         setExamTypes(et);
       }
-    } catch {} finally { setLoading(false); }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);

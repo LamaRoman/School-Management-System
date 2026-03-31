@@ -310,7 +310,7 @@ export default function TeacherMyClassPage() {
         ]);
         setSections(data.classTeacherSections || []);
         if (settings) setCols(settings);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

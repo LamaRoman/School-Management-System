@@ -38,7 +38,7 @@ export default function TeacherNoticesPage() {
       try {
         const data = await api.get<Notice[]>("/notices");
         setNotices(data);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

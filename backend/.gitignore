@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.local
+.env.production
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma generated client (regenerated via prisma generate)
+# node_modules/@prisma/client is covered above
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript build info
+*.tsbuildinfo

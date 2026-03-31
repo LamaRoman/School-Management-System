@@ -69,7 +69,7 @@ export default function StudentReportPage() {
           const et = await api.get<any[]>(`/exam-types?academicYearId=${year.id}`);
           setExamTypes(et);
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

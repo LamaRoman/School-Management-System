@@ -78,7 +78,7 @@ export default function AdminTeachersPage() {
       const url = showInactive ? "/teachers/all" : "/teachers";
       const data = await api.get<Teacher[]>(url);
       setTeachers(data);
-    } catch {} finally { setLoading(false); }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchTeachers(); }, [showInactive]);

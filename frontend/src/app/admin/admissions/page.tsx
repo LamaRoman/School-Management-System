@@ -63,7 +63,7 @@ export default function AdmissionPage() {
           setGrades(g);
           await fetchAdmissions(year.id, "");
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

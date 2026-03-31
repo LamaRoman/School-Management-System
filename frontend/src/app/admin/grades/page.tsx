@@ -26,7 +26,7 @@ export default function GradesPage() {
         const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
         setGrades(g);
       }
-    } catch {} finally { setLoading(false); }
+    } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);

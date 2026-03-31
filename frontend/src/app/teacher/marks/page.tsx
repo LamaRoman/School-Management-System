@@ -48,7 +48,7 @@ export default function MarksEntryPage() {
           const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${yearId}`);
           setExamTypes(et);
         }
-      } catch {}
+      } catch (err) { console.error(err); }
       finally { setLoading(false); }
     })();
   }, []);

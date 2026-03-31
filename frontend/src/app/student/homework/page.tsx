@@ -23,7 +23,7 @@ export default function StudentHomeworkPage() {
       try {
         const data = await api.get<Homework[]>("/homework");
         setHomework(data);
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 

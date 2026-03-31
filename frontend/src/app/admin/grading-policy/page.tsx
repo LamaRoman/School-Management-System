@@ -31,7 +31,7 @@ export default function GradingPolicyPage() {
           setExamTypes(et);
           if (g.length > 0) setSelectedGrade(g[0].id);
         }
-      } catch {} finally { setLoading(false); }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
 
