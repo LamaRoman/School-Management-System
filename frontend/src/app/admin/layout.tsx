@@ -18,6 +18,7 @@ import {
   Receipt,
   Megaphone,
   UserPlus,
+  Users2,
 } from "lucide-react";
 
 const navGroups = [
@@ -44,6 +45,7 @@ const navGroups = [
       { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
       { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
       { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
+      { href: "/admin/parents", label: "Parents", icon: Users2 },
     ],
   },
   {

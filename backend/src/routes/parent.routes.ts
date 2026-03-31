@@ -220,3 +220,18 @@ router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
 });
 
 export default router;
+// PUT /api/parents/:parentId/toggle — admin toggles parent active status
+router.put("/:parentId/toggle", authenticate, authorize("ADMIN"), async (req, res) => {
+  const parent = await prisma.user.findUniqueOrThrow({
+    where: { id: req.params.parentId, role: "PARENT" },
+    select: { id: true, isActive: true },
+  });
+
+  const updated = await prisma.user.update({
+    where: { id: parent.id },
+    data: { isActive: !parent.isActive },
+    select: { id: true, email: true, isActive: true },
+  });
+
+  res.json({ data: updated });
+});
