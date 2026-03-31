@@ -17,7 +17,7 @@ const subjectSchema = z.object({
 });
 
 // GET /api/subjects?gradeId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { gradeId } = req.query;
   const subjects = await prisma.subject.findMany({
     where: gradeId ? { gradeId: String(gradeId) } : undefined,
@@ -28,7 +28,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/subjects/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const subject = await prisma.subject.findUniqueOrThrow({
     where: { id: req.params.id },
     include: { grade: true },

@@ -126,7 +126,7 @@ router.delete("/:parentId/unlink/:studentId", authenticate, authorize("ADMIN"), 
 
 // GET /api/parents/my-children — parent sees their linked students
 router.get("/my-children", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
 
   const links = await prisma.parentStudent.findMany({
     where: { parentId: user.userId },
@@ -155,7 +155,7 @@ router.get("/my-children", authenticate, async (req, res) => {
 
 // GET /api/parents/child/:studentId/fees — parent views child's fee status
 router.get("/child/:studentId/fees", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
   const { studentId } = req.params;
 
   // Verify parent is linked to this student
@@ -199,7 +199,7 @@ router.get("/child/:studentId/fees", authenticate, async (req, res) => {
 
 // GET /api/parents/child/:studentId/attendance — parent views child's attendance
 router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
   const { studentId } = req.params;
 
   if (user.role === "PARENT") {

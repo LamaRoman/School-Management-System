@@ -6,7 +6,7 @@ import { authenticate, authorize } from "../middleware/auth";
 const router = Router();
 
 // GET /api/grading-policy?gradeId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { gradeId } = req.query;
   const policies = await prisma.gradingPolicy.findMany({
     where: gradeId ? { gradeId: String(gradeId) } : undefined,

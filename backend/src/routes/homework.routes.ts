@@ -36,7 +36,7 @@ async function isAssignedToSection(teacherId: string, sectionId: string, subject
 // Students see homework for their section
 // Admin sees all
 router.get("/", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
   const { sectionId, subjectId, academicYearId } = req.query;
 
   const where: any = { isActive: true };
@@ -93,7 +93,7 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/homework — teacher creates homework for their assigned section/subject
 router.post("/", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
 
   if (user.role !== "TEACHER" && user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN") {
     throw new AppError("Only teachers and admins can create homework", 403);
@@ -144,7 +144,7 @@ router.post("/", authenticate, async (req, res) => {
 
 // PUT /api/homework/:id
 router.put("/:id", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
   const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
 
   if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && existing.assignedById !== user.userId) {
@@ -178,7 +178,7 @@ router.put("/:id", authenticate, async (req, res) => {
 
 // DELETE /api/homework/:id
 router.delete("/:id", authenticate, async (req, res) => {
-  const user = (req as any).user;
+  const user = req.user!;
   const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
 
   if (user.role !== "ADMIN" && user.role !== "SYSTEM_ADMIN" && existing.assignedById !== user.userId) {

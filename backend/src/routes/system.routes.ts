@@ -100,7 +100,7 @@ router.put("/admins/:id", authenticate, authorize("SYSTEM_ADMIN"), async (req, r
   const data = schema.parse(req.body);
 
   // Don't allow editing yourself out
-  const user = (req as any).user;
+  const user = req.user!;
   if (req.params.id === user.userId && data.isActive === false) {
     throw new AppError("You cannot deactivate your own account", 400);
   }

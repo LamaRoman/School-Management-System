@@ -12,7 +12,7 @@ const gradeSchema = z.object({
 });
 
 // GET /api/grades?academicYearId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { academicYearId } = req.query;
   const grades = await prisma.grade.findMany({
     where: academicYearId ? { academicYearId: String(academicYearId) } : undefined,
@@ -29,7 +29,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/grades/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const grade = await prisma.grade.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {

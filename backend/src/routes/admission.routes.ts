@@ -135,7 +135,7 @@ router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) 
   });
 
   const { reviewedDate, remarks } = schema.parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   const admission = await prisma.admission.findUniqueOrThrow({
     where: { id: req.params.id },
@@ -170,7 +170,7 @@ router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
   });
 
   const { reviewedDate, remarks } = schema.parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   const admission = await prisma.admission.findUniqueOrThrow({
     where: { id: req.params.id },

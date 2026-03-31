@@ -13,7 +13,7 @@ const yearSchema = z.object({
 });
 
 // GET /api/academic-years
-router.get("/", async (_req, res) => {
+router.get("/", authenticate, async (_req, res) => {
   const years = await prisma.academicYear.findMany({
     orderBy: { yearBS: "desc" },
     include: { _count: { select: { grades: true } } },
@@ -22,7 +22,7 @@ router.get("/", async (_req, res) => {
 });
 
 // GET /api/academic-years/active
-router.get("/active", async (_req, res) => {
+router.get("/active", authenticate, async (_req, res) => {
   const year = await prisma.academicYear.findFirst({
     where: { isActive: true },
     include: { grades: { orderBy: { displayOrder: "asc" } } },
@@ -31,7 +31,7 @@ router.get("/active", async (_req, res) => {
 });
 
 // GET /api/academic-years/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const year = await prisma.academicYear.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {

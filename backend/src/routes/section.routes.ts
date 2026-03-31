@@ -12,7 +12,7 @@ const sectionSchema = z.object({
 });
 
 // GET /api/sections?gradeId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { gradeId } = req.query;
   const sections = await prisma.section.findMany({
     where: gradeId ? { gradeId: String(gradeId) } : undefined,
@@ -26,7 +26,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/sections/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {

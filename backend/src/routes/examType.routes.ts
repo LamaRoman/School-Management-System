@@ -14,7 +14,7 @@ const examTypeSchema = z.object({
 });
 
 // GET /api/exam-types?academicYearId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { academicYearId } = req.query;
   const examTypes = await prisma.examType.findMany({
     where: academicYearId ? { academicYearId: String(academicYearId) } : undefined,
@@ -24,7 +24,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/exam-types/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const examType = await prisma.examType.findUniqueOrThrow({
     where: { id: req.params.id },
     include: { gradingPolicies: true },

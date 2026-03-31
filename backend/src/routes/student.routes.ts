@@ -63,22 +63,16 @@ async function authorizeForSection(user: any, sectionId: string): Promise<void> 
 
 /**
  * Auto-create a User account for a newly added student.
- * Email: firstname.lastname@school.edu.np
+ * Email: firstname.lastname@school.edu.np (uuid suffix guarantees uniqueness in one query)
  * Default password: student123
  */
 async function autoCreateStudentUser(studentId: string, studentName: string): Promise<void> {
   const baseName = studentName.toLowerCase().trim().replace(/\s+/g, ".");
-  let email = `${baseName}@school.edu.np`;
+  // Use the studentId suffix to guarantee uniqueness without any DB lookup loop
+  const email = `${baseName}.${studentId.slice(-6)}@school.edu.np`;
 
-  let attempts = 0;
-  while (attempts < 100) {
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (!existing) break;
-    attempts++;
-    email = `${baseName}${attempts}@school.edu.np`;
-  }
-
-  const hashedPassword = await bcrypt.hash("student123", 10);
+  const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   await prisma.user.create({
     data: {
@@ -94,7 +88,7 @@ async function autoCreateStudentUser(studentId: string, studentName: string): Pr
 // ─── ROUTES ─────────────────────────────────────────────
 
 // GET /api/students?sectionId=xxx&gradeId=xxx
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   const { sectionId, gradeId } = req.query;
   const where: any = { isActive: true };
   if (sectionId) where.sectionId = String(sectionId);
@@ -111,7 +105,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET /api/students/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {
@@ -127,7 +121,7 @@ router.get("/:id", async (req, res) => {
 // POST /api/students — create student + auto-create user account
 router.post("/", authenticate, async (req, res) => {
   const data = studentSchema.parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   await authorizeForSection(user, data.sectionId);
 
@@ -149,7 +143,7 @@ router.post("/bulk", authenticate, async (req, res) => {
     students: z.array(studentSchema.omit({ sectionId: true })),
   });
   const { sectionId, students } = schema.parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   await authorizeForSection(user, sectionId);
 
@@ -171,7 +165,7 @@ router.post("/bulk", authenticate, async (req, res) => {
 // PUT /api/students/:id
 router.put("/:id", authenticate, async (req, res) => {
   const data = studentSchema.partial().parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: req.params.id },
@@ -201,7 +195,7 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
   });
 
   const { sectionId, assignments } = schema.parse(req.body);
-  const user = (req as any).user;
+  const user = req.user!;
 
   await authorizeForSection(user, sectionId);
 
