@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Pin, Trash2, Edit2, X, Megaphone } from "lucide-react";
+import BSDatePicker from "@/components/ui/BSDatePicker";
 
 interface Grade { id: string; name: string }
 interface Notice {
@@ -223,11 +224,11 @@ export default function NoticeBoardPage() {
             <div className="grid grid-cols-4 gap-3">
               <div>
                 <label className="label">Publish Date (BS) *</label>
-                <input className="input" value={form.publishDate} onChange={(e) => setForm({ ...form, publishDate: e.target.value })} placeholder="2082/01/15" />
+                <BSDatePicker value={form.publishDate} onChange={(date) => setForm({ ...form, publishDate: date })} placeholder="2082/01/15" />
               </div>
               <div>
                 <label className="label">Expiry Date (BS)</label>
-                <input className="input" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} placeholder="Optional" />
+                <BSDatePicker value={form.expiryDate} onChange={(date) => setForm({ ...form, expiryDate: date })} placeholder="Optional" />
               </div>
               <div className="flex items-end gap-4">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">

@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
 import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
+import BSDatePicker from "@/components/ui/BSDatePicker";
 
 interface FeeCategory { id: string; name: string; description?: string }
 interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
@@ -372,7 +373,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
           {(payMonths.length > 0 || payFixed.length > 0) && (
             <div className="card p-4 mb-4">
               <div className="flex items-center gap-4">
-                <div className="flex-1"><label className="label">Date</label><input className="input" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></div>
+                <div className="flex-1"><label className="label">Date</label><BSDatePicker value={paymentDate} onChange={(date) => setPaymentDate(date)} /></div>
                 <div className="flex-1"><label className="label">Method</label><select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}><option value="CASH">Cash</option><option value="BANK">Bank</option><option value="ONLINE">Online</option></select></div>
                 <div className="flex-1 text-right"><p className="text-xs text-gray-500">Total</p><p className="text-xl font-bold text-primary">Rs {calculateTotal().toLocaleString()}</p></div>
                 <button onClick={handleCollect} disabled={saving} className="btn-primary text-sm"><Receipt size={16} /> {saving ? "Processing..." : "Collect & Print"}</button>

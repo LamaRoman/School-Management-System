@@ -31,15 +31,19 @@ class ApiClient {
 
     const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
+    const json = await res.json();
+
     if (res.status === 401) {
+      const hadToken = !!this.token;
       this.setToken(null);
-      if (typeof window !== "undefined") {
+      // Only redirect if user was previously logged in (session expired)
+      // Don't redirect for login attempts — let the caller handle the error
+      if (hadToken && typeof window !== "undefined") {
         window.location.href = "/login";
       }
-      throw new Error("Unauthorized");
+      throw new Error(json.error || "Unauthorized");
     }
 
-    const json = await res.json();
     if (!res.ok) {
       throw new Error(json.error || "Something went wrong");
     }

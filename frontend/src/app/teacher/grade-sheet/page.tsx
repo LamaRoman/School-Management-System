@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { formatGradeSection } from "@/lib/bsDate";
 import GradeSheet from "@/components/ui/GradeSheet";
 
 interface ClassTeacherSection {
@@ -69,7 +70,7 @@ export default function TeacherGradeSheetPage() {
         <div>
           <h1 className="text-2xl font-display font-bold text-primary">Grade Sheet</h1>
           <p className="text-sm text-gray-500">
-            {selectedSection?.gradeName} — Section {selectedSection?.sectionName}
+            {selectedSection ? formatGradeSection(selectedSection.gradeName, selectedSection.sectionName, mySections) : ""}
           </p>
         </div>
         {mySections.length > 1 && (
@@ -83,7 +84,7 @@ export default function TeacherGradeSheetPage() {
           >
             {mySections.map((s) => (
               <option key={s.assignmentId} value={s.assignmentId}>
-                {s.gradeName} - Section {s.sectionName}
+                {formatGradeSection(s.gradeName, s.sectionName, mySections)}
               </option>
             ))}
           </select>

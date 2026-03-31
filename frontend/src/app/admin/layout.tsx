@@ -20,25 +20,55 @@ import {
   UserPlus,
 } from "lucide-react";
 
-const navItems = [
-  { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
-  { href: "/admin", label: "Dashboard", icon: LayoutGrid },
-  { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
-  { href: "/admin/grades", label: "Grades & Sections", icon: Layers },
-  { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
-  { href: "/admin/exam-types", label: "Exam Types", icon: ClipboardList },
-  { href: "/admin/grading-policy", label: "Grading Policy", icon: Settings },
-  { href: "/admin/students", label: "Students", icon: Users },
-  { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
-  { href: "/admin/observations", label: "Observations", icon: ClipboardList },
-  { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
-  { href: "/admin/report-settings", label: "Report Card Settings", icon: Settings },
-  { href: "/admin/fees", label: "Fee Management", icon: Receipt },
-  { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
-  { href: "/admin/exam-routine", label: "Exam Routine", icon: CalendarDays },
-  { href: "/admin/seating", label: "Exam Seating", icon: LayoutGrid },
-  { href: "/admin/notices", label: "Notice Board", icon: Megaphone },
-  { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
+const navGroups = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/admin", label: "Dashboard", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "Academic",
+    items: [
+      { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
+      { href: "/admin/grades", label: "Grades & Sections", icon: Layers },
+      { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
+      { href: "/admin/exam-types", label: "Exam Types", icon: ClipboardList },
+      { href: "/admin/grading-policy", label: "Grading Policy", icon: Settings },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      { href: "/admin/students", label: "Students", icon: Users },
+      { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
+      { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
+      { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
+    ],
+  },
+  {
+    label: "Results",
+    items: [
+      { href: "/admin/observations", label: "Observations", icon: ClipboardList },
+      { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
+      { href: "/admin/report-settings", label: "Report Card Settings", icon: Settings },
+      { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "Exams",
+    items: [
+      { href: "/admin/exam-routine", label: "Exam Routine", icon: CalendarDays },
+      { href: "/admin/seating", label: "Exam Seating", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "Finance & Comms",
+    items: [
+      { href: "/admin/fees", label: "Fee Management", icon: Receipt },
+      { href: "/admin/notices", label: "Notice Board", icon: Megaphone },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -61,7 +91,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen flex bg-surface">
-      <aside className="w-64 bg-primary text-white flex flex-col shadow-xl">
+      <aside className="w-64 bg-primary text-white flex flex-col shadow-xl shrink-0">
+        {/* Logo */}
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
@@ -74,41 +105,57 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== "/admin" && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                  isActive
-                    ? "bg-white/15 text-white font-semibold"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <item.icon size={18} />
-                {item.label}
-              </Link>
-            );
-          })}
+        {/* Grouped nav */}
+        <nav className="flex-1 py-3 px-3 overflow-y-auto space-y-4">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest px-3 mb-1">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/admin" && pathname.startsWith(item.href));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                        isActive
+                          ? "bg-white/15 text-white font-semibold"
+                          : "text-white/65 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <item.icon size={16} className="shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
+        {/* User footer */}
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center justify-between">
-            <div className="text-xs">
-              <p className="text-white/90 font-medium">{user.email}</p>
+            <div className="text-xs min-w-0">
+              <p className="text-white/90 font-medium truncate">{user.email}</p>
               <p className="text-white/40 uppercase text-[10px]">{user.role}</p>
             </div>
-            <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg transition-all" title="Logout">
+            <button
+              onClick={logout}
+              className="p-2 hover:bg-white/10 rounded-lg transition-all shrink-0"
+              title="Logout"
+            >
               <LogOut size={16} className="text-white/60" />
             </button>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto min-w-0">
         <div className="max-w-6xl mx-auto p-6">
           {children}
         </div>

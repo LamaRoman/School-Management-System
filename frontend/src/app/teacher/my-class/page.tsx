@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
+import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Printer, Download, ChevronLeft, Users } from "lucide-react";
 
@@ -463,7 +464,7 @@ export default function TeacherMyClassPage() {
         {sections.map((sec) => (
           <button key={sec.sectionId} onClick={() => handleSectionSelect(sec)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === sec.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
-            {sec.gradeName} — Section {sec.sectionName}
+            {formatGradeSection(sec.gradeName, sec.sectionName, sections)}
           </button>
         ))}
       </div>

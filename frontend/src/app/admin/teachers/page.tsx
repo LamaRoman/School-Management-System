@@ -4,6 +4,13 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Edit2, Trash2, X, KeyRound, UserCheck, UserX } from "lucide-react";
 
+interface Assignment {
+  id: string;
+  isClassTeacher: boolean;
+  section: { name: string; grade: { name: string } };
+  subject: { name: string } | null;
+}
+
 interface Teacher {
   id: string;
   name: string;
@@ -11,8 +18,44 @@ interface Teacher {
   phone?: string;
   email?: string;
   isActive: boolean;
-  _count: { assignments: number };
+  assignments: Assignment[];
   user?: { id: string; email: string; isActive: boolean };
+}
+
+// Groups assignments by section and returns formatted summary lines
+// e.g. ["VIII-A  Class Teacher · 5 subjects", "VII-B  3 subjects"]
+function buildAssignmentSummary(assignments: Assignment[]): string[] {
+  if (!assignments || assignments.length === 0) return [];
+
+  // Group by "GradeName-SectionName"
+  const sectionMap = new Map<
+    string,
+    { label: string; isClassTeacher: boolean; subjectCount: number }
+  >();
+
+  for (const a of assignments) {
+    const key = `${a.section.grade.name}-${a.section.name}`;
+    const label = `${a.section.grade.name}-${a.section.name}`;
+    const existing = sectionMap.get(key);
+
+    if (existing) {
+      if (a.isClassTeacher) existing.isClassTeacher = true;
+      if (a.subject) existing.subjectCount++;
+    } else {
+      sectionMap.set(key, {
+        label,
+        isClassTeacher: a.isClassTeacher,
+        subjectCount: a.subject ? 1 : 0,
+      });
+    }
+  }
+
+  return Array.from(sectionMap.values()).map((s) => {
+    const parts: string[] = [];
+    if (s.isClassTeacher) parts.push("Class Teacher");
+    if (s.subjectCount > 0) parts.push(`${s.subjectCount} subject${s.subjectCount !== 1 ? "s" : ""}`);
+    return `${s.label}  ${parts.join(" · ")}`;
+  });
 }
 
 export default function AdminTeachersPage() {
@@ -201,52 +244,75 @@ export default function AdminTeachersPage() {
               <th className="text-left px-5 py-3">Name</th>
               <th className="text-left px-5 py-3">Login Email</th>
               <th className="text-left px-5 py-3">Phone</th>
-              <th className="text-center px-5 py-3">Assignments</th>
+              <th className="text-left px-5 py-3">Assignments</th>
               <th className="text-center px-5 py-3">Status</th>
               <th className="text-right px-5 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {teachers.map((t, i) => (
-              <tr key={t.id} className={`border-t border-gray-100 ${!t.isActive ? "opacity-50" : "hover:bg-surface"}`}>
-                <td className="px-5 py-3 text-gray-400">{i + 1}</td>
-                <td className="px-5 py-3">
-                  <div>
-                    <span className="font-medium text-primary">{t.name}</span>
-                    {t.nameNp && <span className="text-xs text-gray-400 ml-2">{t.nameNp}</span>}
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-gray-600">{t.user?.email || t.email || "—"}</td>
-                <td className="px-5 py-3 text-gray-600">{t.phone || "—"}</td>
-                <td className="px-5 py-3 text-center">
-                  <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">{t._count.assignments}</span>
-                </td>
-                <td className="px-5 py-3 text-center">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                    {t.isActive ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => handleStartEdit(t)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary" title="Edit">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => { setResetPasswordId(t.id); setNewPassword(""); }} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" title="Reset Password">
-                      <KeyRound size={14} />
-                    </button>
-                    {t.isActive ? (
-                      <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" title="Deactivate">
-                        <UserX size={14} />
-                      </button>
+            {teachers.map((t, i) => {
+              const summary = buildAssignmentSummary(t.assignments);
+              return (
+                <tr key={t.id} className={`border-t border-gray-100 ${!t.isActive ? "opacity-50" : "hover:bg-surface"}`}>
+                  <td className="px-5 py-3 text-gray-400">{i + 1}</td>
+                  <td className="px-5 py-3">
+                    <div>
+                      <span className="font-medium text-primary">{t.name}</span>
+                      {t.nameNp && <span className="text-xs text-gray-400 ml-2">{t.nameNp}</span>}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">{t.user?.email || t.email || "—"}</td>
+                  <td className="px-5 py-3 text-gray-600">{t.phone || "—"}</td>
+                  <td className="px-5 py-3">
+                    {summary.length === 0 ? (
+                      <span className="text-xs text-gray-400">No assignments</span>
                     ) : (
-                      <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" title="Reactivate">
-                        <UserCheck size={14} />
-                      </button>
+                      <div className="space-y-1">
+                        {summary.map((line, idx) => {
+                          // Split label from detail: "VIII-A  Class Teacher · 5 subjects"
+                          const [sectionLabel, ...rest] = line.split("  ");
+                          const detail = rest.join("  ");
+                          return (
+                            <div key={idx} className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-semibold px-1.5 py-0.5 bg-primary/10 text-primary rounded">
+                                {sectionLabel}
+                              </span>
+                              {detail && (
+                                <span className="text-xs text-gray-500">{detail}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-5 py-3 text-center">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                      {t.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleStartEdit(t)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary" title="Edit">
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => { setResetPasswordId(t.id); setNewPassword(""); }} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" title="Reset Password">
+                        <KeyRound size={14} />
+                      </button>
+                      {t.isActive ? (
+                        <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" title="Deactivate">
+                          <UserX size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" title="Reactivate">
+                          <UserCheck size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {teachers.length === 0 && <div className="p-8 text-center text-gray-400">No teachers. Add one above.</div>}

@@ -7,15 +7,23 @@ import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
-// GET /api/teachers — list all active teachers with assignment count and login email
+// Shared include for list endpoints — returns assignment details instead of just count
+const teacherListInclude = {
+  assignments: {
+    include: {
+      section: { include: { grade: { select: { name: true } } } },
+      subject: { select: { name: true } },
+    },
+  },
+  user: { select: { id: true, email: true, isActive: true } },
+} as const;
+
+// GET /api/teachers — list all active teachers with assignment details and login email
 router.get("/", authenticate, async (_req, res) => {
   const teachers = await prisma.teacher.findMany({
     where: { isActive: true },
     orderBy: { name: "asc" },
-    include: {
-      _count: { select: { assignments: true } },
-      user: { select: { id: true, email: true, isActive: true } },
-    },
+    include: teacherListInclude,
   });
   res.json({ data: teachers });
 });
@@ -24,10 +32,7 @@ router.get("/", authenticate, async (_req, res) => {
 router.get("/all", authenticate, authorize("ADMIN"), async (_req, res) => {
   const teachers = await prisma.teacher.findMany({
     orderBy: { name: "asc" },
-    include: {
-      _count: { select: { assignments: true } },
-      user: { select: { id: true, email: true, isActive: true } },
-    },
+    include: teacherListInclude,
   });
   res.json({ data: teachers });
 });
@@ -61,7 +66,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const data = schema.parse(req.body);
 
-  // Check if email already exists
   const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
   if (existingUser) {
     throw new AppError("A user with this email already exists");
@@ -69,7 +73,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(data.password, 10);
 
-  // Create teacher and user in a transaction
   const teacher = await prisma.$transaction(async (tx) => {
     const newTeacher = await tx.teacher.create({
       data: {
@@ -93,13 +96,9 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     return newTeacher;
   });
 
-  // Return with user info
   const result = await prisma.teacher.findUniqueOrThrow({
     where: { id: teacher.id },
-    include: {
-      _count: { select: { assignments: true } },
-      user: { select: { id: true, email: true, isActive: true } },
-    },
+    include: teacherListInclude,
   });
 
   res.status(201).json({ data: result });
@@ -117,7 +116,6 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const data = schema.parse(req.body);
 
-  // If email is being changed, update the user account email too
   if (data.email) {
     const teacher = await prisma.teacher.findUniqueOrThrow({
       where: { id: req.params.id },
@@ -125,7 +123,6 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     });
 
     if (teacher.user) {
-      // Check if new email conflicts with another user
       const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
       if (existingUser && existingUser.id !== teacher.user.id) {
         throw new AppError("A user with this email already exists");
@@ -138,7 +135,6 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     }
   }
 
-  // If deactivating teacher, also deactivate user account
   if (data.isActive === false) {
     const teacher = await prisma.teacher.findUniqueOrThrow({
       where: { id: req.params.id },
@@ -152,7 +148,6 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     }
   }
 
-  // If reactivating teacher, also reactivate user account
   if (data.isActive === true) {
     const teacher = await prisma.teacher.findUniqueOrThrow({
       where: { id: req.params.id },
@@ -175,10 +170,7 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
       email: data.email,
       isActive: data.isActive,
     },
-    include: {
-      _count: { select: { assignments: true } },
-      user: { select: { id: true, email: true, isActive: true } },
-    },
+    include: teacherListInclude,
   });
 
   res.json({ data: updated });

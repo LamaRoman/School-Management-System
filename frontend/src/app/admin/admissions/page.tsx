@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Check, X, UserPlus, Trash2 } from "lucide-react";
+import BSDatePicker from "@/components/ui/BSDatePicker";
 
 interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
 interface Admission {
@@ -215,7 +216,7 @@ export default function AdmissionPage() {
             </div>
             <div>
               <label className="label">Date of Birth</label>
-              <input className="input" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} placeholder="2068/05/15" />
+              <BSDatePicker value={form.dateOfBirth} onChange={(date) => setForm({ ...form, dateOfBirth: date })} placeholder="2068/05/15" />
             </div>
             <div>
               <label className="label">Gender</label>
@@ -259,7 +260,7 @@ export default function AdmissionPage() {
             </div>
             <div>
               <label className="label">Applied Date (BS) *</label>
-              <input className="input" value={form.appliedDate} onChange={(e) => setForm({ ...form, appliedDate: e.target.value })} placeholder="2082/01/05" />
+              <BSDatePicker value={form.appliedDate} onChange={(date) => setForm({ ...form, appliedDate: date })} placeholder="2082/01/05" />
             </div>
           </div>
           <div className="mt-3">

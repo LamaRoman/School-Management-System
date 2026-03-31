@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save, Search } from "lucide-react";
+import BSDatePicker from "@/components/ui/BSDatePicker";
 
 interface Student {
   id: string; name: string; nameNp?: string; rollNo?: number;
@@ -125,7 +126,7 @@ export default function StudentsPage() {
             <div><label className="label">Full Name *</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
             <div><label className="label">Name (Nepali)</label><input className="input" value={form.nameNp} onChange={(e) => setForm({ ...form, nameNp: e.target.value })} /></div>
             <div><label className="label">Roll No</label><input type="number" className="input" value={form.rollNo || ""} onChange={(e) => setForm({ ...form, rollNo: parseInt(e.target.value) || undefined })} /></div>
-            <div><label className="label">Date of Birth (BS)</label><input className="input" placeholder="2068/03/15" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} /></div>
+            <div><label className="label">Date of Birth (BS)</label><BSDatePicker value={form.dateOfBirth} onChange={(date) => setForm({ ...form, dateOfBirth: date })} placeholder="2068/03/15" /></div>
             <div>
               <label className="label">Gender</label>
               <select className="input" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>

@@ -1,14 +1,15 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut, GraduationCap } from "lucide-react";
+import { LogOut, GraduationCap, FileText, CalendarDays, BookOpen, Megaphone } from "lucide-react";
 
 const navItems = [
-  { href: "/student/report", label: "Report Card" },
-  { href: "/student/exam-routine", label: "Exam Routine" },
-  { href: "/student/homework", label: "Homework" },
-  { href: "/student/notices", label: "Notices" },
+  { href: "/student/report", label: "Report Card", icon: FileText },
+  { href: "/student/exam-routine", label: "Exam Routine", icon: CalendarDays },
+  { href: "/student/homework", label: "Homework", icon: BookOpen },
+  { href: "/student/notices", label: "Notices", icon: Megaphone },
 ];
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-surface">
       <header className="bg-primary text-white shadow-md no-print">
+        {/* Top bar */}
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <GraduationCap size={22} />
@@ -40,27 +42,31 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-white/70">{user.student?.name || user.email}</span>
-            <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg"><LogOut size={16} /></button>
+            <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg">
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
+        {/* Tabs */}
+        <div className="max-w-4xl mx-auto px-6 overflow-x-auto">
+          <div className="flex gap-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-all whitespace-nowrap ${
+                  pathname.startsWith(item.href)
+                    ? "bg-surface text-primary"
+                    : "text-white/70 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                <item.icon size={16} />
+                {item.label}
+              </Link>
+            ))}
           </div>
         </div>
       </header>
-      <nav className="bg-white border-b no-print">
-        <div className="max-w-4xl mx-auto px-6 flex gap-1">
-          {navItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`px-4 py-2 text-sm font-medium transition-all ${
-                pathname === item.href
-                  ? "text-primary border-b-2 border-primary"
-                  : "text-gray-500 hover:text-primary hover:bg-surface"
-              }`}
-            >
-              {item.label}
-            </a>
-          ))}
-        </div>
-      </nav>
       {children}
     </div>
   );

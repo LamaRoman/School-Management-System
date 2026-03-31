@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { formatGradeSection } from "@/lib/bsDate";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
 
@@ -88,7 +89,7 @@ export default function TeacherExamRoutinePage() {
         {sections.map((sec) => (
           <button key={sec.sectionId} onClick={() => handleSectionSelect(sec)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === sec.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
-            {sec.gradeName} — Section {sec.sectionName}
+            {formatGradeSection(sec.gradeName, sec.sectionName, sections)}
           </button>
         ))}
       </div>

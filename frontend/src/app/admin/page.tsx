@@ -1,17 +1,19 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
+import { getTodayBS } from "@/lib/bsDate";
 import {
-  CalendarDays, Users, BookOpen, Layers, GraduationCap, TrendingUp,
+  Users, GraduationCap, TrendingUp,
   Award, AlertTriangle, CalendarCheck,
+  UserCheck, UserX, X, ChevronRight,
 } from "lucide-react";
 
 interface Analytics {
   summary: {
     totalStudents: number;
     totalTeachers: number;
-    totalGrades: number;
-    totalSubjects: number;
+    todayPresent: number;
+    todayAbsent: number;
     overallAttendanceRate: number;
   };
   classAverages: { gradeName: string; avgGpa: number; avgPct: number; studentCount: number }[];
@@ -19,6 +21,16 @@ interface Analytics {
   subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[];
   attendanceOverview: { overallRate: number; gradeWise: { gradeName: string; rate: number }[] };
   termComparison: { examName: string; avgPercentage: number; studentCount: number }[];
+}
+
+interface AbsentGroup {
+  gradeId: string;
+  gradeName: string;
+  sections: {
+    sectionId: string;
+    sectionName: string;
+    students: { id: string; name: string; rollNo: number | null }[];
+  }[];
 }
 
 function BarChart({ data, valueKey, labelKey, color, maxValue }: {
@@ -49,12 +61,20 @@ export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Absent panel state
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [absentGroups, setAbsentGroups] = useState<AbsentGroup[]>([]);
+  const [absentLoading, setAbsentLoading] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const todayBS = getTodayBS();
+
   useEffect(() => {
     (async () => {
       try {
         const [schoolData, analyticsData] = await Promise.all([
           api.get<any>("/school"),
-          api.get<Analytics>("/analytics/dashboard"),
+          api.get<Analytics>(`/analytics/dashboard?todayBS=${encodeURIComponent(todayBS)}`),
         ]);
         setSchool(schoolData);
         setAnalytics(analyticsData);
@@ -62,6 +82,40 @@ export default function AdminDashboard() {
       finally { setLoading(false); }
     })();
   }, []);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!panelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setPanelOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [panelOpen]);
+
+  // Lock body scroll when panel open
+  useEffect(() => {
+    document.body.style.overflow = panelOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [panelOpen]);
+
+  const openAbsentPanel = async () => {
+    setPanelOpen(true);
+    if (absentGroups.length > 0) return; // already loaded
+    setAbsentLoading(true);
+    try {
+      const data = await api.get<AbsentGroup[]>(
+        `/analytics/absent-students?date=${encodeURIComponent(todayBS)}`
+      );
+      setAbsentGroups(data ?? []);
+    } catch {
+      setAbsentGroups([]);
+    } finally {
+      setAbsentLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -81,6 +135,7 @@ export default function AdminDashboard() {
   }
 
   const s = analytics.summary;
+  const totalToday = s.todayPresent + s.todayAbsent;
 
   // Find subjects with lowest pass rates
   const lowPassSubjects = [...analytics.subjectStats]
@@ -91,8 +146,111 @@ export default function AdminDashboard() {
   // Filter class averages to only those with students
   const activeClassAverages = analytics.classAverages.filter((c) => c.studentCount > 0);
 
+  // Total absent count for panel badge
+  const totalAbsentCount = absentGroups.reduce(
+    (sum, g) => sum + g.sections.reduce((s2, sec) => s2 + sec.students.length, 0),
+    0
+  );
+
   return (
     <div>
+      {/* Overlay */}
+      {panelOpen && (
+        <div className="fixed inset-0 bg-black/30 z-40 transition-opacity" />
+      )}
+
+      {/* Absent Students Slide Panel */}
+      <div
+        ref={panelRef}
+        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${
+          panelOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="font-display font-bold text-primary text-base">Absent Today</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{todayBS}</p>
+          </div>
+          <button
+            onClick={() => setPanelOpen(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Panel Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {absentLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-pulse text-sm text-gray-400">Loading...</div>
+            </div>
+          ) : absentGroups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+                <UserCheck size={24} className="text-emerald-500" />
+              </div>
+              <p className="text-sm font-medium text-gray-700">No absences today</p>
+              <p className="text-xs text-gray-400 mt-1">All attendance marked present</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {absentGroups.map((group) => (
+                <div key={group.gradeId}>
+                  {/* Grade label */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                      Grade {group.gradeName}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-100" />
+                    <span className="text-xs text-gray-400">
+                      {group.sections.reduce((s, sec) => s + sec.students.length, 0)} absent
+                    </span>
+                  </div>
+
+                  {group.sections.map((section) => (
+                    <div key={section.sectionId} className="mb-3">
+                      {/* Section label — only show if multiple sections */}
+                      {group.sections.length > 1 && (
+                        <p className="text-[11px] text-gray-400 font-medium mb-1 ml-1">
+                          Section {section.sectionName}
+                        </p>
+                      )}
+                      <div className="space-y-1">
+                        {section.students.map((student) => (
+                          <div
+                            key={student.id}
+                            className="flex items-center gap-3 px-3 py-2 rounded-lg bg-red-50 border border-red-100"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] font-bold text-red-500">
+                                {student.rollNo ?? "—"}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-700 font-medium">{student.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Panel Footer */}
+        {!absentLoading && absentGroups.length > 0 && (
+          <div className="px-5 py-3 border-t border-gray-100 shrink-0">
+            <p className="text-xs text-gray-400 text-center">
+              {totalAbsentCount} student{totalAbsentCount !== 1 ? "s" : ""} absent across{" "}
+              {absentGroups.length} grade{absentGroups.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold text-primary">{school?.name || "Dashboard"}</h1>
@@ -101,25 +259,80 @@ export default function AdminDashboard() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        {[
-          { label: "Students", value: s.totalStudents, icon: Users, color: "bg-blue-50 text-blue-700" },
-          { label: "Teachers", value: s.totalTeachers, icon: GraduationCap, color: "bg-purple-50 text-purple-700" },
-          { label: "Grades", value: s.totalGrades, icon: Layers, color: "bg-emerald-50 text-emerald-700" },
-          { label: "Subjects", value: s.totalSubjects, icon: BookOpen, color: "bg-amber-50 text-amber-700" },
-          { label: "Attendance", value: `${s.overallAttendanceRate}%`, icon: CalendarCheck, color: "bg-rose-50 text-rose-700" },
-        ].map((stat) => (
-          <div key={stat.label} className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${stat.color}`}>
-                <stat.icon size={18} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-gray-800">{stat.value}</p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{stat.label}</p>
-              </div>
+        {/* Students */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50 text-blue-700">
+              <Users size={18} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-gray-800">{s.totalStudents}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Students</p>
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Teachers */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50 text-purple-700">
+              <GraduationCap size={18} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-gray-800">{s.totalTeachers}</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Teachers</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Present Today */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50 text-emerald-700">
+              <UserCheck size={18} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-gray-800">
+                {totalToday > 0 ? s.todayPresent : "—"}
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Present Today</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Absent Today — clickable */}
+        <button
+          onClick={openAbsentPanel}
+          className="card p-4 text-left hover:shadow-md hover:border-red-200 transition-all group w-full"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-50 text-red-600 group-hover:bg-red-100 transition-colors">
+              <UserX size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xl font-bold text-gray-800">
+                {totalToday > 0 ? s.todayAbsent : "—"}
+              </p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Absent Today</p>
+            </div>
+            {totalToday > 0 && s.todayAbsent > 0 && (
+              <ChevronRight size={14} className="text-gray-300 group-hover:text-red-400 transition-colors shrink-0" />
+            )}
+          </div>
+        </button>
+
+        {/* Attendance Rate */}
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-rose-50 text-rose-700">
+              <CalendarCheck size={18} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-gray-800">{s.overallAttendanceRate}%</p>
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Attendance</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -143,7 +356,7 @@ export default function AdminDashboard() {
         {analytics.termComparison.length > 0 && (
           <div className="card p-5">
             <h3 className="font-display font-bold text-primary mb-4 flex items-center gap-2">
-              <CalendarDays size={16} /> Term Comparison (Avg %)
+              <CalendarCheck size={16} /> Term Comparison (Avg %)
             </h3>
             <BarChart
               data={analytics.termComparison.filter((t) => t.studentCount > 0)}

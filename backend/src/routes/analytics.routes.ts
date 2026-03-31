@@ -7,9 +7,9 @@ import {
 
 const router = Router();
 
-// GET /api/analytics/dashboard?academicYearId=xxx
+// GET /api/analytics/dashboard?academicYearId=xxx&todayBS=2081/12/14
 router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
-  const { academicYearId } = req.query;
+  const { academicYearId, todayBS } = req.query;
 
   const yearId = academicYearId
     ? String(academicYearId)
@@ -80,7 +80,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     percentage: r.totalPercentage || 0,
   }));
 
-  // ─── 3. Subject-wise pass/fail (for grades with marks) ──
+  // ─── 3. Subject-wise pass/fail ───────────────────
   const subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[] = [];
 
   for (const grade of grades) {
@@ -88,7 +88,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     const studentIds = grade.sections.flatMap((s) => s.students.map((st) => st.id));
     if (studentIds.length === 0) continue;
 
-    // Use the last exam type (Final if exists)
     const lastExam = examTypes[examTypes.length - 1];
     if (!lastExam) continue;
 
@@ -105,7 +104,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       const subjectMarks = marks.filter((m) => m.subjectId === subject.id);
       if (subjectMarks.length === 0) continue;
 
-      const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
       let passed = 0;
       let failed = 0;
 
@@ -134,7 +132,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     },
   });
 
-  const totalStudentsWithAttendance = allAttendances.length;
   const overallPresentDays = allAttendances.reduce((a, r) => a + r.presentDays, 0);
   const overallTotalDays = allAttendances.reduce((a, r) => a + r.totalDays, 0);
   const overallAttendanceRate = overallTotalDays > 0
@@ -159,7 +156,20 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     });
   }
 
-  // ─── 5. Term comparison ────────────────────────────
+  // ─── 5. Today's attendance counts ─────────────────
+  let todayPresent = 0;
+  let todayAbsent = 0;
+
+  if (todayBS) {
+    const todayRecords = await prisma.dailyAttendance.findMany({
+      where: { date: String(todayBS), academicYearId: yearId },
+      select: { status: true },
+    });
+    todayPresent = todayRecords.filter((r) => r.status === "PRESENT").length;
+    todayAbsent = todayRecords.filter((r) => r.status === "ABSENT").length;
+  }
+
+  // ─── 6. Term comparison ────────────────────────────
   const termComparison: { examName: string; avgPercentage: number; studentCount: number }[] = [];
 
   for (const exam of examTypes) {
@@ -173,7 +183,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       continue;
     }
 
-    // Group by student, calculate avg percentage per student, then average across all
     const studentMap = new Map<string, { totalPct: number; count: number }>();
     for (const m of examMarks) {
       const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
@@ -197,15 +206,14 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
   // ─── Summary stats ────────────────────────────────
   const totalStudents = grades.reduce((a, g) => a + g.sections.reduce((b, s) => b + s.students.length, 0), 0);
   const totalTeachers = await prisma.teacher.count({ where: { isActive: true } });
-  const totalSubjects = grades.reduce((a, g) => a + g.subjects.length, 0);
 
   res.json({
     data: {
       summary: {
         totalStudents,
         totalTeachers,
-        totalGrades: grades.length,
-        totalSubjects,
+        todayPresent,
+        todayAbsent,
         overallAttendanceRate,
       },
       classAverages,
@@ -218,6 +226,113 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       termComparison,
     },
   });
+});
+
+// GET /api/analytics/absent-students?date=2081/12/14&academicYearId=xxx
+// Returns absent students for a given BS date, grouped by grade → section
+router.get("/absent-students", authenticate, authorize("ADMIN"), async (req, res) => {
+  const { date, academicYearId } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ error: "date is required" });
+  }
+
+  const yearId = academicYearId
+    ? String(academicYearId)
+    : (await prisma.academicYear.findFirst({ where: { isActive: true } }))?.id;
+
+  if (!yearId) {
+    return res.json({ data: [] });
+  }
+
+  const absentRecords = await prisma.dailyAttendance.findMany({
+    where: {
+      date: String(date),
+      status: "ABSENT",
+      academicYearId: yearId,
+    },
+    include: {
+      student: {
+        select: {
+          id: true,
+          name: true,
+          rollNo: true,
+          section: {
+            select: {
+              id: true,
+              name: true,
+              grade: {
+                select: {
+                  id: true,
+                  name: true,
+                  displayOrder: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ student: { section: { grade: { displayOrder: "asc" } } } }],
+  });
+
+  // Group by grade → section
+  const grouped: Record<
+    string,
+    {
+      gradeId: string;
+      gradeName: string;
+      sections: Record<
+        string,
+        {
+          sectionId: string;
+          sectionName: string;
+          students: { id: string; name: string; rollNo: number | null }[];
+        }
+      >;
+    }
+  > = {};
+
+  for (const record of absentRecords) {
+    const { student } = record;
+    const grade = student.section.grade;
+    const section = student.section;
+
+    if (!grouped[grade.id]) {
+      grouped[grade.id] = {
+        gradeId: grade.id,
+        gradeName: grade.name,
+        sections: {},
+      };
+    }
+
+    if (!grouped[grade.id].sections[section.id]) {
+      grouped[grade.id].sections[section.id] = {
+        sectionId: section.id,
+        sectionName: section.name,
+        students: [],
+      };
+    }
+
+    grouped[grade.id].sections[section.id].students.push({
+      id: student.id,
+      name: student.name,
+      rollNo: student.rollNo,
+    });
+  }
+
+  // Convert to array, sort students by rollNo within each section
+  const result = Object.values(grouped).map((g) => ({
+    gradeId: g.gradeId,
+    gradeName: g.gradeName,
+    sections: Object.values(g.sections).map((s) => ({
+      sectionId: s.sectionId,
+      sectionName: s.sectionName,
+      students: s.students.sort((a, b) => (a.rollNo ?? 999) - (b.rollNo ?? 999)),
+    })),
+  }));
+
+  res.json({ data: result });
 });
 
 export default router;

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Copy, Save } from "lucide-react";
+import BSDatePicker from "@/components/ui/BSDatePicker";
 
 interface Grade { id: string; name: string; displayOrder: number }
 interface ExamType { id: string; name: string }
@@ -325,12 +326,11 @@ export default function ExamRoutinePage() {
                       </select>
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
+                      <BSDatePicker
                         value={entry.examDate}
-                        onChange={(e) => handleEntryChange(i, "examDate", e.target.value)}
+                        onChange={(date) => handleEntryChange(i, "examDate", date)}
                         placeholder="2081/09/15"
-                        className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        className="w-full"
                       />
                     </td>
                     <td className="px-3 py-2">
