@@ -89,11 +89,11 @@ async function autoCreateStudentUser(studentId: string, studentName: string): Pr
 
 // GET /api/students?sectionId=xxx&gradeId=xxx
 router.get("/", authenticate, async (req, res) => {
-  const { sectionId, gradeId } = req.query;
+  const { sectionId, gradeId, search } = req.query;
   const where: any = { isActive: true };
+  if (search) where.name = { contains: String(search), mode: "insensitive" };
   if (sectionId) where.sectionId = String(sectionId);
   if (gradeId) where.section = { gradeId: String(gradeId) };
-
   const students = await prisma.student.findMany({
     where,
     orderBy: { rollNo: "asc" },
