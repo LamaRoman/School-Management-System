@@ -3,15 +3,11 @@ import {
   View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity,
 } from 'react-native';
 import { api } from '../../api/client';
-import { Card, StatCard, EmptyState, LoadingScreen, Badge } from '../../components/ui';
+import { Card, StatCard, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS } from '../../utils/bsDate';
 
 interface AcademicYear { id: string; yearNp: string; isActive: boolean }
-interface Defaulter {
-  studentId: string; studentName: string; section: string;
-  totalDue: number; totalPaid: number; balance: number;
-}
 interface CashbookSummary { totalCollection: number; receiptCount: number }
 interface DefaulterSummary { totalStudents: number; totalBalance: number }
 
@@ -19,11 +15,9 @@ export default function AccountantDashboard({ navigation }: any) {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [cashbook, setCashbook] = useState<CashbookSummary | null>(null);
   const [defaulters, setDefaulters] = useState<DefaulterSummary | null>(null);
-  const [recentDefaulters, setRecentDefaulters] = useState<Defaulter[]>([]);
+  const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Get today in YYYY/MM/DD format
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -35,9 +29,10 @@ export default function AccountantDashboard({ navigation }: any) {
       if (!active) { setLoading(false); setRefreshing(false); return; }
 
       const today = getTodayBS();
-      const [cbData, defData] = await Promise.all([
+      const [cbData, defData, noticeData] = await Promise.all([
         api.get<any>(`/accountant-reports/daily-cashbook?date=${today}&academicYearId=${active.id}`).catch(() => null),
         api.get<any>(`/accountant-reports/defaulters?academicYearId=${active.id}`).catch(() => null),
+        api.get<any[]>('/notices').catch(() => []),
       ]);
 
       if (cbData) {
@@ -54,8 +49,9 @@ export default function AccountantDashboard({ navigation }: any) {
           totalStudents: defData.totalDefaulters || defs.length,
           totalBalance: defData.totalOutstanding || defs.reduce((s: number, d: any) => s + (d.balance || 0), 0),
         });
-        setRecentDefaulters(defs.slice(0, 5));
       }
+
+      setNotices(Array.isArray(noticeData) ? noticeData.slice(0, 3) : []);
     } catch (err) {
       console.error('Accountant dashboard error:', err);
     } finally {
@@ -110,22 +106,14 @@ export default function AccountantDashboard({ navigation }: any) {
         />
       </View>
 
-      {/* Top defaulters list */}
-      {recentDefaulters.length > 0 && (
+      {/* Recent notices */}
+      {notices.length > 0 && (
         <View style={s.listSection}>
-          <Text style={s.listTitle}>Top Defaulters</Text>
-          {recentDefaulters.map((d, idx) => (
-            <Card key={d.studentId} style={s.defaulterCard}>
-              <View style={s.defRow}>
-                <View style={s.defLeft}>
-                  <Text style={s.defName}>{d.studentName}</Text>
-                  <Text style={s.defSection}>{d.section}</Text>
-                </View>
-                <View style={s.defRight}>
-                  <Text style={s.defBalance}>Rs {(d.balance || 0).toLocaleString()}</Text>
-                  <Badge label="Due" color="danger" />
-                </View>
-              </View>
+          <Text style={s.listTitle}>Recent Notices</Text>
+          {notices.map((n: any) => (
+            <Card key={n.id} style={s.noticeCard}>
+              <Text style={s.noticeTxt} numberOfLines={1}>{n.title}</Text>
+              <Text style={s.noticeDate}>{n.publishDate}</Text>
             </Card>
           ))}
         </View>
@@ -158,13 +146,9 @@ const s = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: Spacing.md, paddingHorizontal: Spacing.lg },
   listSection: { paddingHorizontal: Spacing.lg, gap: Spacing.md },
   listTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
-  defaulterCard: {},
-  defRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  defLeft: { flex: 1, gap: 2 },
-  defName: { fontSize: FontSize.md, fontWeight: FontWeight.medium as any, color: Colors.text },
-  defSection: { fontSize: FontSize.sm, color: Colors.textMuted },
-  defRight: { alignItems: 'flex-end', gap: Spacing.xs },
-  defBalance: { fontSize: FontSize.md, fontWeight: FontWeight.bold as any, color: Colors.danger },
+  noticeCard: { gap: 4 },
+  noticeTxt: { fontSize: FontSize.md, fontWeight: FontWeight.medium as any, color: Colors.text },
+  noticeDate: { fontSize: FontSize.xs, color: Colors.textMuted },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, paddingHorizontal: Spacing.lg },
   actionCard: { width: '45%', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl, backgroundColor: Colors.white, borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
   actionIcon: { fontSize: 32 },

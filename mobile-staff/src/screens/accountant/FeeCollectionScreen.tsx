@@ -11,7 +11,6 @@ import { getTodayBS } from '../../utils/bsDate';
 interface Grade { id: string; name: string }
 interface Section { id: string; name: string; grade: Grade }
 interface Student { id: string; name: string; rollNo?: number }
-interface FeeMonth { value: string; label: string }
 interface AcademicYear { id: string; yearNp: string; isActive: boolean }
 interface InvoiceItem { feeCategoryId: string; category: string; amount: number; paidMonth?: string; status: string }
 interface Invoice { items: InvoiceItem[]; totalDue: number; grandTotal: number }
@@ -20,7 +19,7 @@ export default function FeeCollectionScreen() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [months, setMonths] = useState<FeeMonth[]>([]);
+  const [months, setMonths] = useState<string[]>([]);
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null);
   const [selectedSection, setSelectedSection] = useState<Section | null>(null);
@@ -160,9 +159,9 @@ export default function FeeCollectionScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={s.row}>
               {months.map(m => (
-                <TouchableOpacity key={m.value} style={[s.chip, selectedMonth === m.value && s.chipOn]}
-                  onPress={() => { setSelectedMonth(m.value); setInvoice(null); }}>
-                  <Text style={[s.chipTxt, selectedMonth === m.value && s.chipTxtOn]}>{m.label}</Text>
+                <TouchableOpacity key={m} style={[s.chip, selectedMonth === m && s.chipOn]}
+                  onPress={() => { setSelectedMonth(m); setInvoice(null); }}>
+                  <Text style={[s.chipTxt, selectedMonth === m && s.chipTxtOn]}>{m}</Text>
                 </TouchableOpacity>
               ))}
             </View>
