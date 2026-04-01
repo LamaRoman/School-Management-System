@@ -7,17 +7,20 @@ import { useAuth } from '../hooks/useAuth';
 import { LoadingScreen } from '../components/ui';
 import { Colors, FontSize, FontWeight } from '../theme';
 
-// Auth
 import LoginScreen from '../screens/auth/LoginScreen';
-
-// Teacher
 import TeacherDashboard from '../screens/teacher/DashboardScreen';
 import AttendanceScreen from '../screens/teacher/AttendanceScreen';
 import MarksScreen from '../screens/teacher/MarksScreen';
-import NoticesScreen from '../screens/shared/NoticesScreen';
-
-// Parent
+import HomeworkScreen from '../screens/teacher/HomeworkScreen';
 import ParentDashboard from '../screens/parent/DashboardScreen';
+import ParentReportScreen from '../screens/parent/ReportCardScreen';
+import ParentFeesScreen from '../screens/parent/FeesScreen';
+import StudentDashboard from '../screens/student/DashboardScreen';
+import StudentReportScreen from '../screens/student/ReportCardScreen';
+import StudentHomeworkScreen from '../screens/student/HomeworkScreen';
+import AccountantDashboard from '../screens/accountant/DashboardScreen';
+import FeeCollectionScreen from '../screens/accountant/FeeCollectionScreen';
+import NoticesScreen from '../screens/shared/NoticesScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -30,98 +33,67 @@ const tabBarStyle = {
   height: 58,
 };
 
-const screenOptions = {
-  headerStyle: { backgroundColor: Colors.primary },
-  headerTintColor: Colors.white,
-  headerTitleStyle: { fontWeight: FontWeight.bold as any, fontSize: FontSize.lg },
-  headerBackTitleVisible: false,
-};
+const tabIcon = (icons: Record<string, string>) =>
+  ({ route }: any) => ({
+    tabBarStyle,
+    tabBarActiveTintColor: Colors.primary,
+    tabBarInactiveTintColor: Colors.textMuted,
+    tabBarLabelStyle: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any },
+    tabBarIcon: ({ focused }: { focused: boolean }) => (
+      <Text style={{ fontSize: focused ? 22 : 20 }}>{icons[route.name] || '•'}</Text>
+    ),
+    headerStyle: { backgroundColor: Colors.primary },
+    headerTintColor: Colors.white,
+    headerTitleStyle: { fontWeight: FontWeight.bold as any },
+  });
 
-// ─── Teacher Tabs ─────────────────────────────────────────
 function TeacherTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarStyle,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any },
-        tabBarIcon: ({ color, focused }) => {
-          const icons: Record<string, string> = {
-            Home: '🏠', Attendance: '✅', Marks: '📝',
-            Homework: '📚', Notices: '📢',
-          };
-          return <Text style={{ fontSize: focused ? 22 : 20 }}>{icons[route.name] || '•'}</Text>;
-        },
-        headerStyle: { backgroundColor: Colors.primary },
-        headerTintColor: Colors.white,
-        headerTitleStyle: { fontWeight: FontWeight.bold as any },
-      })}
-    >
+    <Tab.Navigator screenOptions={tabIcon({ Home: '🏠', Attendance: '✅', Marks: '📝', Homework: '📚', Notices: '📢' })}>
       <Tab.Screen name="Home" component={TeacherDashboard} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
       <Tab.Screen name="Marks" component={MarksScreen} options={{ title: 'Mark Entry' }} />
+      <Tab.Screen name="Homework" component={HomeworkScreen} />
       <Tab.Screen name="Notices" component={NoticesScreen} />
     </Tab.Navigator>
   );
 }
 
-// ─── Parent Tabs ──────────────────────────────────────────
 function ParentTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarStyle,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any },
-        tabBarIcon: ({ focused }) => {
-          const icons: Record<string, string> = {
-            Home: '🏠', ParentReport: '📊', ParentFees: '💰', ParentNotices: '📢',
-          };
-          return <Text style={{ fontSize: focused ? 22 : 20 }}>{icons[route.name] || '•'}</Text>;
-        },
-        headerStyle: { backgroundColor: Colors.primary },
-        headerTintColor: Colors.white,
-        headerTitleStyle: { fontWeight: FontWeight.bold as any },
-      })}
-    >
+    <Tab.Navigator screenOptions={tabIcon({ Home: '🏠', Report: '📊', Fees: '💰', Notices: '📢' })}>
       <Tab.Screen name="Home" component={ParentDashboard} options={{ title: 'My Children' }} />
-      <Tab.Screen name="ParentNotices" component={NoticesScreen} options={{ title: 'Notices' }} />
-    </Tab.Navigator>
-  );
-}
-
-// ─── Student Tabs ─────────────────────────────────────────
-function StudentTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarStyle,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any },
-        tabBarIcon: ({ focused }) => {
-          const icons: Record<string, string> = { Home: '🏠', Notices: '📢' };
-          return <Text style={{ fontSize: focused ? 22 : 20 }}>{icons[route.name] || '•'}</Text>;
-        },
-        headerStyle: { backgroundColor: Colors.primary },
-        headerTintColor: Colors.white,
-        headerTitleStyle: { fontWeight: FontWeight.bold as any },
-      })}
-    >
-      <Tab.Screen name="Home" component={ParentDashboard} options={{ title: 'Dashboard' }} />
+      <Tab.Screen name="Report" component={ParentReportScreen} options={{ title: 'Report Card' }} />
+      <Tab.Screen name="Fees" component={ParentFeesScreen} options={{ title: 'Fee History' }} />
       <Tab.Screen name="Notices" component={NoticesScreen} />
     </Tab.Navigator>
   );
 }
 
-// ─── Root Navigator ───────────────────────────────────────
+function StudentTabs() {
+  return (
+    <Tab.Navigator screenOptions={tabIcon({ Home: '🏠', Report: '📊', Homework: '📚', Notices: '📢' })}>
+      <Tab.Screen name="Home" component={StudentDashboard} options={{ title: 'Dashboard' }} />
+      <Tab.Screen name="Report" component={StudentReportScreen} options={{ title: 'Report Card' }} />
+      <Tab.Screen name="Homework" component={StudentHomeworkScreen} />
+      <Tab.Screen name="Notices" component={NoticesScreen} />
+    </Tab.Navigator>
+  );
+}
+
+function AccountantTabs() {
+  return (
+    <Tab.Navigator screenOptions={tabIcon({ Home: '🏠', Collect: '💰', Notices: '📢' })}>
+      <Tab.Screen name="Home" component={AccountantDashboard} options={{ title: 'Dashboard' }} />
+      <Tab.Screen name="Collect" component={FeeCollectionScreen} options={{ title: 'Fee Collection' }} />
+      <Tab.Screen name="Notices" component={NoticesScreen} />
+    </Tab.Navigator>
+  );
+}
+
 export default function RootNavigator() {
   const { user, loading } = useAuth();
-
   if (loading) return <LoadingScreen />;
-
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -133,8 +105,9 @@ export default function RootNavigator() {
           <Stack.Screen name="ParentApp" component={ParentTabs} />
         ) : user.role === 'STUDENT' ? (
           <Stack.Screen name="StudentApp" component={StudentTabs} />
+        ) : user.role === 'ACCOUNTANT' ? (
+          <Stack.Screen name="AccountantApp" component={AccountantTabs} />
         ) : (
-          // Admin/Accountant — show basic screen for now
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
       </Stack.Navigator>
