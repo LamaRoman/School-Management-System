@@ -6,19 +6,11 @@ import {
 import { api, getErrorMessage } from '../../api/client';
 import { Card, Button, Badge, EmptyState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { getTodayBS } from '../../utils/bsDate';
 
 interface Section { sectionId: string; sectionName: string; gradeName: string; academicYearId: string; }
 interface Record { studentId: string; studentName: string; rollNo: number | null; status: 'PRESENT' | 'ABSENT' | null; isMarked: boolean; }
 
-function getTodayBS(): string {
-  // Simple approximation — in production use nepali-date-converter via a native module
-  const now = new Date();
-  // BS year is approximately AD year + 56.7
-  const bsYear = now.getFullYear() + 57;
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${bsYear - 1}/${month}/${day}`; // rough estimate
-}
 
 export default function AttendanceScreen() {
   const [sections, setSections] = useState<Section[]>([]);

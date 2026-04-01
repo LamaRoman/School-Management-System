@@ -5,6 +5,7 @@ import {
 import { api } from '../../api/client';
 import { Card, StatCard, EmptyState, LoadingScreen, Badge } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { getTodayBS } from '../../utils/bsDate';
 
 interface AcademicYear { id: string; yearNp: string; isActive: boolean }
 interface Defaulter {
@@ -23,11 +24,6 @@ export default function AccountantDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Get today in YYYY/MM/DD format
-  const getTodayBS = () => {
-    // Use a static format — the backend will validate
-    const now = new Date();
-    return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-  };
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);

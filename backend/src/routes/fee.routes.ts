@@ -460,7 +460,7 @@ router.get("/invoice/:studentId", authenticate, async (req, res) => {
     const paid = monthPayments.reduce((sum, p) => sum + p.amount, 0);
     totalDue += amount;
     totalPaid += paid;
-    items.push({ category: s.feeCategory.name, amount: Math.round(amount), paidMonth: String(month), status: paid >= amount ? "PAID" : "DUE" });
+    items.push({ feeCategoryId: s.feeCategoryId, category: s.feeCategory.name, amount: Math.round(amount), paidMonth: String(month), status: paid >= amount ? "PAID" : "DUE" });
   }
 
   // Annual/one-time (show if not yet paid)
@@ -471,7 +471,7 @@ router.get("/invoice/:studentId", authenticate, async (req, res) => {
     if (paid < amount) {
       const remaining = amount - paid;
       totalDue += remaining;
-      items.push({ category: s.feeCategory.name, amount: Math.round(remaining), status: "DUE" });
+      items.push({ feeCategoryId: s.feeCategoryId, category: s.feeCategory.name, amount: Math.round(remaining), status: "DUE" });
     }
   }
 
