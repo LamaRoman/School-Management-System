@@ -197,8 +197,8 @@ export default function FeeCollectionScreen() {
               <Text style={s.paid}>✅ All fees paid for this month</Text>
             ) : (
               <>
-                {dueItems.map((item, i) => (
-                  <View key={i} style={s.invRow}>
+                {dueItems.map((item) => (
+                  <View key={item.feeCategoryId} style={s.invRow}>
                     <Text style={s.invCat}>{item.category}</Text>
                     <Text style={s.invAmt}>Rs {item.amount.toLocaleString()}</Text>
                   </View>

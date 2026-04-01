@@ -15,7 +15,7 @@ interface Defaulter {
 interface CashbookSummary { totalCollection: number; receiptCount: number }
 interface DefaulterSummary { totalStudents: number; totalBalance: number }
 
-export default function AccountantDashboard() {
+export default function AccountantDashboard({ navigation }: any) {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [cashbook, setCashbook] = useState<CashbookSummary | null>(null);
   const [defaulters, setDefaulters] = useState<DefaulterSummary | null>(null);
@@ -135,15 +135,14 @@ export default function AccountantDashboard() {
       <Text style={s.sectionTitle}>Quick Actions</Text>
       <View style={s.actionsGrid}>
         {[
-          { icon: '💰', label: 'Collect Fee' },
-          { icon: '📋', label: 'Admissions' },
-          { icon: '📊', label: 'Reports' },
-          { icon: '💸', label: 'Income/Expense' },
+          { icon: '💰', label: 'Collect Fee', screen: 'Collect' },
+          { icon: '📢', label: 'Notices', screen: 'Notices' },
         ].map(action => (
-          <Card key={action.label} style={s.actionCard}>
+          <TouchableOpacity key={action.label} style={s.actionCard}
+            onPress={() => navigation.navigate(action.screen)} activeOpacity={0.7}>
             <Text style={s.actionIcon}>{action.icon}</Text>
             <Text style={s.actionLabel}>{action.label}</Text>
-          </Card>
+          </TouchableOpacity>
         ))}
       </View>
     </ScrollView>
@@ -167,7 +166,7 @@ const s = StyleSheet.create({
   defRight: { alignItems: 'flex-end', gap: Spacing.xs },
   defBalance: { fontSize: FontSize.md, fontWeight: FontWeight.bold as any, color: Colors.danger },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, paddingHorizontal: Spacing.lg },
-  actionCard: { width: '45%', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl },
+  actionCard: { width: '45%', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl, backgroundColor: Colors.white, borderRadius: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
   actionIcon: { fontSize: 32 },
   actionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.medium as any, color: Colors.text, textAlign: 'center' },
 });
