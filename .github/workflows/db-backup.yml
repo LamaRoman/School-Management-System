@@ -9,6 +9,10 @@ jobs:
   backup:
     runs-on: ubuntu-latest
 
+    env:
+      B2_APPLICATION_KEY_ID: ${{ secrets.B2_KEY_ID }}
+      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+
     steps:
       - name: Install PostgreSQL 17 client
         run: |
@@ -34,21 +38,15 @@ jobs:
 
       - name: Upload to Backblaze B2
         env:
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
         run: |
-          b2 authorize-account "$B2_KEY_ID" "$B2_APPLICATION_KEY"
-          b2 upload-file "$B2_BUCKET_NAME" "$FILENAME" "backups/$FILENAME"
+          b2 file upload "$B2_BUCKET_NAME" "$FILENAME" "backups/$FILENAME"
           echo "✅ Backup uploaded: backups/$FILENAME"
 
       - name: Delete backups older than 30 days
         env:
-          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
         run: |
-          b2 authorize-account "$B2_KEY_ID" "$B2_APPLICATION_KEY"
           CUTOFF=$(date -d '30 days ago' +%s)000
           b2 ls --long "$B2_BUCKET_NAME" backups/ | while read -r timestamp _ _ _ filename; do
             if [ "$timestamp" -lt "$CUTOFF" ]; then
