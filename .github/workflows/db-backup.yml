@@ -1,0 +1,56 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # Runs at 20:00 UTC = 01:45 AM Nepal Time (NPT is UTC+5:45)
+  workflow_dispatch:        # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          FILENAME="school_backup_${TIMESTAMP}.sql"
+          pg_dump "$DATABASE_URL" -F p -f "$FILENAME"
+          echo "FILENAME=$FILENAME" >> $GITHUB_ENV
+
+      - name: Install B2 CLI
+        run: pip install b2
+
+      - name: Upload to Backblaze B2
+        env:
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+        run: |
+          b2 authorize-account "$B2_KEY_ID" "$B2_APPLICATION_KEY"
+          b2 upload-file "$B2_BUCKET_NAME" "$FILENAME" "backups/$FILENAME"
+          echo "✅ Backup uploaded: backups/$FILENAME"
+
+      - name: Delete backups older than 30 days
+        env:
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+        run: |
+          b2 authorize-account "$B2_KEY_ID" "$B2_APPLICATION_KEY"
+          CUTOFF=$(date -d '30 days ago' +%s)000
+          b2 ls --long "$B2_BUCKET_NAME" backups/ | while read -r timestamp _ _ _ filename; do
+            if [ "$timestamp" -lt "$CUTOFF" ]; then
+              b2 delete-file-version "$filename" $(b2 ls --long "$B2_BUCKET_NAME" "$filename" | awk '{print $3}')
+              echo "🗑️ Deleted old backup: $filename"
+            fi
+          done
+
+      - name: Notify success
+        run: echo "✅ Database backup completed successfully at $(date)"
