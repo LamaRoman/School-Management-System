@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -31,7 +32,13 @@ router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) =>
   });
 
   const data = schema.parse(req.body);
-  const category = await prisma.observationCategory.create({ data });
+  const createData: Prisma.ObservationCategoryCreateInput = {
+    name: data.name,
+    nameNp: data.nameNp,
+    displayOrder: data.displayOrder,
+    grade: { connect: { id: data.gradeId } },
+  };
+  const category = await prisma.observationCategory.create({ data: createData });
   res.status(201).json({ data: category });
 });
 

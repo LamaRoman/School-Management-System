@@ -181,6 +181,7 @@ async function buildTermReportData(studentId: string, examTypeId: string) {
     attendance: attendance
       ? { totalDays: attendance.totalDays, presentDays: attendance.presentDays, absentDays: attendance.absentDays }
       : undefined,
+    _observations: null as any[] | null,
   };
 }
 
@@ -342,6 +343,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
     remarks: consolidated?.remarks,
     promoted: consolidated?.promoted,
     promotedTo: consolidated?.promotedTo,
+    _observations: null as any[] | null,
   };
 }
 

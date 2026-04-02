@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -33,7 +34,12 @@ router.post("/rooms", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
-  const room = await prisma.examRoom.create({ data });
+  const createData: Prisma.ExamRoomCreateInput = {
+    name: data.name,
+    capacity: data.capacity,
+    displayOrder: data.displayOrder,
+  };
+  const room = await prisma.examRoom.create({ data: createData });
   res.status(201).json({ data: room });
 });
 

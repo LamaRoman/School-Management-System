@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -115,13 +116,21 @@ router.post("/", authenticate, async (req, res) => {
     throw new AppError("You cannot create notices targeted only at teachers", 403);
   }
 
+  const noticeData: Prisma.NoticeCreateInput = {
+    title: data.title,
+    content: data.content,
+    type: data.type,
+    priority: data.priority,
+    targetAudience: data.targetAudience,
+    publishDate: data.publishDate,
+    expiryDate: data.expiryDate || null,
+    isPublished: data.isPublished,
+    isPinned: data.isPinned,
+    grade: data.gradeId ? { connect: { id: data.gradeId } } : undefined,
+    createdBy: { connect: { id: user.userId } },
+  };
   const notice = await prisma.notice.create({
-    data: {
-      ...data,
-      gradeId: data.gradeId || null,
-      expiryDate: data.expiryDate || null,
-      createdById: user.userId,
-    },
+    data: noticeData,
     include: {
       grade: { select: { id: true, name: true } },
       createdBy: { select: { id: true, email: true, role: true } },

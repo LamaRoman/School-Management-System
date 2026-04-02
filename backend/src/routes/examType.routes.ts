@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 
@@ -35,7 +36,14 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/exam-types
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = examTypeSchema.parse(req.body);
-  const examType = await prisma.examType.create({ data });
+  const createData: Prisma.ExamTypeCreateInput = {
+    name: data.name,
+    displayOrder: data.displayOrder,
+    paperSize: data.paperSize,
+    showRank: data.showRank,
+    academicYear: { connect: { id: data.academicYearId } },
+  };
+  const examType = await prisma.examType.create({ data: createData });
   res.status(201).json({ data: examType });
 });
 

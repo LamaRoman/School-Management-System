@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const existing = await prisma.school.findFirst();
   const school = existing
     ? await prisma.school.update({ where: { id: existing.id }, data })
-    : await prisma.school.create({ data });
+    : await prisma.school.create({ data: data as Prisma.SchoolCreateInput });
   res.json({ data: school });
 });
 

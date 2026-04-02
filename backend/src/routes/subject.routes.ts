@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -39,7 +40,17 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/subjects
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = subjectSchema.parse(req.body);
-  const subject = await prisma.subject.create({ data });
+  const createData: Prisma.SubjectCreateInput = {
+    name: data.name,
+    nameNp: data.nameNp,
+    fullTheoryMarks: data.fullTheoryMarks,
+    fullPracticalMarks: data.fullPracticalMarks,
+    passMarks: data.passMarks,
+    isOptional: data.isOptional,
+    displayOrder: data.displayOrder,
+    grade: { connect: { id: data.gradeId } },
+  };
+  const subject = await prisma.subject.create({ data: createData });
   res.status(201).json({ data: subject });
 });
 
@@ -54,7 +65,16 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   const created = await prisma.$transaction(
     subjects.map((sub, i) =>
       prisma.subject.create({
-        data: { ...sub, gradeId, displayOrder: sub.displayOrder || i + 1 },
+        data: {
+          name: sub.name,
+          nameNp: sub.nameNp,
+          fullTheoryMarks: sub.fullTheoryMarks,
+          fullPracticalMarks: sub.fullPracticalMarks,
+          passMarks: sub.passMarks,
+          isOptional: sub.isOptional,
+          displayOrder: sub.displayOrder || i + 1,
+          grade: { connect: { id: gradeId } },
+        },
       })
     )
   );

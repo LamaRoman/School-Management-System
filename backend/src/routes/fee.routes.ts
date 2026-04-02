@@ -239,7 +239,7 @@ router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) =>
     description: z.string().optional(),
   });
   const data = schema.parse(req.body);
-  const category = await prisma.feeCategory.create({ data });
+  const category = await prisma.feeCategory.create({ data: { name: data.name, description: data.description } });
   res.status(201).json({ data: category });
 });
 
@@ -299,7 +299,14 @@ router.post("/structure", authenticate, authorize("ADMIN"), async (req, res) => 
       },
     },
     update: { amount: data.amount, frequency: data.frequency },
-    create: { ...data, examTypeId: data.examTypeId || null },
+    create: {
+      feeCategory: { connect: { id: data.feeCategoryId } },
+      grade: { connect: { id: data.gradeId } },
+      academicYear: { connect: { id: data.academicYearId } },
+      examType: data.examTypeId ? { connect: { id: data.examTypeId } } : undefined,
+      amount: data.amount,
+      frequency: data.frequency,
+    },
     include: {
       feeCategory: { select: { id: true, name: true } },
       examType: { select: { id: true, name: true } },

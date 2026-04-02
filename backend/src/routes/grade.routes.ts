@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 
@@ -45,7 +46,12 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = gradeSchema.parse(req.body);
 
   // Create grade and auto-create default section "A"
-  const grade = await prisma.grade.create({ data });
+  const createData: Prisma.GradeCreateInput = {
+    name: data.name,
+    displayOrder: data.displayOrder,
+    academicYear: { connect: { id: data.academicYearId } },
+  };
+  const grade = await prisma.grade.create({ data: createData });
 
   await prisma.section.create({
     data: { name: "A", gradeId: grade.id },

@@ -4,6 +4,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -105,6 +106,22 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 // GET /api/students/:id
+// GET /api/students/me — returns the student record linked to the logged-in student user
+router.get("/me", authenticate, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    include: {
+      student: {
+        include: {
+          section: { include: { grade: true } },
+        },
+      },
+    },
+  });
+  if (!user?.student) throw new AppError("No student record linked to this account", 404);
+  res.json({ data: user.student });
+});
+
 router.get("/:id", authenticate, async (req, res) => {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: req.params.id },
@@ -128,7 +145,23 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     include: { grade: { include: { academicYear: true } } },
   });
 
-  const student = await prisma.student.create({ data });
+  const createData: Prisma.StudentCreateInput = {
+    name: data.name,
+    nameNp: data.nameNp,
+    dateOfBirth: data.dateOfBirth,
+    rollNo: data.rollNo,
+    symbolNumber: data.symbolNumber,
+    gender: data.gender,
+    fatherName: data.fatherName,
+    motherName: data.motherName,
+    guardianName: data.guardianName,
+    guardianPhone: data.guardianPhone,
+    address: data.address,
+    photo: data.photo,
+    isActive: data.isActive,
+    section: { connect: { id: data.sectionId } },
+  };
+  const student = await prisma.student.create({ data: createData });
 
   // Auto-create login account
   try {
@@ -180,7 +213,22 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   await authorizeForSection(user, sectionId);
 
   const created = await prisma.$transaction(
-    students.map((s) => prisma.student.create({ data: { ...s, sectionId } }))
+  students.map((s) => prisma.student.create({ data: {
+      name: s.name,
+      nameNp: s.nameNp,
+      dateOfBirth: s.dateOfBirth,
+      rollNo: s.rollNo,
+      symbolNumber: s.symbolNumber,
+      gender: s.gender,
+      fatherName: s.fatherName,
+      motherName: s.motherName,
+      guardianName: s.guardianName,
+      guardianPhone: s.guardianPhone,
+      address: s.address,
+      photo: s.photo,
+      isActive: s.isActive ?? true,
+      section: { connect: { id: sectionId } },
+    } as Prisma.StudentCreateInput }))
   );
 
   for (const student of created) {

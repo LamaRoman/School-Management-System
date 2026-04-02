@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -40,7 +41,11 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/sections
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = sectionSchema.parse(req.body);
-  const section = await prisma.section.create({ data });
+  const createData: Prisma.SectionCreateInput = {
+    name: data.name,
+    grade: { connect: { id: data.gradeId } },
+  };
+  const section = await prisma.section.create({ data: createData });
   res.status(201).json({ data: section });
 });
 

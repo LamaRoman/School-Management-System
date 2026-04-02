@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 
@@ -48,7 +49,13 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   if (data.isActive) {
     await prisma.academicYear.updateMany({ data: { isActive: false } });
   }
-  const year = await prisma.academicYear.create({ data });
+  const createData: Prisma.AcademicYearCreateInput = {
+    yearBS: data.yearBS,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    isActive: data.isActive,
+  };
+  const year = await prisma.academicYear.create({ data: createData });
   res.status(201).json({ data: year });
 });
 
