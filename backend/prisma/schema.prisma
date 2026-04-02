@@ -283,6 +283,7 @@ model User {
   notices        Notice[]
   homeworks      Homework[]
   admissions     Admission[]
+  auditLogs      AuditLog[]
   @@map("users")
 }
 
@@ -655,4 +656,20 @@ model ParentStudent {
 
   @@unique([parentId, studentId])
   @@map("parent_students")
+}
+// ─── AUDIT LOG ──────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  action     String                        // e.g. PAYMENT_CREATED, PAYMENT_DELETED
+  entity     String                        // e.g. FeePayment
+  entityId   String   @map("entity_id")   // id of the affected record
+  detail     Json?                         // extra info: amount, receiptNumber, etc.
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
 }

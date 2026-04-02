@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { logAudit } from "../utils/audit";
 
 const router = Router();
 
@@ -460,6 +461,17 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     )
   );
 
+  const userId = (req as any).user.id;
+  for (const p of created) {
+    await logAudit({
+      userId,
+      action: "PAYMENT_CREATED",
+      entity: "FeePayment",
+      entityId: p.id,
+      detail: { receiptNumber, amount: p.amount, paidMonth: p.paidMonth },
+      ipAddress: req.ip,
+    });
+  }
   res.status(201).json({
     data: {
       message: `${created.length} payments recorded`,
@@ -477,6 +489,14 @@ router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res
   await prisma.feePayment.update({
     where: { id: req.params.id },
     data: { deletedAt: new Date() },
+  });
+  await logAudit({
+    userId: (req as any).user.id,
+    action: "PAYMENT_DELETED",
+    entity: "FeePayment",
+    entityId: req.params.id,
+    detail: { receiptNumber: payment.receiptNumber, amount: payment.amount },
+    ipAddress: req.ip,
   });
   res.json({
     data: {
