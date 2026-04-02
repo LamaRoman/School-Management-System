@@ -18,6 +18,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Run pg_dump
         env:
@@ -25,7 +26,7 @@ jobs:
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           FILENAME="school_backup_${TIMESTAMP}.sql"
-          pg_dump "$DATABASE_URL" -F p -f "$FILENAME"
+          /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -F p -f "$FILENAME"
           echo "FILENAME=$FILENAME" >> $GITHUB_ENV
 
       - name: Install B2 CLI
