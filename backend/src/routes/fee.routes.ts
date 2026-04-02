@@ -81,7 +81,7 @@ async function buildInvoice(
     }),
     prisma.academicYear.findUnique({ where: { id: academicYearId } }),
     prisma.studentFeeOverride.findMany({ where: { studentId, academicYearId } }),
-    prisma.feePayment.findMany({ where: { studentId, academicYearId } }),
+    prisma.feePayment.findMany({ where: { studentId, academicYearId, deletedAt: null } }),
   ]);
 
   const gradeId = student.section.gradeId;
@@ -408,7 +408,7 @@ router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, re
 
 router.get("/payments", authenticate, async (req, res) => {
   const { studentId, academicYearId } = req.query;
-  const where: any = {};
+  const where: any = { deletedAt: null };
   if (studentId) where.studentId = String(studentId);
   if (academicYearId) where.academicYearId = String(academicYearId);
   const payments = await prisma.feePayment.findMany({
@@ -469,6 +469,24 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
   });
 });
 
+// ─── SOFT DELETE PAYMENT ──────────────────────────────────────────────────────
+router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const payment = await prisma.feePayment.findUnique({ where: { id: req.params.id } });
+  if (!payment) throw new AppError("Payment not found", 404);
+  if (payment.deletedAt) throw new AppError("Payment already deleted", 400);
+  await prisma.feePayment.update({
+    where: { id: req.params.id },
+    data: { deletedAt: new Date() },
+  });
+  res.json({
+    data: {
+      message: "Payment soft-deleted. Record preserved for audit trail.",
+      paymentId: req.params.id,
+      receiptNumber: payment.receiptNumber,
+    },
+  });
+});
+
 // ─── SECTION OVERVIEW ─────────────────────────────────────────────────────────
 
 router.get("/section-overview", authenticate, async (req, res) => {
@@ -499,7 +517,7 @@ router.get("/section-overview", authenticate, async (req, res) => {
       where: { studentId: { in: studentIds }, academicYearId: String(academicYearId) },
     }),
     prisma.feePayment.findMany({
-      where: { studentId: { in: studentIds }, academicYearId: String(academicYearId) },
+      where: { studentId: { in: studentIds }, academicYearId: String(academicYearId), deletedAt: null },
     }),
   ]);
 
@@ -580,7 +598,7 @@ router.get("/student-ledger/:studentId", authenticate, async (req, res) => {
     Promise.resolve(null as any), // placeholder
     prisma.studentFeeOverride.findMany({ where: { studentId, academicYearId: String(academicYearId) } }),
     prisma.feePayment.findMany({
-      where: { studentId, academicYearId: String(academicYearId) },
+      where: { studentId, academicYearId: String(academicYearId), deletedAt: null },
       orderBy: { createdAt: "desc" },
     }),
     Promise.resolve(null as any), // placeholder

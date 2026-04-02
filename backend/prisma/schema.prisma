@@ -555,6 +555,7 @@ model FeePayment {
   paymentMethod   String?  @map("payment_method")  // CASH, BANK, ONLINE
   remarks         String?
   createdAt       DateTime @default(now()) @map("created_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   student       Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   feeCategory   FeeCategory  @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
