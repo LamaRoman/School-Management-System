@@ -1,14 +1,22 @@
 {
-  "cli": { "version": ">= 16.0.0" },
+  "cli": {
+    "version": ">= 16.0.0"
+  },
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "API_URL": "http://192.168.1.65:4000/api" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "API_URL": "http://192.168.1.65:4000/api"
+      }
     },
     "production": {
       "distribution": "store",
-      "env": { "API_URL": "https://api.yourschool.com/api" }
+      "env": {
+        "API_URL": "https://api.school.zentaralabs.com/api"
+      }
     }
   }
 }
