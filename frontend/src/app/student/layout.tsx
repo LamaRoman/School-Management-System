@@ -1,11 +1,10 @@
 "use client";
-import { useState } from "react";
 import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut, GraduationCap, FileText, CalendarDays, BookOpen, Megaphone } from "lucide-react";
+import { LogOut, GraduationCap, FileText, CalendarDays, BookOpen, Megaphone, KeyRound } from "lucide-react";
 
 const navItems = [
   { href: "/student/report", label: "Report Card", icon: FileText },
@@ -14,8 +13,8 @@ const navItems = [
   { href: "/student/notices", label: "Notices", icon: Megaphone },
 ];
 
-export default function StudentLayout({
-  const [showChangePassword, setShowChangePassword] = useState(false); children }: { children: React.ReactNode }) {
+export default function StudentLayout({ children }: { children: React.ReactNode }) {
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();

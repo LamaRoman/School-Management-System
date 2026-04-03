@@ -1,17 +1,16 @@
 "use client";
-import { useState } from "react";
 import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, Users, CalendarDays, BookOpen, Megaphone } from "lucide-react";
+import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, Users, CalendarDays, BookOpen, Megaphone, KeyRound } from "lucide-react";
 
 const allowedRoles = ["TEACHER", "ADMIN"];
 
-export default function TeacherLayout({
-  const [showChangePassword, setShowChangePassword] = useState(false); children }: { children: React.ReactNode }) {
+export default function TeacherLayout({ children }: { children: React.ReactNode }) {
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();

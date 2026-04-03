@@ -1,7 +1,6 @@
 "use client";
-import { useState } from "react";
 import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +13,7 @@ import {
   Megaphone,
   LayoutDashboard,
   FileBarChart,
+  KeyRound,
 } from "lucide-react";
 
 const tabs = [
@@ -27,8 +27,8 @@ const tabs = [
 
 const allowedRoles = ["ACCOUNTANT", "ADMIN"];
 
-export default function AccountantLayout({
-  const [showChangePassword, setShowChangePassword] = useState(false); children }: { children: React.ReactNode }) {
+export default function AccountantLayout({ children }: { children: React.ReactNode }) {
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();

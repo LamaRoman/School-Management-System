@@ -27,7 +27,7 @@ const nepaliMonths = ["Baisakh","Jestha","Ashadh","Shrawan","Bhadra","Ashwin","K
 type Tab = "categories" | "structure" | "collection" | "discounts";
 
 export default function FeeManagementPage() {
-  const confirm = useConfirm();
+  const showConfirm = useConfirm();
   const [tab, setTab] = useState<Tab>("categories");
   const [activeYear, setActiveYear] = useState<any>(null);
   const [categories, setCategories] = useState<FeeCategory[]>([]);
@@ -74,6 +74,7 @@ export default function FeeManagementPage() {
 // ─── CATEGORIES TAB ─────────────────────────────────────
 
 function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[]; setCategories: (c: FeeCategory[]) => void }) {
+  const showConfirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState(""); const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -83,7 +84,7 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
   const handleAdd = async () => { if (!name.trim()) return; try { await api.post("/fees/categories", { name: name.trim(), description: description.trim() || undefined }); toast.success("Added"); setName(""); setDescription(""); setShowForm(false); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
   const handleStartEdit = (cat: FeeCategory) => { setEditingId(cat.id); setEditName(cat.name); setEditDesc(cat.description || ""); };
   const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await api.put(`/fees/categories/${editingId}`, { name: editName.trim(), description: editDesc.trim() || undefined }); toast.success("Updated"); setEditingId(null); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
-  const handleDelete = async (id: string) => { if (!await confirm({ title: "Remove category", message: "This fee category will be removed.", confirmLabel: "Remove", variant: "danger" })) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+  const handleDelete = async (id: string) => { if (!await showConfirm({ title: "Remove category", message: "This fee category will be removed.", confirmLabel: "Remove", variant: "danger" })) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
 
   return (
     <div>
@@ -112,7 +113,7 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
 // ─── STRUCTURE TAB ──────────────────────────────────────
 
 function StructureTab({ activeYear, categories, grades, examTypes }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; examTypes: ExamType[] }) {
-  const confirm = useConfirm();
+  const showConfirm = useConfirm();
   const [selectedGrade, setSelectedGrade] = useState("");
   const [entries, setEntries] = useState<{ feeCategoryId: string; amount: number; frequency: string; examTypeId?: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -126,7 +127,7 @@ function StructureTab({ activeYear, categories, grades, examTypes }: { activeYea
   const handleRemoveRow = (i: number) => { setEntries((p) => p.filter((_, idx) => idx !== i)); };
   const handleSave = async () => { if (!selectedGrade) return; const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); setSaving(true); try { await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: selectedGrade, entries: valid }); toast.success(valid.length > 0 ? "Saved" : "Cleared"); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
   const handleCopyToAll = async () => { if (!selectedGrade) return;
-  if (!await confirm({ title: "Copy to all grades", message: "This fee structure will be copied to all other grades in the active year.", confirmLabel: "Copy", variant: "warning" })) return; setSaving(true); try { const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); for (const g of grades) { if (g.id !== selectedGrade) await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: g.id, entries: valid }); } toast.success(`Copied to ${grades.length - 1} grades`); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
+  if (!await showConfirm({ title: "Copy to all grades", message: "This fee structure will be copied to all other grades in the active year.", confirmLabel: "Copy", variant: "warning" })) return; setSaving(true); try { const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); for (const g of grades) { if (g.id !== selectedGrade) await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: g.id, entries: valid }); } toast.success(`Copied to ${grades.length - 1} grades`); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
   const calcAnnual = (e: { amount: number; frequency: string }) => e.frequency === "MONTHLY" ? e.amount * 12 : e.amount;
 
   return (

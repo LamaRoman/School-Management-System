@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 interface User {
   id: string;
   email: string;
-  role: "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
+  role: "ADMIN" | "TEACHER" | "STUDENT" | "PARENT" | "ACCOUNTANT";
   student?: { id: string; name: string } | null;
   teacher?: { id: string; name: string } | null;
 }

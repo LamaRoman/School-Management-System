@@ -1,7 +1,6 @@
 "use client";
-import { useState } from "react";
 import ChangePasswordModal from "@/components/ui/ChangePasswordModal";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,7 +20,6 @@ import {
   Megaphone,
   UserPlus,
   Users2,
-,
   KeyRound,
 } from "lucide-react";
 
