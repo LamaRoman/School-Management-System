@@ -74,43 +74,43 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use("/api/auth/login", loginLimiter);
-app.use("/api/", apiLimiter);
+app.use("/auth/login", loginLimiter);
+app.use("/", apiLimiter);
 
 // Health check
-app.get("/api/health", (_req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // Routes
-app.use("/api/accountant-reports", accountantReportRoutes);
-app.use("/api/notices", noticeRoutes);
-app.use("/api/fees", feeRoutes);
-app.use("/api/seating", seatingRoutes);
-app.use("/api/report-card-settings", reportCardSettingsRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/school", schoolRoutes);
-app.use("/api/academic-years", academicYearRoutes);
-app.use("/api/grades", gradeRoutes);
-app.use("/api/sections", sectionRoutes);
-app.use("/api/subjects", subjectRoutes);
-app.use("/api/exam-types", examTypeRoutes);
-app.use("/api/grading-policy", gradingPolicyRoutes);
-app.use("/api/students", studentRoutes);
-app.use("/api/marks", markRoutes);
-app.use("/api/reports", reportRoutes);
-app.use("/api/teacher-assignments", teacherAssignmentRoutes);
-app.use("/api/teachers", teacherRoutes);
-app.use("/api/daily-attendance", dailyAttendanceRoutes);
-app.use("/api/grade-sheet", gradeSheetRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/pdf", pdfRoutes);
-app.use("/api/observations", observationRoutes);
-app.use("/api/promotion", promotionRoutes);
-app.use("/api/exam-routine", examRoutineRoutes);
-app.use("/api/homework", homeworkRoutes);
-app.use("/api/admissions", admissionRoutes);
-app.use("/api/parents", parentRoutes);
+app.use("/accountant-reports", accountantReportRoutes);
+app.use("/notices", noticeRoutes);
+app.use("/fees", feeRoutes);
+app.use("/seating", seatingRoutes);
+app.use("/report-card-settings", reportCardSettingsRoutes);
+app.use("/auth", authRoutes);
+app.use("/school", schoolRoutes);
+app.use("/academic-years", academicYearRoutes);
+app.use("/grades", gradeRoutes);
+app.use("/sections", sectionRoutes);
+app.use("/subjects", subjectRoutes);
+app.use("/exam-types", examTypeRoutes);
+app.use("/grading-policy", gradingPolicyRoutes);
+app.use("/students", studentRoutes);
+app.use("/marks", markRoutes);
+app.use("/reports", reportRoutes);
+app.use("/teacher-assignments", teacherAssignmentRoutes);
+app.use("/teachers", teacherRoutes);
+app.use("/daily-attendance", dailyAttendanceRoutes);
+app.use("/grade-sheet", gradeSheetRoutes);
+app.use("/analytics", analyticsRoutes);
+app.use("/pdf", pdfRoutes);
+app.use("/observations", observationRoutes);
+app.use("/promotion", promotionRoutes);
+app.use("/exam-routine", examRoutineRoutes);
+app.use("/homework", homeworkRoutes);
+app.use("/admissions", admissionRoutes);
+app.use("/parents", parentRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 
