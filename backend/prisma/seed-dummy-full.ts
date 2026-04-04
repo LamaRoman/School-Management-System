@@ -89,44 +89,68 @@ function getSubjectSet(gradeName: string) {
   return subjectSets.secondary;
 }
 
-// Nepali student names
-const maleFirstNames = ["Aarav", "Bibek", "Chirag", "Dipesh", "Eshan", "Firoj", "Ganesh", "Hari", "Ishan", "Janak", "Kamal", "Lokesh", "Manish", "Nabin", "Om", "Prakash", "Rajesh", "Santosh", "Tilak", "Umesh"];
-const femaleFirstNames = ["Aasha", "Bipasha", "Chanda", "Deepa", "Elina", "Fulkumari", "Gita", "Hema", "Indira", "Jyoti", "Kamala", "Laxmi", "Maya", "Nisha", "Oja", "Puja", "Rita", "Sunita", "Tara", "Uma"];
-const lastNames = ["Sharma", "Thapa", "Basnet", "Karki", "Gurung", "Tamang", "Shrestha", "Rai", "Limbu", "Magar", "Poudel", "Adhikari", "Bhattarai", "Koirala", "Dahal", "Ghimire", "Subedi", "Tiwari", "Regmi", "Khadka"];
+// Nepali student names — Roman + Devanagari pairs
+const maleFirstNames: [string, string][] = [
+  ["Aarav", "आरव"], ["Bibek", "विवेक"], ["Chirag", "चिराग"], ["Dipesh", "दिपेश"],
+  ["Eshan", "एशान"], ["Firoj", "फिरोज"], ["Ganesh", "गणेश"], ["Hari", "हरि"],
+  ["Ishan", "इशान"], ["Janak", "जनक"], ["Kamal", "कमल"], ["Lokesh", "लोकेश"],
+  ["Manish", "मनिष"], ["Nabin", "नबिन"], ["Om", "ओम"], ["Prakash", "प्रकाश"],
+  ["Rajesh", "राजेश"], ["Santosh", "सन्तोष"], ["Tilak", "तिलक"], ["Umesh", "उमेश"],
+];
+const femaleFirstNames: [string, string][] = [
+  ["Aasha", "आशा"], ["Bipasha", "बिपाशा"], ["Chanda", "चन्दा"], ["Deepa", "दीपा"],
+  ["Elina", "एलिना"], ["Fulkumari", "फूलकुमारी"], ["Gita", "गीता"], ["Hema", "हेमा"],
+  ["Indira", "इन्दिरा"], ["Jyoti", "ज्योती"], ["Kamala", "कमला"], ["Laxmi", "लक्ष्मी"],
+  ["Maya", "माया"], ["Nisha", "निशा"], ["Oja", "ओजा"], ["Puja", "पूजा"],
+  ["Rita", "रिता"], ["Sunita", "सुनिता"], ["Tara", "तारा"], ["Uma", "उमा"],
+];
+const lastNames: [string, string][] = [
+  ["Sharma", "शर्मा"], ["Thapa", "थापा"], ["Basnet", "बस्नेत"], ["Karki", "कार्की"],
+  ["Gurung", "गुरुङ"], ["Tamang", "तामाङ"], ["Shrestha", "श्रेष्ठ"], ["Rai", "राई"],
+  ["Limbu", "लिम्बू"], ["Magar", "मगर"], ["Poudel", "पौडेल"], ["Adhikari", "अधिकारी"],
+  ["Bhattarai", "भट्टराई"], ["Koirala", "कोइराला"], ["Dahal", "दाहाल"], ["Ghimire", "घिमिरे"],
+  ["Subedi", "सुवेदी"], ["Tiwari", "तिवारी"], ["Regmi", "रेग्मी"], ["Khadka", "खड्का"],
+];
 
-const fatherNames = ["Ram", "Shyam", "Hari", "Krishna", "Gopal", "Mohan", "Bishnu", "Ganesh", "Indra", "Surya"];
-const motherNames = ["Sita", "Gita", "Maya", "Laxmi", "Durga", "Parvati", "Saraswati", "Kamala", "Radha", "Sumitra"];
+const fatherFirstNames: [string, string][] = [
+  ["Ram", "राम"], ["Shyam", "श्याम"], ["Hari", "हरि"], ["Krishna", "कृष्ण"], ["Gopal", "गोपाल"],
+  ["Mohan", "मोहन"], ["Bishnu", "विष्णु"], ["Ganesh", "गणेश"], ["Indra", "इन्द्र"], ["Surya", "सूर्य"],
+];
+const motherFirstNames: [string, string][] = [
+  ["Sita", "सीता"], ["Gita", "गीता"], ["Maya", "माया"], ["Laxmi", "लक्ष्मी"], ["Durga", "दुर्गा"],
+  ["Parvati", "पार्वती"], ["Saraswati", "सरस्वती"], ["Kamala", "कमला"], ["Radha", "राधा"], ["Sumitra", "सुमित्रा"],
+];
 
 function makeName(index: number, gender: "Male" | "Female"): { name: string; nameNp: string; fatherName: string; motherName: string } {
   const first = gender === "Male"
     ? maleFirstNames[index % maleFirstNames.length]
     : femaleFirstNames[index % femaleFirstNames.length];
   const last = lastNames[index % lastNames.length];
-  const father = fatherNames[index % fatherNames.length] + " " + last;
-  const mother = motherNames[index % motherNames.length] + " " + last;
+  const father = fatherFirstNames[index % fatherFirstNames.length];
+  const mother = motherFirstNames[index % motherFirstNames.length];
   return {
-    name: `${first} ${last}`,
-    nameNp: `${first} ${last}`,
-    fatherName: father,
-    motherName: mother,
+    name: `${first[0]} ${last[0]}`,
+    nameNp: `${first[1]} ${last[1]}`,
+    fatherName: `${father[0]} ${last[0]}`,
+    motherName: `${mother[0]} ${last[0]}`,
   };
 }
 
 // Teacher names per grade
 const teacherData = [
-  { name: "Sunita Pandey", email: "sunita.pandey@school.edu.np", gradeName: "Nursery" },
-  { name: "Ramesh Bhandari", email: "ramesh.bhandari@school.edu.np", gradeName: "LKG" },
-  { name: "Mina Karki", email: "mina.karki@school.edu.np", gradeName: "UKG" },
-  { name: "Kiran Thapa", email: "kiran.thapa@school.edu.np", gradeName: "I" },
-  { name: "Sujata Shrestha", email: "sujata.shrestha@school.edu.np", gradeName: "II" },
-  { name: "Deepak Adhikari", email: "deepak.adhikari@school.edu.np", gradeName: "III" },
-  { name: "Anita Gurung", email: "anita.gurung@school.edu.np", gradeName: "IV" },
-  { name: "Bikash Tamang", email: "bikash.tamang@school.edu.np", gradeName: "V" },
-  { name: "Priya Rai", email: "priya.rai@school.edu.np", gradeName: "VI" },
-  { name: "Suresh Magar", email: "suresh.magar@school.edu.np", gradeName: "VII" },
-  { name: "Ram Sharma", email: "ram.sharma@school.edu.np", gradeName: "VIII" },
-  { name: "Nirmala Poudel", email: "nirmala.poudel@school.edu.np", gradeName: "IX" },
-  { name: "Bijaya Koirala", email: "bijaya.koirala@school.edu.np", gradeName: "X" },
+  { name: "Sunita Pandey", nameNp: "सुनिता पाण्डे", email: "sunita.pandey@school.edu.np", gradeName: "Nursery" },
+  { name: "Ramesh Bhandari", nameNp: "रमेश भण्डारी", email: "ramesh.bhandari@school.edu.np", gradeName: "LKG" },
+  { name: "Mina Karki", nameNp: "मिना कार्की", email: "mina.karki@school.edu.np", gradeName: "UKG" },
+  { name: "Kiran Thapa", nameNp: "किरण थापा", email: "kiran.thapa@school.edu.np", gradeName: "I" },
+  { name: "Sujata Shrestha", nameNp: "सुजाता श्रेष्ठ", email: "sujata.shrestha@school.edu.np", gradeName: "II" },
+  { name: "Deepak Adhikari", nameNp: "दीपक अधिकारी", email: "deepak.adhikari@school.edu.np", gradeName: "III" },
+  { name: "Anita Gurung", nameNp: "अनिता गुरुङ", email: "anita.gurung@school.edu.np", gradeName: "IV" },
+  { name: "Bikash Tamang", nameNp: "विकास तामाङ", email: "bikash.tamang@school.edu.np", gradeName: "V" },
+  { name: "Priya Rai", nameNp: "प्रिया राई", email: "priya.rai@school.edu.np", gradeName: "VI" },
+  { name: "Suresh Magar", nameNp: "सुरेश मगर", email: "suresh.magar@school.edu.np", gradeName: "VII" },
+  { name: "Ram Sharma", nameNp: "राम शर्मा", email: "ram.sharma@school.edu.np", gradeName: "VIII" },
+  { name: "Nirmala Poudel", nameNp: "निर्मला पौडेल", email: "nirmala.poudel@school.edu.np", gradeName: "IX" },
+  { name: "Bijaya Koirala", nameNp: "विजय कोइराला", email: "bijaya.koirala@school.edu.np", gradeName: "X" },
 ];
 
 const gradeNames = ["Nursery", "LKG", "UKG", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -199,7 +223,7 @@ async function main() {
       const teacher = await prisma.teacher.upsert({
         where: { id: teacherId },
         update: {},
-        create: { id: teacherId, name: tData.name, email: tData.email, phone: "98XXXXXXXX" },
+        create: { id: teacherId, name: tData.name, nameNp: tData.nameNp, email: tData.email, phone: "98XXXXXXXX" },
       });
 
       await prisma.user.upsert({
