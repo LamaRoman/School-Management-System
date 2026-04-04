@@ -1,8 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import NepaliDate from "nepali-date-converter";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
 
@@ -242,8 +243,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   // Auto-create admission record so there is always a paper trail
   try {
-    const today = new Date();
-    const todayBS = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}`;
+    const todayBS = new NepaliDate().format("YYYY/MM/DD");
     await prisma.admission.create({
       data: {
         studentName: student.name,
@@ -381,6 +381,14 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     where: { id: req.params.id },
     data: { isActive: false },
   });
+
+  // Also deactivate the linked user account and bust the auth cache
+  const linkedUser = await prisma.user.findFirst({ where: { studentId: req.params.id } });
+  if (linkedUser) {
+    await prisma.user.update({ where: { id: linkedUser.id }, data: { isActive: false } });
+    invalidateUserCache(linkedUser.id);
+  }
+
   res.json({ data: { message: "Student deactivated" } });
 });
 

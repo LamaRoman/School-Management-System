@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import bcrypt from "bcryptjs";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
@@ -219,7 +219,6 @@ router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
   res.json({ data: attendance });
 });
 
-export default router;
 // PUT /api/parents/:parentId/toggle — admin toggles parent active status
 router.put("/:parentId/toggle", authenticate, authorize("ADMIN"), async (req, res) => {
   const parent = await prisma.user.findUniqueOrThrow({
@@ -233,5 +232,8 @@ router.put("/:parentId/toggle", authenticate, authorize("ADMIN"), async (req, re
     select: { id: true, email: true, isActive: true },
   });
 
+  invalidateUserCache(parent.id);
   res.json({ data: updated });
 });
+
+export default router;

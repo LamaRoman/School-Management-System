@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
@@ -219,6 +219,7 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
       where: { id: teacher.user.id },
       data: { isActive: false },
     });
+    invalidateUserCache(teacher.user.id);
   }
 
   res.json({ data: { message: `${teacher.name} deactivated` } });
