@@ -52,10 +52,49 @@ async function authorizeForSection(user: any, sectionId: string): Promise<void> 
   if (user.role === "ADMIN") return;
 
   if (user.role === "TEACHER") {
-    const teacherId = await getTeacherId(user.id);
+    const teacherId = await getTeacherId(user.userId);
     if (!teacherId) throw new AppError("Teacher record not found for this user", 403);
     const authorized = await isClassTeacherOf(teacherId, sectionId);
     if (!authorized) throw new AppError("You can only manage students in your assigned section", 403);
+    return;
+  }
+
+  throw new AppError("Not authorized", 403);
+}
+
+/** Check if a teacher has ANY assignment (class teacher or subject) for a given section. */
+async function isTeacherOfSection(teacherId: string, sectionId: string): Promise<boolean> {
+  const assignment = await prisma.teacherAssignment.findFirst({
+    where: { teacherId, sectionId },
+  });
+  return !!assignment;
+}
+
+/** Authorize read access to a specific student record based on role. */
+async function authorizeStudentRead(userId: string, role: string, studentId: string, studentSectionId: string): Promise<void> {
+  // Admin and accountant can see everything
+  if (role === "ADMIN" || role === "ACCOUNTANT") return;
+
+  // Teachers can see students in sections they're assigned to
+  if (role === "TEACHER") {
+    const teacherId = await getTeacherId(userId);
+    if (!teacherId) throw new AppError("Teacher record not found", 403);
+    const assigned = await isTeacherOfSection(teacherId, studentSectionId);
+    if (!assigned) throw new AppError("You can only view students in your assigned sections", 403);
+    return;
+  }
+
+  // Students can only see their own record
+  if (role === "STUDENT") {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { studentId: true } });
+    if (user?.studentId !== studentId) throw new AppError("You can only view your own record", 403);
+    return;
+  }
+
+  // Parents can only see linked children
+  if (role === "PARENT") {
+    const link = await prisma.parentStudent.findFirst({ where: { parentId: userId, studentId } });
+    if (!link) throw new AppError("You can only view your linked children", 403);
     return;
   }
 
@@ -89,12 +128,39 @@ async function autoCreateStudentUser(studentId: string, studentName: string): Pr
 // ─── ROUTES ─────────────────────────────────────────────
 
 // GET /api/students?sectionId=xxx&gradeId=xxx
+// Admin/Accountant: all students. Teacher: only their assigned sections. Student/Parent: denied (use /me or /my-children).
 router.get("/", authenticate, async (req, res) => {
+  const user = req.user!;
   const { sectionId, gradeId, search } = req.query;
   const where: any = { isActive: true };
   if (search) where.name = { contains: String(search), mode: "insensitive" };
   if (sectionId) where.sectionId = String(sectionId);
   if (gradeId) where.section = { gradeId: String(gradeId) };
+
+  // Students and parents should use /students/me or /parents/my-children
+  if (user.role === "STUDENT" || user.role === "PARENT") {
+    throw new AppError("Use /students/me or /parents/my-children instead", 403);
+  }
+
+  // Teachers can only list students in sections they're assigned to
+  if (user.role === "TEACHER") {
+    const teacherId = await getTeacherId(user.userId);
+    if (!teacherId) return res.json({ data: [] });
+    const assignments = await prisma.teacherAssignment.findMany({
+      where: { teacherId },
+      select: { sectionId: true },
+    });
+    const assignedSectionIds = assignments.map(a => a.sectionId);
+    // If a specific section is requested, verify teacher is assigned to it
+    if (sectionId && !assignedSectionIds.includes(String(sectionId))) {
+      throw new AppError("You can only view students in your assigned sections", 403);
+    }
+    // If no section filter, auto-restrict to assigned sections
+    if (!sectionId) {
+      where.sectionId = { in: assignedSectionIds };
+    }
+  }
+
   const students = await prisma.student.findMany({
     where,
     orderBy: { rollNo: "asc" },
@@ -132,6 +198,10 @@ router.get("/:id", authenticate, async (req, res) => {
       results: true,
     },
   });
+
+  // Verify the requesting user has permission to view this student
+  await authorizeStudentRead(req.user!.userId, req.user!.role, student.id, student.sectionId);
+
   res.json({ data: student });
 });
 

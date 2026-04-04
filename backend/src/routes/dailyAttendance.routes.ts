@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
@@ -43,7 +43,8 @@ router.get("/", authenticate, async (req, res) => {
 });
 
 // POST /api/daily-attendance/bulk — mark attendance for entire section
-router.post("/bulk", authenticate, async (req, res) => {
+// Only Admin and Teachers assigned to the section can mark attendance.
+router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schema = z.object({
     sectionId: z.string().min(1),
     date: z.string().min(1),
@@ -64,6 +65,15 @@ router.post("/bulk", authenticate, async (req, res) => {
     where: { id: req.user!.userId },
     select: { teacherId: true },
   });
+
+  // If teacher, verify they're assigned to this section
+  if (req.user!.role === "TEACHER") {
+    if (!user?.teacherId) throw new AppError("Teacher record not found", 403);
+    const assignment = await prisma.teacherAssignment.findFirst({
+      where: { teacherId: user.teacherId, sectionId },
+    });
+    if (!assignment) throw new AppError("You are not assigned to this section", 403);
+  }
 
   // Upsert each record
   const results = await prisma.$transaction(
