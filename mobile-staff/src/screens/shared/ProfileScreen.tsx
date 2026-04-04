@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { api, getErrorMessage } from '../../api/client';
 import { Card, Button } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import { Ionicons } from '@expo/vector-icons';
 
 const ROLE_LABELS: Record<string, string> = {
   TEACHER: 'Teacher',
@@ -211,7 +212,7 @@ export default function ProfileScreen() {
                 autoCapitalize="none"
               />
               <TouchableOpacity style={s.eyeBtn} onPress={() => setShowCurrent(v => !v)}>
-                <Text style={s.eyeIcon}>{showCurrent ? '🙈' : '👁'}</Text>
+                <Ionicons name={showCurrent ? 'eye-off' : 'eye'} size={20} color="#999" />
               </TouchableOpacity>
             </View>
 
@@ -227,7 +228,7 @@ export default function ProfileScreen() {
                 autoCapitalize="none"
               />
               <TouchableOpacity style={s.eyeBtn} onPress={() => setShowNew(v => !v)}>
-                <Text style={s.eyeIcon}>{showNew ? '🙈' : '👁'}</Text>
+                <Ionicons name={showNew ? 'eye-off' : 'eye'} size={20} color="#999" />
               </TouchableOpacity>
             </View>
 
@@ -294,7 +295,7 @@ const s = StyleSheet.create({
   textInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text, backgroundColor: Colors.surface },
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   eyeBtn: { padding: Spacing.md },
-  eyeIcon: { fontSize: 20 },
+  eyeIcon: { width: 24, alignItems: 'center' as any, justifyContent: 'center' as any },
   errorText: { fontSize: FontSize.sm, color: Colors.danger, marginTop: Spacing.xs },
   modalFooter: { flexDirection: 'row', gap: Spacing.md, padding: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border },
 });

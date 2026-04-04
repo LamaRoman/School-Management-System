@@ -447,28 +447,34 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
 
   if (items.length === 0) throw new AppError("At least one payment item required");
 
-  const count = await prisma.feePayment.count({ where: { academicYearId } });
-  const receiptNumber = `RCP-${String(count + 1).padStart(5, "0")}`;
+  // Atomic receipt generation: interactive transaction ensures no two requests
+  // can read the same count before either has written its payments.
+  const { created, receiptNumber } = await prisma.$transaction(async (tx) => {
+    const count = await tx.feePayment.count({ where: { academicYearId } });
+    const receipt = `RCP-${String(count + 1).padStart(5, "0")}`;
 
-  const created = await prisma.$transaction(
-    items.map(item =>
-      prisma.feePayment.create({
+    const results = [];
+    for (const item of items) {
+      const p = await tx.feePayment.create({
         data: {
           studentId,
           feeCategoryId: item.feeCategoryId,
           academicYearId,
           amount: item.amount,
           paidMonth: item.paidMonth ?? null,
-          receiptNumber,
+          receiptNumber: receipt,
           paymentDate,
           paymentMethod: paymentMethod ?? null,
           remarks: remarks ?? null,
         },
-      })
-    )
-  );
+      });
+      results.push(p);
+    }
 
-  const userId = (req as any).user.id;
+    return { created: results, receiptNumber: receipt };
+  });
+
+  const userId = req.user!.userId;
   for (const p of created) {
     await logAudit({
       userId,
@@ -498,7 +504,7 @@ router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res
     data: { deletedAt: new Date() },
   });
   await logAudit({
-    userId: (req as any).user.id,
+    userId: req.user!.userId,
     action: "PAYMENT_DELETED",
     entity: "FeePayment",
     entityId: req.params.id,

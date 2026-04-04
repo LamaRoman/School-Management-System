@@ -8,19 +8,22 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 
 interface ExamType { id: string; name: string }
-interface MarkRow {
-  subject: { name: string };
+interface SubjectRow {
+  subjectName: string;
   totalMarks: number | null;
   fullMarks: number;
   grade: string | null;
-  gradePoint: number | null;
+  gpa: number | null;
+  isAbsent: boolean;
 }
 interface ReportData {
-  student: { name: string; rollNumber?: number };
-  examType: { name: string };
-  academicYear: { yearNp: string };
-  marks: MarkRow[];
-  summary?: { percentage: number; gpa: number; overallGrade: string };
+  student: { name: string; rollNo?: number };
+  examType: string;
+  academicYear: string;
+  subjects: SubjectRow[];
+  overallPercentage: number;
+  overallGpa: number;
+  overallGrade: string;
 }
 
 export default function StudentReportScreen() {
@@ -35,15 +38,16 @@ export default function StudentReportScreen() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [students, exams] = await Promise.all([
-          api.get<any[]>('/students'),
+        const [me, activeYear, exams] = await Promise.all([
+          api.get<any>('/students/me'),
+          api.get<any>('/academic-years/active'),
           api.get<ExamType[]>('/exam-types'),
         ]);
-        const me = Array.isArray(students)
-          ? students.find(s => s.user?.id === user?.id || s.userId === user?.id) || students[0]
-          : null;
         if (me) setStudentId(me.id);
-        const examList = Array.isArray(exams) ? exams : [];
+        const allExams = Array.isArray(exams) ? exams : [];
+        const examList = activeYear
+          ? allExams.filter((e: any) => e.academicYearId === activeYear.id)
+          : allExams;
         setExamTypes(examList);
         if (examList.length) setSelectedExam(examList[0]);
       } catch (err) {
@@ -61,7 +65,7 @@ export default function StudentReportScreen() {
     setReport(null);
     api.get<ReportData>(`/reports/term/${studentId}/${selectedExam.id}`)
       .then(data => setReport(data))
-      .catch(err => console.error('Report fetch error:', err))
+      .catch(err => { if (err?.response?.status !== 404) console.error('Report fetch error:', err); })
       .finally(() => setReportLoading(false));
   }, [studentId, selectedExam]);
 
@@ -93,28 +97,28 @@ export default function StudentReportScreen() {
         <EmptyState icon="📊" message="No report card found for this exam" />
       ) : (
         <>
-          {report.summary && (
+          {report && (
             <Card style={s.summaryCard}>
               <Text style={s.studentName}>{report.student.name}</Text>
-              <Text style={s.examName}>{report.examType.name} • {report.academicYear.yearNp}</Text>
+              <Text style={s.examName}>{report.examType} • {report.academicYear}</Text>
               <View style={s.summaryRow}>
                 <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.summary.gpa) }]}>
-                    {report.summary.gpa.toFixed(2)}
+                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
+                    {report.overallGpa.toFixed(2)}
                   </Text>
                   <Text style={s.summaryKey}>GPA</Text>
                 </View>
                 <View style={s.divider} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryVal, { color: Colors.primary }]}>
-                    {report.summary.percentage.toFixed(1)}%
+                    {report.overallPercentage.toFixed(1)}%
                   </Text>
                   <Text style={s.summaryKey}>Percentage</Text>
                 </View>
                 <View style={s.divider} />
                 <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.summary.gpa) }]}>
-                    {report.summary.overallGrade}
+                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
+                    {report.overallGrade}
                   </Text>
                   <Text style={s.summaryKey}>Grade</Text>
                 </View>
@@ -130,16 +134,16 @@ export default function StudentReportScreen() {
               <Text style={s.th}>FM</Text>
               <Text style={s.th}>Grade</Text>
             </View>
-            {report.marks.map((row, idx) => (
+            {report.subjects.map((row, idx) => (
               <View key={idx} style={[s.tableRow, idx % 2 === 0 && s.rowAlt]}>
-                <Text style={[s.td, { flex: 2.5 }]} numberOfLines={1}>{row.subject.name}</Text>
-                <Text style={s.td}>{row.totalMarks ?? '–'}</Text>
+                <Text style={[s.td, { flex: 2.5 }]} numberOfLines={1}>{row.subjectName}</Text>
+                <Text style={s.td}>{row.isAbsent ? 'Abs' : (row.totalMarks ?? '–')}</Text>
                 <Text style={s.td}>{row.fullMarks}</Text>
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   {row.grade ? (
                     <Badge label={row.grade} color={
-                      (row.gradePoint ?? 0) >= 3.6 ? 'success' :
-                      (row.gradePoint ?? 0) >= 2.4 ? 'info' : 'warning'
+                      (row.gpa ?? 0) >= 3.6 ? 'success' :
+                      (row.gpa ?? 0) >= 2.4 ? 'info' : 'warning'
                     } />
                   ) : <Text style={s.td}>–</Text>}
                 </View>

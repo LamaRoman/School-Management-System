@@ -1,10 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-// Change this to your backend IP when testing on a physical device
-// e.g. 'http://192.168.1.100:4000/api'
-// For Expo Go on simulator: 'http://localhost:4000/api'
-const API_BASE = 'http://192.168.1.65:4000/api';
+// Reads from app.config.js → extra.apiUrl, which is set per EAS build profile.
+// Fallback to local dev server (no /api prefix — backend routes are at root).
+const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
 const client = axios.create({
   baseURL: API_BASE,
   timeout: 15000,

@@ -9,5 +9,5 @@ export default ({ config }) => ({
   splash: { image: './assets/splash-icon.png', resizeMode: 'contain', backgroundColor: '#1a3a5c' },
   ios: { supportsTablet: false, bundleIdentifier: 'com.school.parent' },
   android: { adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#1a3a5c' }, package: 'com.school.parent' },
-  extra: { apiUrl: process.env.API_URL || 'http://192.168.1.65:4000/api', eas: { projectId: '' } },
+  extra: { apiUrl: process.env.API_URL || 'http://localhost:4000', eas: { projectId: '' } },
 });

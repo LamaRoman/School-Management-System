@@ -8,12 +8,11 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Child { id: string; name: string }
 interface Payment {
-  id: string;
-  monthNp: string;
-  paidDateBS: string;
-  totalPaid: number;
   receiptNumber: string;
-  feeCategory: { name: string };
+  paidMonth: string;
+  paymentDate: string;
+  amount: number;
+  category: string;
 }
 interface FeeData {
   payments: Payment[];
@@ -69,7 +68,7 @@ export default function ParentFeesScreen() {
   if (loading) return <LoadingScreen />;
 
   const payments = feeData?.payments || [];
-  const totalPaid = payments.reduce((sum, p) => sum + p.totalPaid, 0);
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <ScrollView
@@ -124,19 +123,19 @@ export default function ParentFeesScreen() {
             {payments.length === 0 ? (
               <EmptyState icon="💰" message="No fee payments recorded yet" />
             ) : (
-              payments.map(payment => (
-                <Card key={payment.id} style={s.paymentCard}>
+              payments.map((payment, idx) => (
+                <Card key={payment.receiptNumber ?? idx} style={s.paymentCard}>
                   <View style={s.paymentRow}>
                     <View style={s.paymentLeft}>
-                      <Text style={s.paymentCategory}>{payment.feeCategory?.name || 'Fee'}</Text>
-                      <Text style={s.paymentMonth}>{payment.monthNp}</Text>
+                      <Text style={s.paymentCategory}>{payment.category || 'Fee'}</Text>
+                      <Text style={s.paymentMonth}>{payment.paidMonth}</Text>
                       <View style={s.paymentMeta}>
-                        <Text style={s.paymentDate}>📅 {payment.paidDateBS}</Text>
+                        <Text style={s.paymentDate}>📅 {payment.paymentDate}</Text>
                         <Text style={s.paymentReceipt}>🧾 #{payment.receiptNumber}</Text>
                       </View>
                     </View>
                     <View style={s.paymentRight}>
-                      <Text style={s.paymentAmount}>Rs {payment.totalPaid.toLocaleString()}</Text>
+                      <Text style={s.paymentAmount}>Rs {payment.amount.toLocaleString()}</Text>
                       <Badge label="Paid" color="success" />
                     </View>
                   </View>

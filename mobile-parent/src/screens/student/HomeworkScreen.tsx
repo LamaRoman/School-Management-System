@@ -10,7 +10,7 @@ interface HomeworkItem {
   id: string;
   title: string;
   description: string;
-  dueDateBS: string;
+  dueDate: string;
   subject: { name: string };
   section: { name: string; grade: { name: string } };
 }
@@ -38,7 +38,7 @@ export default function StudentHomeworkScreen() {
   if (loading) return <LoadingScreen />;
 
   const today = new Date();
-  const isOverdue = (dueDateBS: string) => {
+  const isOverdue = (dueDate: string) => {
     // Simple check — if BS date string looks past, mark overdue
     return false; // Conservative — don't falsely mark overdue
   };
@@ -60,7 +60,7 @@ export default function StudentHomeworkScreen() {
           <Card style={s.card}>
             <View style={s.cardTop}>
               <Text style={s.cardTitle}>{item.title}</Text>
-              <Badge label={`Due ${item.dueDateBS}`} color="warning" />
+              <Badge label={`Due ${item.dueDate}`} color="warning" />
             </View>
             <View style={s.badges}>
               <Badge label={item.subject?.name} color="info" />

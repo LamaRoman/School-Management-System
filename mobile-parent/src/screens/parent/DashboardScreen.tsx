@@ -58,9 +58,9 @@ export default function ParentDashboard({ navigation }: any) {
     ? Math.round((attendance.presentDays / attendance.totalDays) * 100) : 0;
 
   const quickActions = [
-    { label: 'Report Card', icon: '📊', screen: 'ParentReport' },
-    { label: 'Fee Status', icon: '💰', screen: 'ParentFees' },
-    { label: 'Notices', icon: '📢', screen: 'ParentNotices' },
+    { label: 'Report Card', icon: '📊', screen: 'Report' },
+    { label: 'Fee Status', icon: '💰', screen: 'Fees' },
+    { label: 'Notices', icon: '📢', screen: 'Notices' },
   ];
 
   return (

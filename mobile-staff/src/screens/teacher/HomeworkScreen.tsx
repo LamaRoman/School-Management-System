@@ -11,13 +11,13 @@ interface Assignment {
   id: string;
   title: string;
   description: string;
-  dueDateBS: string;
+  dueDate: string;
   subject: { name: string };
   section: { name: string; grade: { name: string } };
   createdAt: string;
 }
 
-interface Section { id: string; name: string; grade: { name: string } }
+interface Section { id: string; name: string; academicYearId: string; grade: { name: string } }
 interface Subject { id: string; name: string }
 
 export default function HomeworkScreen() {
@@ -51,18 +51,31 @@ export default function HomeworkScreen() {
 
   const loadFormData = async () => {
     try {
-      const [sData, subData] = await Promise.all([
-        api.get<any>('/teacher-assignments/my-assignments'),
-        api.get<Subject[]>('/subjects'),
-      ]);
+      const myData = await api.get<any>('/teacher-assignments/my');
       const secs: Section[] = [];
-      if (Array.isArray(sData)) {
-        sData.forEach((a: any) => {
-          if (a.section && !secs.find(s => s.id === a.section.id)) secs.push(a.section);
-        });
-      }
+      const subs: Subject[] = [];
+      const allAssignments = [
+        ...(myData.classTeacherSections || []),
+        ...(myData.subjectAssignments || []),
+      ];
+      allAssignments.forEach((a: any) => {
+        if (!secs.find(s => s.id === a.sectionId)) {
+          secs.push({
+            id: a.sectionId,
+            name: a.sectionName,
+            academicYearId: a.academicYearId,
+            grade: { name: a.gradeName },
+          });
+        }
+      });
+      // Only show subjects this teacher is assigned to teach
+      (myData.subjectAssignments || []).forEach((a: any) => {
+        if (a.subjectId && !subs.find(s => s.id === a.subjectId)) {
+          subs.push({ id: a.subjectId, name: a.subjectName });
+        }
+      });
       setSections(secs);
-      setSubjects(Array.isArray(subData) ? subData : []);
+      setSubjects(subs);
     } catch (err) {
       console.error('Form data load error:', err);
     }
@@ -87,12 +100,15 @@ export default function HomeworkScreen() {
 
     setSaving(true);
     try {
+      const section = sections.find(s => s.id === selectedSection);
       await api.post('/homework', {
         title: title.trim(),
         description: description.trim(),
-        dueDateBS: dueDate.trim(),
+        dueDate: dueDate.trim(),
         sectionId: selectedSection,
         subjectId: selectedSubject,
+        academicYearId: section?.academicYearId || '',
+        assignedDate: dueDate.trim(),
       });
       setShowModal(false);
       load(true);
@@ -153,7 +169,7 @@ export default function HomeworkScreen() {
                 {item.description ? (
                   <Text style={s.cardDesc} numberOfLines={2}>{item.description}</Text>
                 ) : null}
-                <Text style={s.cardDue}>📅 Due: {item.dueDateBS}</Text>
+                <Text style={s.cardDue}>📅 Due: {item.dueDate}</Text>
               </View>
               <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(item)}>
                 <Text style={s.deleteBtnText}>🗑</Text>

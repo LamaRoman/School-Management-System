@@ -8,22 +8,25 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Child { id: string; name: string; grade?: { name: string }; section?: { name: string } }
 interface ExamType { id: string; name: string }
-interface MarkRow {
-  subject: { name: string };
+interface SubjectRow {
+  subjectName: string;
   theoryMarks: number | null;
   practicalMarks: number | null;
   totalMarks: number | null;
   fullMarks: number;
   grade: string | null;
-  gradePoint: number | null;
-  remarks: string | null;
+  gpa: number | null;
+  isAbsent: boolean;
 }
 interface ReportData {
-  student: { name: string; rollNumber?: number };
-  examType: { name: string };
-  academicYear: { yearNp: string };
-  marks: MarkRow[];
-  summary?: { percentage: number; gpa: number; overallGrade: string; rank?: number };
+  student: { name: string; rollNo?: number };
+  examType: string;
+  academicYear: string;
+  subjects: SubjectRow[];
+  overallPercentage: number;
+  overallGpa: number;
+  overallGrade: string;
+  rank?: number;
 }
 
 export default function ParentReportScreen({ children }: { children?: Child[] }) {
@@ -38,12 +41,16 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
   useEffect(() => {
     const init = async () => {
       try {
-        const [childData, examData] = await Promise.all([
+        const [childData, examData, activeYear] = await Promise.all([
           api.get<Child[]>('/parents/my-children'),
           api.get<ExamType[]>('/exam-types'),
+          api.get<any>('/academic-years/active'),
         ]);
         const kids = Array.isArray(childData) ? childData : [];
-        const exams = Array.isArray(examData) ? examData : [];
+        const allExams = Array.isArray(examData) ? examData : [];
+        const exams = activeYear
+          ? allExams.filter((e: any) => e.academicYearId === activeYear.id)
+          : allExams;
         setMyChildren(kids);
         setExamTypes(exams);
         if (kids.length) setSelectedChild(kids[0]);
@@ -63,7 +70,7 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
     setReport(null);
     api.get<ReportData>(`/reports/term/${selectedChild.id}/${selectedExam.id}`)
       .then(data => setReport(data))
-      .catch(err => console.error('Report fetch error:', err))
+      .catch(err => { if (err?.response?.status !== 404) console.error('Report fetch error:', err); })
       .finally(() => setReportLoading(false));
   }, [selectedChild, selectedExam]);
 
@@ -114,28 +121,28 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
       ) : (
         <>
           {/* Summary card */}
-          {report.summary && (
+          {report && (
             <Card style={s.summaryCard}>
               <Text style={s.studentName}>{report.student.name}</Text>
-              <Text style={s.examLabel}>{report.examType.name} • {report.academicYear.yearNp}</Text>
+              <Text style={s.examLabel}>{report.examType} • {report.academicYear}</Text>
               <View style={s.summaryRow}>
                 <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.summary.gpa) }]}>
-                    {report.summary.gpa.toFixed(2)}
+                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
+                    {report.overallGpa.toFixed(2)}
                   </Text>
                   <Text style={s.summaryKey}>GPA</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryVal, { color: Colors.primary }]}>
-                    {report.summary.percentage.toFixed(1)}%
+                    {report.overallPercentage.toFixed(1)}%
                   </Text>
                   <Text style={s.summaryKey}>Percentage</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.summary.gpa) }]}>
-                    {report.summary.overallGrade}
+                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
+                    {report.overallGrade}
                   </Text>
                   <Text style={s.summaryKey}>Grade</Text>
                 </View>
@@ -152,16 +159,16 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
               <Text style={s.th}>FM</Text>
               <Text style={s.th}>Grade</Text>
             </View>
-            {report.marks.map((row, idx) => (
+            {report.subjects.map((row, idx) => (
               <View key={idx} style={[s.tableRow, idx % 2 === 0 && s.tableRowAlt]}>
-                <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{row.subject.name}</Text>
-                <Text style={s.td}>{row.totalMarks ?? '–'}</Text>
+                <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{row.subjectName}</Text>
+                <Text style={s.td}>{row.isAbsent ? 'Abs' : (row.totalMarks ?? '–')}</Text>
                 <Text style={s.td}>{row.fullMarks}</Text>
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   {row.grade ? (
                     <Badge label={row.grade} color={
-                      row.gradePoint && row.gradePoint >= 3.6 ? 'success' :
-                      row.gradePoint && row.gradePoint >= 2.4 ? 'info' : 'warning'
+                      (row.gpa ?? 0) >= 3.6 ? 'success' :
+                      (row.gpa ?? 0) >= 2.4 ? 'info' : 'warning'
                     } />
                   ) : <Text style={s.td}>–</Text>}
                 </View>

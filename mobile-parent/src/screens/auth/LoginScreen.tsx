@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Input, Button } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getErrorMessage } from '../../api/client';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -70,7 +71,7 @@ export default function LoginScreen() {
               style={styles.eyeBtn}
               onPress={() => setShowPassword(!showPassword)}
             >
-              <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#aaa" />
             </TouchableOpacity>
           </View>
 
@@ -111,7 +112,6 @@ const styles = StyleSheet.create({
 
   passwordWrapper: { position: 'relative', marginBottom: Spacing.md },
   eyeBtn: { position: 'absolute', right: Spacing.md, bottom: Spacing.md },
-  eyeText: { fontSize: 16 },
 
   loginBtn: { marginTop: Spacing.sm },
   footer: { textAlign: 'center', color: Colors.textLight, fontSize: FontSize.xs, marginTop: Spacing.xxl },

@@ -41,13 +41,60 @@ export default function MarksScreen() {
 
   useEffect(() => {
     if (!current) return;
-    api.get<Student[]>(`/students?sectionId=${current.sectionId}`).then(stus => {
-      setStudents(stus);
-      const initial: Record<string, MarkEntry> = {};
-      stus.forEach(s => { initial[s.id] = { theoryMarks: '', practicalMarks: '', isAbsent: false }; });
-      setMarks(initial);
-    }).catch(err => console.error(err));
+    const loadStudentsAndMarks = async () => {
+      try {
+        const stus = await api.get<Student[]>(`/students?sectionId=${current.sectionId}`);
+        setStudents(stus);
+
+        // Build initial empty marks
+        const initial: Record<string, MarkEntry> = {};
+        stus.forEach(s => { initial[s.id] = { theoryMarks: '', practicalMarks: '', isAbsent: false }; });
+
+        // Pre-fill existing marks if exam is already selected
+        if (selectedExam) {
+          try {
+            const existing = await api.get<any[]>(`/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`);
+            if (Array.isArray(existing)) {
+              existing.forEach((m: any) => {
+                if (initial[m.studentId]) {
+                  initial[m.studentId] = {
+                    theoryMarks: m.isAbsent ? '' : (m.theoryMarks != null ? String(m.theoryMarks) : ''),
+                    practicalMarks: m.isAbsent ? '' : (m.practicalMarks != null ? String(m.practicalMarks) : ''),
+                    isAbsent: m.isAbsent || false,
+                  };
+                }
+              });
+            }
+          } catch (_) {}
+        }
+        setMarks(initial);
+      } catch (err) { console.error(err); }
+    };
+    loadStudentsAndMarks();
   }, [selectedAssignment]);
+
+  // Re-fetch marks when exam changes (students already loaded)
+  useEffect(() => {
+    if (!current || !selectedExam || students.length === 0) return;
+    api.get<any[]>(`/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`)
+      .then(existing => {
+        if (!Array.isArray(existing)) return;
+        setMarks(prev => {
+          const updated = { ...prev };
+          existing.forEach((m: any) => {
+            if (updated[m.studentId]) {
+              updated[m.studentId] = {
+                theoryMarks: m.isAbsent ? '' : (m.theoryMarks != null ? String(m.theoryMarks) : ''),
+                practicalMarks: m.isAbsent ? '' : (m.practicalMarks != null ? String(m.practicalMarks) : ''),
+                isAbsent: m.isAbsent || false,
+              };
+            }
+          });
+          return updated;
+        });
+      })
+      .catch(() => {});
+  }, [selectedExam]);
 
   const updateMark = (studentId: string, field: keyof MarkEntry, value: string | boolean) => {
     setMarks(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: value } }));

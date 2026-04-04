@@ -8,12 +8,11 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 
 interface StudentInfo {
-  id: string; name: string; rollNumber?: number;
-  section?: { name: string; grade?: { name: string } };
-  photo?: string;
+  id: string; name: string; rollNo?: number;
+  section?: { name: string; grade?: { name: string; academicYearId: string } };
 }
 interface AttendanceSummary { present: number; absent: number; total: number }
-interface HomeworkItem { id: string; title: string; dueDateBS: string; subject: { name: string } }
+interface HomeworkItem { id: string; title: string; dueDate: string; subject: { name: string } }
 interface Notice { id: string; title: string; content: string; createdAt: string }
 
 export default function StudentDashboard() {
@@ -28,16 +27,21 @@ export default function StudentDashboard() {
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Find the student record for this user
-      const students = await api.get<StudentInfo[]>('/students');
-      // The student whose user account matches the logged in user
-      const me = Array.isArray(students)
-        ? students.find((s: any) => s.user?.id === user?.id || s.userId === user?.id) || students[0]
-        : null;
+      const me = await api.get<StudentInfo>('/students/me');
       setStudent(me || null);
 
+      const sectionId = me ? (me as any).sectionId || null : null;
+      const academicYearId = me?.section?.grade?.academicYearId || null;
+
       const [attData, hwData, noticeData] = await Promise.all([
-        me ? api.get<AttendanceSummary>('/daily-attendance/summary', { studentId: me.id }).catch(() => null) : Promise.resolve(null),
+        (sectionId && academicYearId)
+          ? api.get<any[]>('/daily-attendance/summary', { sectionId, academicYearId })
+              .then(rows => {
+                const row = Array.isArray(rows) ? rows.find((r: any) => r.studentId === me.id) : null;
+                return row ? { present: row.presentDays, absent: row.absentDays, total: row.totalDays } : null;
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
         api.get<HomeworkItem[]>('/homework').catch(() => []),
         api.get<Notice[]>('/notices').catch(() => []),
       ]);
@@ -79,7 +83,7 @@ export default function StudentDashboard() {
           {student?.section && (
             <Text style={s.bannerGrade}>
               Class {student.section.grade?.name} – Section {student.section.name}
-              {student.rollNumber ? `  •  Roll #${student.rollNumber}` : ''}
+              {student.rollNo ? `  •  Roll #${student.rollNo}` : ''}
             </Text>
           )}
         </View>
@@ -125,7 +129,7 @@ export default function StudentDashboard() {
                   <Text style={s.hwTitle}>{hw.title}</Text>
                   <Badge label={hw.subject.name} color="info" />
                 </View>
-                <Text style={s.hwDue}>Due {hw.dueDateBS}</Text>
+                <Text style={s.hwDue}>Due {hw.dueDate}</Text>
               </View>
             </Card>
           ))

@@ -40,8 +40,8 @@ export default function AttendanceScreen() {
   const fetchAttendance = async (sec: Section, d: string) => {
     setFetching(true);
     try {
-      const data = await api.get<any>(`/daily-attendance?sectionId=${sec.sectionId}&date=${d}&academicYearId=${sec.academicYearId}`);
-      setRecords(data.students || []);
+      const data = await api.get<any[]>(`/daily-attendance?sectionId=${sec.sectionId}&date=${d}&academicYearId=${sec.academicYearId}`);
+      setRecords(Array.isArray(data) ? data : []);
       setHasChanges(false);
     } catch (err) { console.error(err); } finally { setFetching(false); }
   };
