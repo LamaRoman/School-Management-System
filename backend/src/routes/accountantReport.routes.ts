@@ -25,6 +25,7 @@ router.get("/daily-cashbook", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res
     where: {
       paymentDate: dateStr,
       academicYearId: yearId,
+      deletedAt: null,
     },
     include: {
       student: {
@@ -112,7 +113,7 @@ router.get("/payment-history", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
     return res.status(400).json({ error: "academicYearId is required" });
   }
 
-  const where: any = { academicYearId: String(academicYearId) };
+  const where: any = { academicYearId: String(academicYearId), deletedAt: null };
 
   // Date range filter
   if (dateFrom || dateTo) {
@@ -232,7 +233,7 @@ router.get("/defaulters", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =>
   // Get all payments for these students
   const studentIds = students.map((s) => s.id);
   const payments = await prisma.feePayment.findMany({
-    where: { studentId: { in: studentIds }, academicYearId: yearId },
+    where: { studentId: { in: studentIds }, academicYearId: yearId, deletedAt: null },
   });
 
   const paymentsByStudent = new Map<string, number>();
@@ -373,7 +374,7 @@ router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
   const yearId = String(academicYearId);
 
   // Get all payments, optionally filtered by month
-  const paymentWhere: any = { academicYearId: yearId };
+  const paymentWhere: any = { academicYearId: yearId, deletedAt: null };
   if (month) {
     paymentWhere.paidMonth = String(month);
   }
@@ -405,20 +406,29 @@ router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
     categoryData[cat] = (categoryData[cat] || 0) + p.amount;
   }
 
-  // Get expected amounts
-  const structures = await prisma.feeStructure.findMany({
+  // Get expected amounts — calculated PER GRADE to avoid cross-multiplication
+  const grades = await prisma.grade.findMany({
     where: { academicYearId: yearId },
-    include: { feeCategory: { select: { name: true } }, grade: { select: { name: true } } },
-  });
-  const studentCount = await prisma.student.count({
-    where: { isActive: true, status: "ACTIVE", section: { grade: { academicYearId: yearId } } },
+    include: {
+      sections: {
+        include: {
+          _count: { select: { students: { where: { isActive: true, status: "ACTIVE" } } } },
+        },
+      },
+      feeStructures: {
+        where: { academicYearId: yearId, frequency: "MONTHLY" },
+      },
+    },
   });
 
-  // Monthly expected (all monthly fees × student count)
-  const monthlyFeeTotal = structures
-    .filter((s) => s.frequency === "MONTHLY")
-    .reduce((sum, s) => sum + s.amount, 0);
-  const expectedMonthly = monthlyFeeTotal * studentCount;
+  let expectedMonthly = 0;
+  let studentCount = 0;
+  for (const grade of grades) {
+    const gradeStudents = grade.sections.reduce((sum, s) => sum + s._count.students, 0);
+    const gradeMonthlyFee = grade.feeStructures.reduce((sum, s) => sum + s.amount, 0);
+    expectedMonthly += gradeMonthlyFee * gradeStudents;
+    studentCount += gradeStudents;
+  }
 
   const totalCollected = payments.reduce((s, p) => s + p.amount, 0);
 

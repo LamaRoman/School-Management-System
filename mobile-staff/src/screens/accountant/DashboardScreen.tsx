@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Modal, FlatList, TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { api, getErrorMessage } from '../../api/client';
 import { Card, StatCard, LoadingScreen, EmptyState } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
@@ -369,7 +370,10 @@ export default function AccountantDashboard({ navigation }: any) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Reload data every time this tab gets focus (e.g. after collecting a fee)
+  useFocusEffect(
+    useCallback(() => { load(true); }, [load])
+  );
 
   // Navigate to Fee Collection — student name passed as hint for the accountant
   const handleSelectStudent = useCallback((student: Student) => {
