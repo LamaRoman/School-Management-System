@@ -85,7 +85,8 @@ function MonthlyProgressCard({ data }: { data: MonthProgress }) {
         <Text style={[mp.pct, { color }]}>{Math.round(pct)}%</Text>
       </View>
       <View style={mp.track}>
-        <View style={[mp.fill, { width: `${pct}%` as any, backgroundColor: color }]} />
+        {pct > 0 && <View style={[mp.fill, { flex: pct, backgroundColor: color }]} />}
+        <View style={{ flex: Math.max(0, 100 - pct) }} />
       </View>
       <View style={mp.statsRow}>
         <View style={mp.stat}>
@@ -114,7 +115,7 @@ const mp = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
   pct: { fontSize: FontSize.lg, fontWeight: FontWeight.bold as any },
-  track: { height: 8, backgroundColor: Colors.borderLight, borderRadius: Radius.full, overflow: 'hidden' },
+  track: { height: 8, backgroundColor: Colors.borderLight, borderRadius: Radius.full, overflow: 'hidden', flexDirection: 'row' },
   fill: { height: '100%', borderRadius: Radius.full },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.xs },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
