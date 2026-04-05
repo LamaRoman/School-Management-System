@@ -1,15 +1,7 @@
 /**
- * seed-payments.ts
- * Seeds realistic fee payments across ALL grades.
- *
- * Payment patterns (per student):
- *   ~30% — paid all months up to current month (good students)
- *   ~30% — paid up to 2 months behind
- *   ~20% — paid up to 5 months behind
- *   ~10% — paid only first month
- *   ~10% — never paid (complete defaulter)
- *
- * Also seeds a few payments dated TODAY so "Today's Collection" shows data.
+ * seed-payments.ts — Minimal payment seed
+ * Seeds fee payments for 5 students per grade (varied payment patterns).
+ * Also seeds 3 payments dated TODAY for "Today's Collection".
  *
  * Run: DATABASE_URL="..." npx tsx prisma/seed-payments.ts
  */
@@ -27,25 +19,18 @@ function getTodayBS(): string {
   return new NepaliDate().format("YYYY/MM/DD");
 }
 
-function getCurrentMonthIndex(): number {
-  const parts = getTodayBS().split("/");
-  return parts.length >= 2 ? parseInt(parts[1], 10) - 1 : 0;
-}
-
 async function main() {
-  console.log("🌱 Seeding fee payments for all grades...\n");
-
   const today = getTodayBS();
-  const currentMonthIdx = getCurrentMonthIndex();
-  const currentMonthName = nepaliMonths[currentMonthIdx];
-  console.log(`📅 Today: ${today} (${currentMonthName})\n`);
+  const currentMonthIdx = parseInt(today.split("/")[1], 10) - 1;
+  const currentMonth = nepaliMonths[currentMonthIdx];
+  console.log("🌱 Seeding minimal fee payments...");
+  console.log(`📅 Today: ${today} (${currentMonth})\n`);
 
   const year = await prisma.academicYear.findFirst({ where: { isActive: true } });
-  if (!year) { console.error("❌ No active year. Run seed.ts first."); process.exit(1); }
+  if (!year) { console.error("❌ No active year"); process.exit(1); }
 
-  // Clear existing payments to avoid duplicates
-  const deleted = await prisma.feePayment.deleteMany({ where: { academicYearId: year.id } });
-  console.log(`🗑️  Cleared ${deleted.count} existing payments\n`);
+  await prisma.feePayment.deleteMany({ where: { academicYearId: year.id } });
+  console.log("🗑️  Cleared existing payments\n");
 
   const grades = await prisma.grade.findMany({
     where: { academicYearId: year.id },
@@ -55,6 +40,7 @@ async function main() {
           students: {
             where: { isActive: true, status: "ACTIVE" },
             orderBy: { rollNo: "asc" },
+            take: 5,
           },
         },
       },
@@ -62,176 +48,109 @@ async function main() {
     orderBy: { displayOrder: "asc" },
   });
 
-  let receiptCounter = 0;
-  let totalPayments = 0;
-  let todayPayments = 0;
+  let rcpt = 0;
+  let total = 0;
+
+  // Payment patterns for 5 students:
+  // [0] fully paid, [1] 2 months behind, [2] 4 months behind, [3] only Baisakh, [4] never paid
+  const paidUpTo = (idx: number) => {
+    if (idx === 0) return currentMonthIdx + 1;
+    if (idx === 1) return Math.max(0, currentMonthIdx - 1);
+    if (idx === 2) return Math.max(0, currentMonthIdx - 3);
+    if (idx === 3) return 1;
+    return 0;
+  };
 
   for (const grade of grades) {
     const structures = await prisma.feeStructure.findMany({
       where: { gradeId: grade.id, academicYearId: year.id },
-      include: { feeCategory: true, examType: true },
+      include: { feeCategory: true },
     });
+    if (structures.length === 0) continue;
 
-    if (structures.length === 0) {
-      console.log(`  ⚠️  ${grade.name}: No fee structure, skipping`);
-      continue;
-    }
-
-    const monthlyStructures = structures.filter(s => s.frequency === "MONTHLY");
-    const annualStructures = structures.filter(s => s.frequency === "ANNUAL" || s.frequency === "ONE_TIME");
-
-    let gradeStudents = 0;
-    let gradePayments = 0;
+    const monthly = structures.filter(s => s.frequency === "MONTHLY");
+    const annual = structures.filter(s => s.frequency === "ANNUAL" || s.frequency === "ONE_TIME");
+    let count = 0;
 
     for (const section of grade.sections) {
-      for (let si = 0; si < section.students.length; si++) {
-        const student = section.students[si];
-        gradeStudents++;
+      for (let i = 0; i < section.students.length; i++) {
+        const student = section.students[i];
+        const months = paidUpTo(i);
 
-        // Determine payment pattern based on student position
-        const ratio = si / Math.max(section.students.length, 1);
-        let paidUpToMonth: number;
-        let paidAnnual: boolean;
-
-        if (ratio < 0.3) {
-          // Group 1: Fully paid up to current month
-          paidUpToMonth = currentMonthIdx + 1;
-          paidAnnual = true;
-        } else if (ratio < 0.6) {
-          // Group 2: 2 months behind
-          paidUpToMonth = Math.max(0, currentMonthIdx - 1);
-          paidAnnual = true;
-        } else if (ratio < 0.8) {
-          // Group 3: 5 months behind
-          paidUpToMonth = Math.max(0, currentMonthIdx - 4);
-          paidAnnual = false;
-        } else if (ratio < 0.9) {
-          // Group 4: Only first month
-          paidUpToMonth = 1;
-          paidAnnual = false;
-        } else {
-          // Group 5: Never paid
-          paidUpToMonth = 0;
-          paidAnnual = false;
-        }
-
-        // Create monthly payments
-        for (let m = 0; m < paidUpToMonth; m++) {
-          receiptCounter++;
-          const receiptNumber = `RCP-${String(receiptCounter).padStart(5, "0")}`;
-          const paymentDate = `${year.yearBS}/${String(m + 1).padStart(2, "0")}/05`;
-
-          for (const s of monthlyStructures) {
+        // Monthly payments
+        for (let m = 0; m < months; m++) {
+          rcpt++;
+          const rn = `RCP-${String(rcpt).padStart(5, "0")}`;
+          for (const s of monthly) {
             await prisma.feePayment.create({
               data: {
-                studentId: student.id,
-                feeCategoryId: s.feeCategoryId,
-                academicYearId: year.id,
-                amount: s.amount,
-                paidMonth: nepaliMonths[m],
-                receiptNumber,
-                paymentDate,
-                paymentMethod: m % 3 === 0 ? "BANK" : "CASH",
+                studentId: student.id, feeCategoryId: s.feeCategoryId,
+                academicYearId: year.id, amount: s.amount,
+                paidMonth: nepaliMonths[m], receiptNumber: rn,
+                paymentDate: `${year.yearBS}/${String(m + 1).padStart(2, "0")}/05`,
+                paymentMethod: m % 2 === 0 ? "CASH" : "BANK",
               },
             });
-            totalPayments++;
-            gradePayments++;
+            total++;
           }
         }
 
-        // Create annual/one-time payments
-        if (paidAnnual && annualStructures.length > 0) {
-          receiptCounter++;
-          const receiptNumber = `RCP-${String(receiptCounter).padStart(5, "0")}`;
-          for (const s of annualStructures) {
+        // Annual fees for students who paid > 3 months
+        if (months > 3 && annual.length > 0) {
+          rcpt++;
+          const rn = `RCP-${String(rcpt).padStart(5, "0")}`;
+          for (const s of annual) {
             await prisma.feePayment.create({
               data: {
-                studentId: student.id,
-                feeCategoryId: s.feeCategoryId,
-                academicYearId: year.id,
-                amount: s.amount,
-                receiptNumber,
-                paymentDate: `${year.yearBS}/01/05`,
+                studentId: student.id, feeCategoryId: s.feeCategoryId,
+                academicYearId: year.id, amount: s.amount,
+                receiptNumber: rn, paymentDate: `${year.yearBS}/01/05`,
                 paymentMethod: "CASH",
               },
             });
-            totalPayments++;
-            gradePayments++;
+            total++;
           }
         }
+        count++;
       }
     }
-
-    console.log(`✅ ${grade.name}: ${gradeStudents} students, ${gradePayments} payments`);
+    console.log(`✅ ${grade.name}: ${count} students seeded`);
   }
 
-  // ─── Seed a few payments dated TODAY for "Today's Collection" ───
-  const unpaidStudents = await prisma.student.findMany({
+  // 3 payments dated TODAY
+  const unpaid = await prisma.student.findMany({
     where: {
-      isActive: true,
-      status: "ACTIVE",
+      isActive: true, status: "ACTIVE",
       section: { grade: { academicYearId: year.id } },
+      feePayments: { none: { paidMonth: currentMonth, academicYearId: year.id } },
     },
     include: { section: { include: { grade: true } } },
-    take: 50,
+    take: 3,
   });
 
-  let todayCount = 0;
-  for (const student of unpaidStudents) {
-    const gradeStructures = await prisma.feeStructure.findMany({
+  for (const student of unpaid) {
+    const monthly = await prisma.feeStructure.findMany({
       where: { gradeId: student.section.gradeId, academicYearId: year.id, frequency: "MONTHLY" },
-      include: { feeCategory: true },
     });
-
-    if (gradeStructures.length === 0) continue;
-
-    // Check if already paid this month
-    const existing = await prisma.feePayment.findFirst({
-      where: {
-        studentId: student.id,
-        academicYearId: year.id,
-        paidMonth: currentMonthName,
-      },
-    });
-    if (existing) continue;
-
-    receiptCounter++;
-    const receiptNumber = `RCP-${String(receiptCounter).padStart(5, "0")}`;
-
-    for (const s of gradeStructures) {
+    if (monthly.length === 0) continue;
+    rcpt++;
+    const rn = `RCP-${String(rcpt).padStart(5, "0")}`;
+    for (const s of monthly) {
       await prisma.feePayment.create({
         data: {
-          studentId: student.id,
-          feeCategoryId: s.feeCategoryId,
-          academicYearId: year.id,
-          amount: s.amount,
-          paidMonth: currentMonthName,
-          receiptNumber,
-          paymentDate: today,
-          paymentMethod: "CASH",
+          studentId: student.id, feeCategoryId: s.feeCategoryId,
+          academicYearId: year.id, amount: s.amount,
+          paidMonth: currentMonth, receiptNumber: rn,
+          paymentDate: today, paymentMethod: "CASH",
         },
       });
-      totalPayments++;
-      todayPayments++;
+      total++;
     }
-    todayCount++;
-    if (todayCount >= 5) break;
   }
 
-  console.log(`\n📊 Summary:`);
-  console.log(`   Total payments: ${totalPayments}`);
-  console.log(`   Total receipts: ${receiptCounter}`);
-  console.log(`   Today's payments: ${todayPayments} (${todayCount} students)`);
-  console.log(`   Current month: ${currentMonthName}`);
-  console.log(`\n💰 Payment distribution per grade:`);
-  console.log(`   ~30% students: Paid up to ${currentMonthName}`);
-  console.log(`   ~30% students: 2 months behind`);
-  console.log(`   ~20% students: 5 months behind`);
-  console.log(`   ~10% students: Only Baisakh`);
-  console.log(`   ~10% students: Never paid`);
-  console.log(`\n🎉 Payment seed complete!`);
+  console.log(`\n🎉 Done! ${total} payments, ${rcpt} receipts, ${unpaid.length} today's collections`);
 }
 
 main()
-  .catch(e => { console.error("❌ Error:", e); process.exit(1); })
+  .catch(e => { console.error("❌", e); process.exit(1); })
   .finally(() => prisma.$disconnect());
