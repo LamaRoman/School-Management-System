@@ -37,6 +37,16 @@ interface DefaulterSummary {
   totalDue: number;
 }
 
+interface Defaulter {
+  studentId: string;
+  studentName: string;
+  className: string;
+  section: string;
+  rollNo: number | null;
+  balance: number;
+  monthsPending: number;
+}
+
 interface MonthProgress {
   month: string;
   collected: number;
@@ -55,6 +65,20 @@ interface Student {
   };
 }
 
+interface RecentPayment {
+  id: string;
+  receiptNumber: string;
+  studentName: string;
+  className: string;
+  section: string;
+  rollNo: number | null;
+  category: string;
+  amount: number;
+  paidMonth: string | null;
+  paymentDate: string;
+  paymentMethod: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const nepaliMonths = [
@@ -71,12 +95,36 @@ function getCurrentBSMonth(): string {
   return nepaliMonths[0];
 }
 
+/** Group recent payments by receipt number into Receipt objects */
+function groupPaymentsToReceipts(payments: RecentPayment[]): Receipt[] {
+  const map = new Map<string, Receipt>();
+  for (const p of payments) {
+    const key = p.receiptNumber;
+    if (!map.has(key)) {
+      map.set(key, {
+        receiptNumber: key,
+        studentName: p.studentName,
+        className: p.className,
+        section: p.section,
+        rollNo: p.rollNo,
+        paymentMethod: p.paymentMethod,
+        items: [],
+        total: 0,
+      });
+    }
+    const entry = map.get(key)!;
+    entry.items.push({ category: p.category, amount: p.amount, paidMonth: p.paidMonth });
+    entry.total += p.amount;
+  }
+  return Array.from(map.values());
+}
+
 // ─── Monthly Progress Card ────────────────────────────────────────────────────
 
 function MonthlyProgressCard({ data }: { data: MonthProgress }) {
   const pct = data.expected > 0 ? Math.min(100, (data.collected / data.expected) * 100) : 0;
   const remaining = Math.max(0, data.expected - data.collected);
-  const color = pct >= 80 ? Colors.success : pct >= 50 ? Colors.warning : Colors.error;
+  const color = pct >= 80 ? Colors.success : pct >= 50 ? Colors.warning : Colors.danger;
 
   return (
     <Card style={mp.card}>
@@ -96,7 +144,7 @@ function MonthlyProgressCard({ data }: { data: MonthProgress }) {
         <View style={mp.divider} />
         <View style={mp.stat}>
           <Text style={mp.statLabel}>Remaining</Text>
-          <Text style={[mp.statValue, { color: remaining > 0 ? Colors.error : Colors.success }]}>
+          <Text style={[mp.statValue, { color: remaining > 0 ? Colors.danger : Colors.success }]}>
             Rs {remaining.toLocaleString()}
           </Text>
         </View>
@@ -124,6 +172,82 @@ const mp = StyleSheet.create({
   divider: { width: 1, height: 28, backgroundColor: Colors.borderLight },
 });
 
+// ─── Defaulters Summary Card ──────────────────────────────────────────────────
+
+function DefaultersSummaryCard({
+  defaultersList,
+  summary,
+}: {
+  defaultersList: Defaulter[];
+  summary: DefaulterSummary;
+}) {
+  const critical = defaultersList.filter(d => d.monthsPending >= 3);
+  const moderate = defaultersList.filter(d => d.monthsPending >= 1 && d.monthsPending < 3);
+
+  const criticalDue = critical.reduce((s, d) => s + d.balance, 0);
+  const moderateDue = moderate.reduce((s, d) => s + d.balance, 0);
+
+  return (
+    <Card style={df.card}>
+      <View style={df.headerRow}>
+        <Text style={df.title}>Fee Defaulters</Text>
+        <View style={df.totalBadge}>
+          <Text style={df.totalBadgeText}>{summary.totalDefaulters} students</Text>
+        </View>
+      </View>
+
+      <View style={df.totalDueRow}>
+        <Text style={df.totalDueLabel}>Total Outstanding</Text>
+        <Text style={df.totalDueValue}>Rs {summary.totalDue.toLocaleString()}</Text>
+      </View>
+
+      {critical.length > 0 && (
+        <View style={[df.severityRow, { backgroundColor: Colors.dangerBg }]}>
+          <View style={[df.severityDot, { backgroundColor: Colors.danger }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[df.severityLabel, { color: Colors.danger }]}>Critical (3+ months)</Text>
+            <Text style={df.severityDetail}>
+              {critical.length} students · Rs {criticalDue.toLocaleString()}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {moderate.length > 0 && (
+        <View style={[df.severityRow, { backgroundColor: Colors.warningBg }]}>
+          <View style={[df.severityDot, { backgroundColor: Colors.warning }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[df.severityLabel, { color: Colors.warning }]}>Moderate (1-2 months)</Text>
+            <Text style={df.severityDetail}>
+              {moderate.length} students · Rs {moderateDue.toLocaleString()}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {summary.totalDefaulters === 0 && (
+        <Text style={df.allClear}>All fees up to date!</Text>
+      )}
+    </Card>
+  );
+}
+
+const df = StyleSheet.create({
+  card: { gap: Spacing.sm },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
+  totalBadge: { backgroundColor: Colors.dangerBg, borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
+  totalBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold as any, color: Colors.danger },
+  totalDueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.xs },
+  totalDueLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
+  totalDueValue: { fontSize: FontSize.lg, fontWeight: FontWeight.bold as any, color: Colors.danger },
+  severityRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, gap: Spacing.sm },
+  severityDot: { width: 10, height: 10, borderRadius: 5 },
+  severityLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold as any },
+  severityDetail: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  allClear: { fontSize: FontSize.sm, color: Colors.success, fontWeight: FontWeight.medium as any, textAlign: 'center', paddingVertical: Spacing.sm },
+});
+
 // ─── Receipt Detail Modal ─────────────────────────────────────────────────────
 
 function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
@@ -143,7 +267,7 @@ function ReceiptModal({ receipt, onClose }: { receipt: Receipt; onClose: () => v
           <Card>
             <Text style={rm.studentName}>{receipt.studentName}</Text>
             <Text style={rm.meta}>
-              {receipt.className} – {receipt.section}
+              {receipt.className} - {receipt.section}
               {receipt.rollNo != null ? `  ·  Roll #${receipt.rollNo}` : ''}
             </Text>
             {receipt.paymentMethod && <Text style={rm.meta}>Method: {receipt.paymentMethod}</Text>}
@@ -214,8 +338,6 @@ function StudentSearchModal({
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        // Industry standard: query the students table directly by name.
-        // This finds ALL students regardless of payment history.
         const data = await api.get<Student[]>('/students', {
           search: query.trim(),
         });
@@ -233,16 +355,16 @@ function StudentSearchModal({
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: Colors.surface }}>
-        <View style={ss.header}>
-          <Text style={ss.title}>Find Student</Text>
+        <View style={searchStyles.header}>
+          <Text style={searchStyles.title}>Find Student</Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={ss.close}>✕</Text>
+            <Text style={searchStyles.close}>✕</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={ss.searchWrap}>
+        <View style={searchStyles.searchWrap}>
           <TextInput
-            style={ss.input}
+            style={searchStyles.input}
             value={query}
             onChangeText={setQuery}
             placeholder="Type student name..."
@@ -251,7 +373,7 @@ function StudentSearchModal({
             clearButtonMode="while-editing"
           />
           {searching && (
-            <ActivityIndicator size="small" color={Colors.primary} style={ss.spinner} />
+            <ActivityIndicator size="small" color={Colors.primary} style={searchStyles.spinner} />
           )}
         </View>
 
@@ -261,23 +383,23 @@ function StudentSearchModal({
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             query.trim().length < 2 ? (
-              <View style={ss.hint}>
-                <Text style={ss.hintTxt}>Type at least 2 characters to search</Text>
+              <View style={searchStyles.hint}>
+                <Text style={searchStyles.hintTxt}>Type at least 2 characters to search</Text>
               </View>
             ) : !searching ? (
               <EmptyState icon="🔍" message={`No students matching "${query}"`} />
             ) : null
           }
           renderItem={({ item }) => (
-            <TouchableOpacity style={ss.row} onPress={() => onSelectStudent(item)}>
+            <TouchableOpacity style={searchStyles.row} onPress={() => onSelectStudent(item)}>
               <View style={{ flex: 1 }}>
-                <Text style={ss.name}>{item.name}</Text>
-                <Text style={ss.meta}>
-                  {item.section.grade.name} – {item.section.name}
+                <Text style={searchStyles.name}>{item.name}</Text>
+                <Text style={searchStyles.meta}>
+                  {item.section.grade.name} - {item.section.name}
                   {item.rollNo != null ? `  ·  Roll #${item.rollNo}` : ''}
                 </Text>
               </View>
-              <Text style={ss.arrow}>›</Text>
+              <Text style={searchStyles.arrow}>›</Text>
             </TouchableOpacity>
           )}
         />
@@ -286,7 +408,7 @@ function StudentSearchModal({
   );
 }
 
-const ss = StyleSheet.create({
+const searchStyles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.text },
   close: { fontSize: FontSize.xl, color: Colors.textMuted, padding: Spacing.sm },
@@ -301,13 +423,146 @@ const ss = StyleSheet.create({
   arrow: { fontSize: 20, color: Colors.textMuted },
 });
 
+// ─── Receipt Search Modal ─────────────────────────────────────────────────────
+
+function ReceiptSearchModal({
+  academicYearId,
+  onViewReceipt,
+  onClose,
+}: {
+  academicYearId: string;
+  onViewReceipt: (receipt: Receipt) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Receipt[]>([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api.get<any>('/accountant-reports/payment-history', {
+          academicYearId,
+          search: query.trim(),
+          limit: 50,
+        });
+        const payments: RecentPayment[] = Array.isArray(data?.payments) ? data.payments : [];
+        setResults(groupPaymentsToReceipts(payments));
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, academicYearId]);
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: Colors.surface }}>
+        <View style={rcptSearch.header}>
+          <Text style={rcptSearch.title}>Find Receipt</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Text style={rcptSearch.close}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={rcptSearch.searchWrap}>
+          <TextInput
+            style={rcptSearch.input}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Receipt number or student name..."
+            placeholderTextColor={Colors.textLight}
+            autoFocus
+            clearButtonMode="while-editing"
+          />
+          {searching && (
+            <ActivityIndicator size="small" color={Colors.primary} style={rcptSearch.spinner} />
+          )}
+        </View>
+
+        <FlatList
+          data={results}
+          keyExtractor={item => item.receiptNumber}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.sm }}
+          ListEmptyComponent={
+            query.trim().length < 2 ? (
+              <View style={rcptSearch.hint}>
+                <Text style={rcptSearch.hintTxt}>Search by receipt number (e.g. RCP-00012) or student name</Text>
+              </View>
+            ) : !searching ? (
+              <EmptyState icon="🔍" message={`No receipts matching "${query}"`} />
+            ) : null
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => { onClose(); onViewReceipt(item); }}
+              activeOpacity={0.7}
+            >
+              <Card style={rcptSearch.receiptCard}>
+                <View style={rcptSearch.receiptRow}>
+                  <View style={rcptSearch.rcpBadge}>
+                    <Text style={rcptSearch.rcpBadgeText}>{item.receiptNumber}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={rcptSearch.receiptStudent} numberOfLines={1}>{item.studentName}</Text>
+                    <Text style={rcptSearch.receiptMeta}>{item.className} {item.section}</Text>
+                  </View>
+                  <View style={rcptSearch.receiptRight}>
+                    <Text style={rcptSearch.receiptAmt}>Rs {item.total.toLocaleString()}</Text>
+                    <Text style={rcptSearch.chevron}>›</Text>
+                  </View>
+                </View>
+              </Card>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    </Modal>
+  );
+}
+
+const rcptSearch = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  title: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.text },
+  close: { fontSize: FontSize.xl, color: Colors.textMuted, padding: Spacing.sm },
+  searchWrap: { padding: Spacing.lg, backgroundColor: Colors.white, flexDirection: 'row', alignItems: 'center' },
+  input: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text, backgroundColor: Colors.surface },
+  spinner: { position: 'absolute', right: Spacing.xl + Spacing.md },
+  hint: { padding: Spacing.xxxl, alignItems: 'center' },
+  hintTxt: { fontSize: FontSize.sm, color: Colors.textLight, textAlign: 'center', lineHeight: 20 },
+  receiptCard: { padding: 0, overflow: 'hidden' },
+  receiptRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, gap: Spacing.sm },
+  rcpBadge: { backgroundColor: Colors.primaryLight, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 3 },
+  rcpBadgeText: { fontSize: 10, fontWeight: FontWeight.bold as any, color: Colors.white, letterSpacing: 0.5 },
+  receiptStudent: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
+  receiptMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  receiptRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  receiptAmt: { fontSize: FontSize.md, fontWeight: FontWeight.bold as any, color: Colors.success },
+  chevron: { fontSize: 20, color: Colors.textMuted, lineHeight: 24 },
+});
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function AccountantDashboard({ navigation }: any) {
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [cashbook, setCashbook] = useState<CashbookData | null>(null);
   const [defaulters, setDefaulters] = useState<DefaulterSummary | null>(null);
+  const [defaultersList, setDefaultersList] = useState<Defaulter[]>([]);
   const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
+  const [recentReceipts, setRecentReceipts] = useState<Receipt[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -315,6 +570,7 @@ export default function AccountantDashboard({ navigation }: any) {
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [showStudentSearch, setShowStudentSearch] = useState(false);
+  const [showReceiptSearch, setShowReceiptSearch] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -329,10 +585,14 @@ export default function AccountantDashboard({ navigation }: any) {
       const today = getTodayBS();
       const currentMonth = getCurrentBSMonth();
 
-      const [cbData, defData, summaryData, noticeData] = await Promise.all([
+      const [cbData, defData, summaryData, recentData, noticeData] = await Promise.all([
         api.get<any>(`/accountant-reports/daily-cashbook?date=${today}&academicYearId=${active.id}`).catch(() => null),
-        api.get<any>(`/accountant-reports/defaulters?academicYearId=${active.id}`).catch(() => null),
+        api.get<any>(`/accountant-reports/defaulters?academicYearId=${active.id}&currentMonth=${currentMonth}`).catch(() => null),
         api.get<any>(`/accountant-reports/monthly-summary?academicYearId=${active.id}&month=${currentMonth}`).catch(() => null),
+        api.get<any>('/accountant-reports/payment-history', {
+          academicYearId: active.id,
+          limit: 20,
+        }).catch(() => null),
         api.get<any[]>('/notices').catch(() => []),
       ]);
 
@@ -350,6 +610,11 @@ export default function AccountantDashboard({ navigation }: any) {
           totalDue: defData.summary.totalDue ?? 0,
         });
       }
+      if (defData?.defaulters && Array.isArray(defData.defaulters)) {
+        setDefaultersList(defData.defaulters);
+      } else {
+        setDefaultersList([]);
+      }
 
       if (summaryData?.months) {
         const entry = summaryData.months.find((m: any) => m.month === currentMonth);
@@ -360,6 +625,13 @@ export default function AccountantDashboard({ navigation }: any) {
             expected: entry.expected ?? 0,
           });
         }
+      }
+
+      // Recent transactions — group payments into receipts
+      if (recentData?.payments && Array.isArray(recentData.payments)) {
+        setRecentReceipts(groupPaymentsToReceipts(recentData.payments));
+      } else {
+        setRecentReceipts([]);
       }
 
       setNotices(Array.isArray(noticeData) ? noticeData.slice(0, 3) : []);
@@ -473,15 +745,46 @@ export default function AccountantDashboard({ navigation }: any) {
           )}
         </View>
 
-        {/* ── Defaulters ── */}
-        <Text style={s.sectionTitle}>Fee Defaulters</Text>
-        <View style={s.statsRow}>
-          <StatCard label="Students" value={defaulters?.totalDefaulters ?? 0} color={Colors.danger} />
-          <StatCard
-            label="Outstanding"
-            value={defaulters ? `Rs ${defaulters.totalDue.toLocaleString()}` : 'Rs 0'}
-            color={Colors.warning}
-          />
+        {/* ── Defaulters summary ── */}
+        {defaulters && (
+          <View style={s.section}>
+            <DefaultersSummaryCard defaultersList={defaultersList} summary={defaulters} />
+          </View>
+        )}
+
+        {/* ── Recent Transactions ── */}
+        <View style={s.listSection}>
+          <View style={s.listHeaderRow}>
+            <Text style={s.listTitle}>Recent Transactions</Text>
+          </View>
+          {recentReceipts.length > 0 ? (
+            recentReceipts.slice(0, 5).map(receipt => (
+              <TouchableOpacity
+                key={receipt.receiptNumber}
+                onPress={() => setSelectedReceipt(receipt)}
+                activeOpacity={0.7}
+              >
+                <Card style={s.receiptCard}>
+                  <View style={s.receiptRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.receiptStudent} numberOfLines={1}>{receipt.studentName}</Text>
+                      <Text style={s.receiptMeta}>
+                        {receipt.className} {receipt.section}  ·  {receipt.receiptNumber}
+                      </Text>
+                    </View>
+                    <View style={s.receiptRight}>
+                      <Text style={s.receiptAmt}>Rs {receipt.total.toLocaleString()}</Text>
+                      <Text style={s.chevron}>›</Text>
+                    </View>
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Card>
+              <Text style={s.emptyTxt}>No recent transactions found.</Text>
+            </Card>
+          )}
         </View>
 
         {/* ── Notices ── */}
@@ -501,17 +804,18 @@ export default function AccountantDashboard({ navigation }: any) {
         <Text style={s.sectionTitle}>Quick Actions</Text>
         <View style={s.actionsGrid}>
           {[
-            { icon: '💰', label: 'Collect Fee', screen: 'Collect' },
-            { icon: '📢', label: 'Notices', screen: 'Notices' },
-          ].map(action => (
+            { icon: '💰', label: 'Collect Fee', action: () => navigation.navigate('Collect') },
+            { icon: '🧾', label: 'Find Receipt', action: () => setShowReceiptSearch(true) },
+            { icon: '📢', label: 'Notices', action: () => navigation.navigate('Notices') },
+          ].map(item => (
             <TouchableOpacity
-              key={action.label}
+              key={item.label}
               style={s.actionCard}
-              onPress={() => navigation.navigate(action.screen)}
+              onPress={item.action}
               activeOpacity={0.7}
             >
-              <Text style={s.actionIcon}>{action.icon}</Text>
-              <Text style={s.actionLabel}>{action.label}</Text>
+              <Text style={s.actionIcon}>{item.icon}</Text>
+              <Text style={s.actionLabel}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -576,6 +880,15 @@ export default function AccountantDashboard({ navigation }: any) {
           onClose={() => setShowStudentSearch(false)}
         />
       )}
+
+      {/* ── Receipt search modal ── */}
+      {showReceiptSearch && activeYear && (
+        <ReceiptSearchModal
+          academicYearId={activeYear.id}
+          onViewReceipt={(receipt) => setSelectedReceipt(receipt)}
+          onClose={() => setShowReceiptSearch(false)}
+        />
+      )}
     </>
   );
 }
@@ -611,9 +924,9 @@ const s = StyleSheet.create({
   noticeTxt: { fontSize: FontSize.md, fontWeight: FontWeight.medium as any, color: Colors.text },
   noticeDate: { fontSize: FontSize.xs, color: Colors.textMuted },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
-  actionCard: { width: '45%', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl, backgroundColor: Colors.white, borderRadius: Radius.lg, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
+  actionCard: { width: '28%', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xl, backgroundColor: Colors.white, borderRadius: Radius.lg, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
   actionIcon: { fontSize: 32 },
-  actionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.medium as any, color: Colors.text, textAlign: 'center' },
+  actionLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any, color: Colors.text, textAlign: 'center' },
   modalHdr: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.lg, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   modalTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.text },
   modalClose: { fontSize: FontSize.xl, color: Colors.textMuted, padding: Spacing.sm },
