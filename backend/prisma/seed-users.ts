@@ -52,22 +52,19 @@ async function main() {
   console.log(`✅ Teacher login: ram.sharma@school.edu.np / teacher123`);
 
   // Assign teacher as class teacher for VIII-A
-  await prisma.teacherAssignment.upsert({
-    where: {
-      teacherId_sectionId_subjectId: {
+  const existingCT = await prisma.teacherAssignment.findFirst({
+    where: { sectionId: sectionA.id, isClassTeacher: true },
+  });
+  if (!existingCT) {
+    await prisma.teacherAssignment.create({
+      data: {
         teacherId: teacher.id,
         sectionId: sectionA.id,
-        subjectId: grade8.subjects[0]?.id || "",
+        subjectId: null,
+        isClassTeacher: true,
       },
-    },
-    update: {},
-    create: {
-      teacherId: teacher.id,
-      sectionId: sectionA.id,
-      subjectId: grade8.subjects[0]?.id || null,
-      isClassTeacher: true,
-    },
-  });
+    });
+  }
 
   // Assign teacher to all subjects in VIII-A
   for (const subject of grade8.subjects) {

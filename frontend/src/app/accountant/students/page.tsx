@@ -49,7 +49,7 @@ export default function AccountantStudentSearchPage() {
     debounceRef.current = setTimeout(async () => {
       setGlobalSearching(true);
       try {
-        const data = await api.get<Student[]>("/students", { search: globalQuery.trim() });
+        const data = await api.get<Student[]>(`/students?search=${encodeURIComponent(globalQuery.trim())}`);
         setGlobalResults(Array.isArray(data) ? data : []);
       } catch {
         setGlobalResults([]);

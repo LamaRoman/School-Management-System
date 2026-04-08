@@ -166,24 +166,23 @@ export function bsToAD(bsDateStr: string): Date | null {
 // ─── Grade / Section label ───────────────────────────────
 
 /**
- * Format a grade + section label, hiding the section name when the grade
- * appears only once in the provided list (i.e. only one section for that grade).
+ * Format a grade + section label.
+ * Always shows the section name when provided.
  *
  * Examples:
- *   Grade VIII has only Section A → returns "VIII"
- *   Grade VIII has Section A and B → returns "VIII - A" / "VIII - B"
+ *   "VIII", "A" → "VIII - A"
+ *   "Nursery", "A" → "Nursery - A"
  *
  * @param gradeName   e.g. "VIII"
  * @param sectionName e.g. "A"
- * @param allSections full list of sections (any object with a gradeName field)
+ * @param allSections (unused, kept for backward compat)
  */
 export function formatGradeSection(
   gradeName: string,
   sectionName: string,
-  allSections: { gradeName: string }[]
+  allSections?: { gradeName: string }[]
 ): string {
-  const hasMultiple = allSections.filter((s) => s.gradeName === gradeName).length > 1;
-  return hasMultiple ? `${gradeName} - ${sectionName}` : gradeName;
+  return sectionName ? `${gradeName} - ${sectionName}` : gradeName;
 }
 
 /** Get formatted BS date with month name: "12 Chaitra 2082" */

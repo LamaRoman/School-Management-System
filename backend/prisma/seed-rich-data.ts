@@ -168,11 +168,8 @@ async function main() {
           where: { sectionId: sectionB.id, isClassTeacher: true },
         });
         if (!existingCT) {
-          const firstSubject = grade.subjects[0];
-          await prisma.teacherAssignment.upsert({
-            where: { teacherId_sectionId_subjectId: { teacherId: ctId, sectionId: sectionB.id, subjectId: firstSubject?.id || "" } },
-            update: {},
-            create: { teacherId: ctId, sectionId: sectionB.id, subjectId: firstSubject?.id || null, isClassTeacher: true },
+          await prisma.teacherAssignment.create({
+            data: { teacherId: ctId, sectionId: sectionB.id, subjectId: null, isClassTeacher: true },
           });
           console.log(`  ✅ ${gradeName}-B class teacher: ${sectionBClassTeachers[gradeName]}`);
         }

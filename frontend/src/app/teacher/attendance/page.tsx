@@ -161,7 +161,7 @@ export default function AttendancePage() {
       <div className="mb-4">
         <h1 className="text-xl font-display font-bold text-primary">Attendance</h1>
         <p className="text-sm text-gray-500">
-          {selectedSection ? `${selectedSection.gradeName} - Section ${selectedSection.sectionName}` : ""}
+          {selectedSection ? formatGradeSection(selectedSection.gradeName, selectedSection.sectionName) : ""}
         </p>
       </div>
 
@@ -177,7 +177,7 @@ export default function AttendancePage() {
         >
           {mySections.map((s) => (
             <option key={s.assignmentId} value={s.assignmentId}>
-              {s.gradeName} - Section {s.sectionName}
+              {formatGradeSection(s.gradeName, s.sectionName)}
             </option>
           ))}
         </select>

@@ -120,7 +120,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       where: {
         sectionId: data.sectionId,
         isClassTeacher: true,
-        isTemporary: false,
       },
     });
     if (existing && existing.teacherId === data.teacherId) {
@@ -130,11 +129,25 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       throw new AppError("This section already has a class teacher. Remove the existing one first.");
     }
   }
+
+  // Prevent duplicate subject assignment (same teacher + section + subject)
+  if (!data.isClassTeacher && data.subjectId) {
+    const existingSubject = await prisma.teacherAssignment.findFirst({
+      where: {
+        teacherId: data.teacherId,
+        sectionId: data.sectionId,
+        subjectId: data.subjectId,
+      },
+    });
+    if (existingSubject) {
+      throw new AppError("This teacher is already assigned to this subject for this section.");
+    }
+  }
   const assignment = await prisma.teacherAssignment.create({
     data: {
       teacherId: data.teacherId,
       sectionId: data.sectionId,
-      subjectId: data.subjectId || null,
+      subjectId: data.isClassTeacher ? null : (data.subjectId || null),
       isClassTeacher: data.isClassTeacher,
       isTemporary: data.isTemporary,
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,

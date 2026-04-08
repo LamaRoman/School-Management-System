@@ -241,12 +241,15 @@ async function main() {
       // Assign as class teacher + all subjects for Section A
       const sectionA = grade.sections.find(s => s.name === "A");
       if (sectionA) {
-        // Class teacher assignment
-        await prisma.teacherAssignment.upsert({
-          where: { teacherId_sectionId_subjectId: { teacherId: teacher.id, sectionId: sectionA.id, subjectId: createdSubjects[0]?.id || "" } },
-          update: {},
-          create: { teacherId: teacher.id, sectionId: sectionA.id, subjectId: createdSubjects[0]?.id || null, isClassTeacher: true },
+        // Class teacher assignment (no subjectId — class teacher is a section-level role)
+        const existingCT = await prisma.teacherAssignment.findFirst({
+          where: { sectionId: sectionA.id, isClassTeacher: true },
         });
+        if (!existingCT) {
+          await prisma.teacherAssignment.create({
+            data: { teacherId: teacher.id, sectionId: sectionA.id, subjectId: null, isClassTeacher: true },
+          });
+        }
         // All subject assignments
         for (const sub of createdSubjects) {
           try {
