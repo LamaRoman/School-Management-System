@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Printer } from "lucide-react";
+import { printGradeSheet } from "@/lib/printUtils";
 
 interface GradeSheetProps {
   sectionId: string;
@@ -70,7 +71,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
           </button>
         ))}
         {data && (
-          <button onClick={() => window.print()} className="btn-primary text-xs ml-auto">
+          <button onClick={() => data && printGradeSheet(data)} className="btn-primary text-xs ml-auto">
             <Printer size={14} /> Print
           </button>
         )}

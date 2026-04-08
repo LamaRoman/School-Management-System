@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
+import { printExamRoutine } from "@/lib/printUtils";
 
 interface ClassTeacherSection {
   sectionId: string;
@@ -79,7 +80,7 @@ export default function TeacherExamRoutinePage() {
           <p className="text-sm text-gray-500 mt-1">View exam schedule for your class</p>
         </div>
         {entries.length > 0 && (
-          <button onClick={() => window.print()} className="btn-outline text-xs">
+          <button onClick={() => printExamRoutine(entries, selectedExamName, selectedSection?.gradeName || "")} className="btn-outline text-xs">
             <Printer size={14} /> Print
           </button>
         )}
@@ -102,14 +103,6 @@ export default function TeacherExamRoutinePage() {
               {et.name}
             </button>
           ))}
-        </div>
-      )}
-
-      {/* Printable header */}
-      {entries.length > 0 && (
-        <div className="hidden print:block text-center mb-4">
-          <h2 className="text-lg font-bold">{selectedExamName} — Exam Routine</h2>
-          <p className="text-sm">{selectedSection?.gradeName}</p>
         </div>
       )}
 

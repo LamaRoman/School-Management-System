@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { Prisma } from "@prisma/client";
 
 const router = Router();
 
@@ -17,9 +16,10 @@ const router = Router();
 // ─── ROOMS ──────────────────────────────────────────────
 
 // GET /api/seating/rooms
-router.get("/rooms", authenticate, async (_req, res) => {
+router.get("/rooms", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const rooms = await prisma.examRoom.findMany({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     orderBy: { displayOrder: "asc" },
   });
   res.json({ data: rooms });
@@ -34,12 +34,10 @@ router.post("/rooms", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
-  const createData: Prisma.ExamRoomCreateInput = {
-    name: data.name,
-    capacity: data.capacity,
-    displayOrder: data.displayOrder,
-  };
-  const room = await prisma.examRoom.create({ data: createData });
+  const schoolId = getSchoolId(req);
+  const room = await prisma.examRoom.create({
+    data: { schoolId, name: data.name, capacity: data.capacity, displayOrder: data.displayOrder },
+  });
   res.status(201).json({ data: room });
 });
 
@@ -53,6 +51,8 @@ router.put("/rooms/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await prisma.examRoom.findFirstOrThrow({ where: { id: req.params.id, schoolId } });
   const room = await prisma.examRoom.update({
     where: { id: req.params.id },
     data,
@@ -62,6 +62,8 @@ router.put("/rooms/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/seating/rooms/:id (soft delete)
 router.delete("/rooms/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await prisma.examRoom.findFirstOrThrow({ where: { id: req.params.id, schoolId } });
   await prisma.examRoom.update({
     where: { id: req.params.id },
     data: { isActive: false },

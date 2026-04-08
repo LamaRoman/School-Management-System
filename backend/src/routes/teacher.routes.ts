@@ -2,12 +2,11 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
-// Shared include for list endpoints — returns assignment details instead of just count
 const teacherListInclude = {
   assignments: {
     include: {
@@ -18,29 +17,33 @@ const teacherListInclude = {
   user: { select: { id: true, email: true, isActive: true } },
 } as const;
 
-// GET /api/teachers — list all active teachers with assignment details and login email
-router.get("/", authenticate, async (_req, res) => {
+// GET /api/teachers
+router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const teachers = await prisma.teacher.findMany({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     orderBy: { name: "asc" },
     include: teacherListInclude,
   });
   res.json({ data: teachers });
 });
 
-// GET /api/teachers/all — includes deactivated teachers (admin only)
-router.get("/all", authenticate, authorize("ADMIN"), async (_req, res) => {
+// GET /api/teachers/all — includes deactivated
+router.get("/all", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const teachers = await prisma.teacher.findMany({
+    where: { schoolId },
     orderBy: { name: "asc" },
     include: teacherListInclude,
   });
   res.json({ data: teachers });
 });
 
-// GET /api/teachers/:id — single teacher with assignments
+// GET /api/teachers/:id
 router.get("/:id", authenticate, async (req, res) => {
-  const teacher = await prisma.teacher.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const teacher = await prisma.teacher.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
     include: {
       assignments: {
         include: {
@@ -54,8 +57,9 @@ router.get("/:id", authenticate, async (req, res) => {
   res.json({ data: teacher });
 });
 
-// POST /api/teachers — create teacher + user account
+// POST /api/teachers
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     name: z.string().min(1),
     nameNp: z.string().optional(),
@@ -67,15 +71,14 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = schema.parse(req.body);
 
   const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
-  if (existingUser) {
-    throw new AppError("A user with this email already exists");
-  }
+  if (existingUser) throw new AppError("A user with this email already exists");
 
   const hashedPassword = await bcrypt.hash(data.password, 10);
 
   const teacher = await prisma.$transaction(async (tx) => {
     const newTeacher = await tx.teacher.create({
       data: {
+        schoolId,
         name: data.name,
         nameNp: data.nameNp || null,
         phone: data.phone || null,
@@ -89,6 +92,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
         password: hashedPassword,
         role: "TEACHER",
         teacherId: newTeacher.id,
+        schoolId,
         isActive: true,
       },
     });
@@ -104,8 +108,9 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   res.status(201).json({ data: result });
 });
 
-// PUT /api/teachers/:id — update teacher info
+// PUT /api/teachers/:id
 router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     name: z.string().min(1).optional(),
     nameNp: z.string().nullable().optional(),
@@ -116,49 +121,23 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const data = schema.parse(req.body);
 
-  if (data.email) {
-    const teacher = await prisma.teacher.findUniqueOrThrow({
-      where: { id: req.params.id },
-      include: { user: true },
-    });
+  // Verify ownership
+  const teacher = await prisma.teacher.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
+    include: { user: true },
+  });
 
-    if (teacher.user) {
-      const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
-      if (existingUser && existingUser.id !== teacher.user.id) {
-        throw new AppError("A user with this email already exists");
-      }
-
-      await prisma.user.update({
-        where: { id: teacher.user.id },
-        data: { email: data.email },
-      });
+  if (data.email && teacher.user) {
+    const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existingUser && existingUser.id !== teacher.user.id) {
+      throw new AppError("A user with this email already exists");
     }
+    await prisma.user.update({ where: { id: teacher.user.id }, data: { email: data.email } });
   }
 
-  if (data.isActive === false) {
-    const teacher = await prisma.teacher.findUniqueOrThrow({
-      where: { id: req.params.id },
-      include: { user: true },
-    });
-    if (teacher.user) {
-      await prisma.user.update({
-        where: { id: teacher.user.id },
-        data: { isActive: false },
-      });
-    }
-  }
-
-  if (data.isActive === true) {
-    const teacher = await prisma.teacher.findUniqueOrThrow({
-      where: { id: req.params.id },
-      include: { user: true },
-    });
-    if (teacher.user) {
-      await prisma.user.update({
-        where: { id: teacher.user.id },
-        data: { isActive: true },
-      });
-    }
+  if (data.isActive !== undefined && teacher.user) {
+    await prisma.user.update({ where: { id: teacher.user.id }, data: { isActive: data.isActive } });
+    if (!data.isActive) invalidateUserCache(teacher.user.id);
   }
 
   const updated = await prisma.teacher.update({
@@ -176,49 +155,36 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   res.json({ data: updated });
 });
 
-// POST /api/teachers/:id/reset-password — admin resets teacher password
+// POST /api/teachers/:id/reset-password
 router.post("/:id/reset-password", authenticate, authorize("ADMIN"), async (req, res) => {
-  const schema = z.object({
-    newPassword: z.string().min(6, "Password must be at least 6 characters"),
-  });
+  const schoolId = getSchoolId(req);
+  const { newPassword } = z.object({ newPassword: z.string().min(6) }).parse(req.body);
 
-  const { newPassword } = schema.parse(req.body);
-
-  const teacher = await prisma.teacher.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const teacher = await prisma.teacher.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
     include: { user: true },
   });
 
-  if (!teacher.user) {
-    throw new AppError("Teacher has no user account");
-  }
+  if (!teacher.user) throw new AppError("Teacher has no user account");
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({
-    where: { id: teacher.user.id },
-    data: { password: hashedPassword },
-  });
+  await prisma.user.update({ where: { id: teacher.user.id }, data: { password: hashedPassword } });
 
   res.json({ data: { message: `Password reset for ${teacher.name}` } });
 });
 
-// DELETE /api/teachers/:id (soft delete — deactivates teacher + user)
+// DELETE /api/teachers/:id (soft delete)
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
-  const teacher = await prisma.teacher.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const teacher = await prisma.teacher.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
     include: { user: true },
   });
 
-  await prisma.teacher.update({
-    where: { id: req.params.id },
-    data: { isActive: false },
-  });
+  await prisma.teacher.update({ where: { id: req.params.id }, data: { isActive: false } });
 
   if (teacher.user) {
-    await prisma.user.update({
-      where: { id: teacher.user.id },
-      data: { isActive: false },
-    });
+    await prisma.user.update({ where: { id: teacher.user.id }, data: { isActive: false } });
     invalidateUserCache(teacher.user.id);
   }
 

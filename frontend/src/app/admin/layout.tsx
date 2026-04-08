@@ -21,9 +21,16 @@ import {
   UserPlus,
   Users2,
   KeyRound,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  Eye,
 } from "lucide-react";
 
-const navGroups = [
+interface NavItem { href: string; label: string; icon: any }
+interface NavGroup { label: string; items: NavItem[]; collapsible?: boolean }
+
+const navGroups: NavGroup[] = [
   {
     label: "Overview",
     items: [
@@ -31,55 +38,65 @@ const navGroups = [
     ],
   },
   {
-    label: "Academic",
-    items: [
-      { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
-      { href: "/admin/grades", label: "Grades & Sections", icon: Layers },
-      { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
-      { href: "/admin/exam-types", label: "Exam Types", icon: ClipboardList },
-      { href: "/admin/grading-policy", label: "Grading Policy", icon: Settings },
-    ],
-  },
-  {
     label: "People",
     items: [
       { href: "/admin/students", label: "Students", icon: Users },
       { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
-      { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
       { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
       { href: "/admin/parents", label: "Parents", icon: Users2 },
     ],
   },
   {
-    label: "Results",
+    label: "Academics",
     items: [
-      { href: "/admin/observations", label: "Observations", icon: ClipboardList },
-      { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
-      { href: "/admin/report-settings", label: "Report Card Settings", icon: Settings },
-      { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
-    ],
-  },
-  {
-    label: "Exams",
-    items: [
+      { href: "/admin/grades", label: "Grades & Sections", icon: Layers },
+      { href: "/admin/subjects", label: "Subjects", icon: BookOpen },
       { href: "/admin/exam-routine", label: "Exam Routine", icon: CalendarDays },
       { href: "/admin/seating", label: "Exam Seating", icon: LayoutGrid },
     ],
   },
   {
-    label: "Finance & Comms",
+    label: "Results",
+    items: [
+      { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
+      { href: "/admin/observations", label: "Observations", icon: Eye },
+      { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "Finance",
     items: [
       { href: "/admin/fees", label: "Fee Management", icon: Receipt },
       { href: "/admin/notices", label: "Notice Board", icon: Megaphone },
+    ],
+  },
+  {
+    label: "Setup",
+    collapsible: true,
+    items: [
+      { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
+      { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
+      { href: "/admin/exam-types", label: "Exam Types", icon: ClipboardList },
+      { href: "/admin/grading-policy", label: "Grading Policy", icon: Settings },
+      { href: "/admin/report-settings", label: "Report Card Settings", icon: Settings },
     ],
   },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Auto-expand Setup if a setup page is active
+  const setupHrefs = navGroups.find((g) => g.collapsible)?.items.map((i) => i.href) || [];
+  const isSetupActive = setupHrefs.some((href) => pathname === href || pathname.startsWith(href + "/"));
+
+  useEffect(() => {
+    if (isSetupActive) setSetupOpen(true);
+  }, [isSetupActive]);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -110,34 +127,56 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
 
-        {/* Grouped nav */}
+        {/* Nav */}
         <nav className="flex-1 py-3 px-3 overflow-y-auto space-y-4">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest px-3 mb-1">
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    (item.href !== "/admin" && pathname.startsWith(item.href));
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                        isActive
-                          ? "bg-white/15 text-white font-semibold"
-                          : "text-white/65 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      <item.icon size={16} className="shrink-0" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
+              {group.collapsible ? (
+                <button
+                  onClick={() => setSetupOpen(!setupOpen)}
+                  className="flex items-center justify-between w-full px-3 mb-1 group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Wrench size={10} className="text-white/30" />
+                    <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest group-hover:text-white/50 transition-colors">
+                      {group.label}
+                    </p>
+                  </div>
+                  {setupOpen ? (
+                    <ChevronDown size={12} className="text-white/30" />
+                  ) : (
+                    <ChevronRight size={12} className="text-white/30" />
+                  )}
+                </button>
+              ) : (
+                <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest px-3 mb-1">
+                  {group.label}
+                </p>
+              )}
+
+              {(!group.collapsible || setupOpen) && (
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive =
+                      pathname === item.href ||
+                      (item.href !== "/admin" && pathname.startsWith(item.href));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                          isActive
+                            ? "bg-white/15 text-white font-semibold"
+                            : "text-white/65 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <item.icon size={16} className="shrink-0" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))}
         </nav>

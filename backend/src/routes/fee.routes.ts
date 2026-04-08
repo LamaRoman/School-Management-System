@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { logAudit } from "../utils/audit";
 
@@ -225,36 +225,43 @@ async function buildInvoice(
 
 // ─── FEE CATEGORIES ──────────────────────────────────────────────────────────
 
-router.get("/categories", authenticate, async (_req, res) => {
+router.get("/categories", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const categories = await prisma.feeCategory.findMany({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     orderBy: { name: "asc" },
   });
   res.json({ data: categories });
 });
 
 router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     name: z.string().min(1),
     description: z.string().optional(),
   });
   const data = schema.parse(req.body);
-  const category = await prisma.feeCategory.create({ data: { name: data.name, description: data.description } });
+  const category = await prisma.feeCategory.create({ data: { name: data.name, description: data.description, schoolId } });
   res.status(201).json({ data: category });
 });
 
 router.put("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     name: z.string().min(1).optional(),
     description: z.string().optional(),
     isActive: z.boolean().optional(),
   });
   const data = schema.parse(req.body);
+  // Verify ownership
+  await prisma.feeCategory.findFirstOrThrow({ where: { id: req.params.id, schoolId } });
   const category = await prisma.feeCategory.update({ where: { id: req.params.id }, data });
   res.json({ data: category });
 });
 
 router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await prisma.feeCategory.findFirstOrThrow({ where: { id: req.params.id, schoolId } });
   await prisma.feeCategory.update({ where: { id: req.params.id }, data: { isActive: false } });
   res.json({ data: { message: "Category deactivated" } });
 });

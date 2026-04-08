@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
+import { printExamRoutine } from "@/lib/printUtils";
 
 interface ExamType { id: string; name: string }
 interface RoutineEntry {
@@ -70,7 +71,7 @@ export default function StudentExamRoutinePage() {
             <p className="text-sm text-gray-500 mt-1">{gradeName}</p>
           </div>
           {entries.length > 0 && (
-            <button onClick={() => window.print()} className="btn-outline text-xs">
+            <button onClick={() => printExamRoutine(entries, selectedExamName, gradeName)} className="btn-outline text-xs">
               <Printer size={14} /> Print
             </button>
           )}
@@ -84,14 +85,6 @@ export default function StudentExamRoutinePage() {
             </button>
           ))}
         </div>
-
-        {/* Printable header */}
-        {entries.length > 0 && (
-          <div className="hidden print:block text-center mb-4">
-            <h2 className="text-lg font-bold">{selectedExamName} — Exam Routine</h2>
-            <p className="text-sm">{gradeName}</p>
-          </div>
-        )}
 
         {entries.length > 0 && (
           <div className="card overflow-hidden">

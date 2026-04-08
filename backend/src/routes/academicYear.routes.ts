@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 
 const router = Router();
 
@@ -14,8 +13,10 @@ const yearSchema = z.object({
 });
 
 // GET /api/academic-years
-router.get("/", authenticate, async (_req, res) => {
+router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const years = await prisma.academicYear.findMany({
+    where: { schoolId },
     orderBy: { yearBS: "desc" },
     include: { _count: { select: { grades: true } } },
   });
@@ -23,9 +24,10 @@ router.get("/", authenticate, async (_req, res) => {
 });
 
 // GET /api/academic-years/active
-router.get("/active", authenticate, async (_req, res) => {
+router.get("/active", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const year = await prisma.academicYear.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     include: { grades: { orderBy: { displayOrder: "asc" } } },
   });
   res.json({ data: year });
@@ -33,8 +35,9 @@ router.get("/active", authenticate, async (_req, res) => {
 
 // GET /api/academic-years/:id
 router.get("/:id", authenticate, async (req, res) => {
-  const year = await prisma.academicYear.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const year = await prisma.academicYear.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
     include: {
       grades: { orderBy: { displayOrder: "asc" }, include: { sections: true } },
       examTypes: { orderBy: { displayOrder: "asc" } },
@@ -45,25 +48,42 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/academic-years
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = yearSchema.parse(req.body);
   if (data.isActive) {
-    await prisma.academicYear.updateMany({ data: { isActive: false } });
+    // Only deactivate this school's years
+    await prisma.academicYear.updateMany({
+      where: { schoolId },
+      data: { isActive: false },
+    });
   }
-  const createData: Prisma.AcademicYearCreateInput = {
-    yearBS: data.yearBS,
-    startDate: data.startDate,
-    endDate: data.endDate,
-    isActive: data.isActive,
-  };
-  const year = await prisma.academicYear.create({ data: createData });
+  const year = await prisma.academicYear.create({
+    data: {
+      schoolId,
+      yearBS: data.yearBS,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      isActive: data.isActive,
+    },
+  });
   res.status(201).json({ data: year });
 });
 
 // PUT /api/academic-years/:id
 router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = yearSchema.partial().parse(req.body);
+
+  // Verify ownership
+  await prisma.academicYear.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
+  });
+
   if (data.isActive) {
-    await prisma.academicYear.updateMany({ data: { isActive: false } });
+    await prisma.academicYear.updateMany({
+      where: { schoolId },
+      data: { isActive: false },
+    });
   }
   const year = await prisma.academicYear.update({ where: { id: req.params.id }, data });
   res.json({ data: year });
@@ -71,6 +91,11 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/academic-years/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  // Verify ownership before delete
+  await prisma.academicYear.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
+  });
   await prisma.academicYear.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Academic year deleted" } });
 });

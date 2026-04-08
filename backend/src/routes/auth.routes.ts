@@ -27,8 +27,14 @@ router.post("/login", async (req, res) => {
     throw new AppError("Invalid email or password", 401);
   }
 
+  // Include schoolId in the JWT so every request knows the tenant
   const token = jwt.sign(
-    { userId: user.id, email: user.email, role: user.role },
+    {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId || null,
+    },
     process.env.JWT_SECRET!,
     { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as SignOptions["expiresIn"] }
   );
@@ -36,7 +42,12 @@ router.post("/login", async (req, res) => {
   res.json({
     data: {
       token,
-      user: { id: user.id, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId || null,
+      },
     },
   });
 });
@@ -49,6 +60,7 @@ router.get("/me", authenticate, async (req, res) => {
       id: true,
       email: true,
       role: true,
+      schoolId: true,
       student: { select: { id: true, name: true } },
       teacher: { select: { id: true, name: true } },
     },

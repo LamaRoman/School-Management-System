@@ -8,12 +8,14 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: UserRole;
+  schoolId: string | null;
 }
 
 declare global {
   namespace Express {
     interface Request {
       user?: AuthPayload;
+      schoolId?: string;
     }
   }
 }
@@ -51,6 +53,10 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthPayload;
     req.user = payload;
+    // Attach schoolId to request for convenient access
+    if (payload.schoolId) {
+      req.schoolId = payload.schoolId;
+    }
   } catch {
     throw new AppError("Invalid or expired token", 401);
   }
@@ -74,4 +80,30 @@ export function authorize(...roles: UserRole[]) {
     }
     next();
   };
+}
+
+/**
+ * Middleware: require that the user belongs to a school.
+ * SUPER_ADMIN users are rejected — they must use super-admin-specific routes.
+ * Attach after `authenticate`.
+ */
+export function requireSchool(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) {
+    throw new AppError("Authentication required", 401);
+  }
+  if (!req.schoolId) {
+    throw new AppError("School context required. Super admins must use /super-admin routes.", 403);
+  }
+  next();
+}
+
+/**
+ * Helper: get schoolId from request or throw.
+ * Use inside route handlers for convenience.
+ */
+export function getSchoolId(req: Request): string {
+  if (!req.schoolId) {
+    throw new AppError("School context required", 403);
+  }
+  return req.schoolId;
 }

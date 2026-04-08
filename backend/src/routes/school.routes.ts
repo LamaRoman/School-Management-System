@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
-import { Prisma } from "@prisma/client";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 
 const router = Router();
 
@@ -17,19 +16,18 @@ const schoolSchema = z.object({
   motto: z.string().optional(),
 });
 
-// GET /api/school
-router.get("/", async (_req, res) => {
-  const school = await prisma.school.findFirst();
+// GET /api/school — returns the current user's school
+router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
   res.json({ data: school });
 });
 
-// PUT /api/school
+// PUT /api/school — update the current user's school
 router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = schoolSchema.parse(req.body);
-  const existing = await prisma.school.findFirst();
-  const school = existing
-    ? await prisma.school.update({ where: { id: existing.id }, data })
-    : await prisma.school.create({ data: data as Prisma.SchoolCreateInput });
+  const school = await prisma.school.update({ where: { id: schoolId }, data });
   res.json({ data: school });
 });
 

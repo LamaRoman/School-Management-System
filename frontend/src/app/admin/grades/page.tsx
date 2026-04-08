@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Users, Layers, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Section { id: string; name: string; _count: { students: number } }
@@ -12,10 +12,10 @@ export default function GradesPage() {
   const confirm = useConfirm();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showGradeForm, setShowGradeForm] = useState(false);
   const [gradeForm, setGradeForm] = useState({ name: "", displayOrder: 0 });
-  const [sectionForm, setSectionForm] = useState({ gradeId: "", name: "" });
+  const [addingSectionFor, setAddingSectionFor] = useState<string | null>(null);
+  const [sectionName, setSectionName] = useState("");
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -31,12 +31,6 @@ export default function GradesPage() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const toggleExpand = (id: string) => {
-    const next = new Set(expanded);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setExpanded(next);
-  };
-
   const addGrade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeYear) return toast.error("Create an academic year first");
@@ -50,11 +44,12 @@ export default function GradesPage() {
   };
 
   const addSection = async (gradeId: string) => {
-    const name = prompt("Section name (e.g. A, B, C):");
-    if (!name) return;
+    if (!sectionName.trim()) return;
     try {
-      await api.post("/sections", { name: name.trim().toUpperCase(), gradeId });
+      await api.post("/sections", { name: sectionName.trim().toUpperCase(), gradeId });
       toast.success("Section added");
+      setAddingSectionFor(null);
+      setSectionName("");
       fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -81,8 +76,14 @@ export default function GradesPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const totalSections = grades.reduce((s, g) => s + g.sections.length, 0);
+  const totalStudents = grades.reduce((s, g) => s + g.sections.reduce((s2, sec) => s2 + (sec._count?.students ?? 0), 0), 0);
+
+  if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
+
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold text-primary">Grades & Sections</h1>
@@ -92,88 +93,145 @@ export default function GradesPage() {
         </div>
         <div className="flex gap-2">
           {grades.length === 0 && activeYear && (
-            <button onClick={seedAllGrades} className="btn-outline text-xs">
-              Quick: Add Nursery–X
-            </button>
+            <button onClick={seedAllGrades} className="btn-outline text-xs">Quick: Add Nursery–X</button>
           )}
-          <button onClick={() => setShowGradeForm(!showGradeForm)} className="btn-primary">
+          <button onClick={() => { setShowGradeForm(!showGradeForm); setGradeForm({ name: "", displayOrder: grades.length }); }} className="btn-primary">
             <Plus size={16} /> Add Grade
           </button>
         </div>
       </div>
 
+      {/* Summary */}
+      {grades.length > 0 && (
+        <div className="flex gap-4 mb-6">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Layers size={14} className="text-primary" />
+            <span><span className="font-semibold text-gray-800">{grades.length}</span> grades</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Layers size={14} className="text-primary" />
+            <span><span className="font-semibold text-gray-800">{totalSections}</span> sections</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Users size={14} className="text-primary" />
+            <span><span className="font-semibold text-gray-800">{totalStudents}</span> students</span>
+          </div>
+        </div>
+      )}
+
+      {/* Add Grade Form */}
       {showGradeForm && (
         <div className="card p-5 mb-6">
+          <h3 className="text-sm font-semibold text-primary mb-3">New Grade</h3>
           <form onSubmit={addGrade} className="flex flex-wrap gap-4 items-end">
             <div className="flex-1 min-w-[160px]">
               <label className="label">Grade Name</label>
-              <input className="input" placeholder="e.g. Nursery, I, II..." value={gradeForm.name} onChange={(e) => setGradeForm({ ...gradeForm, name: e.target.value })} required />
+              <input className="input" placeholder="e.g. Nursery, I, II..." value={gradeForm.name} onChange={(e) => setGradeForm({ ...gradeForm, name: e.target.value })} required autoFocus />
             </div>
-            <div className="w-32">
+            <div className="w-28">
               <label className="label">Order</label>
               <input type="number" className="input" value={gradeForm.displayOrder} onChange={(e) => setGradeForm({ ...gradeForm, displayOrder: parseInt(e.target.value) || 0 })} />
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="btn-primary">Save</button>
-              <button type="button" onClick={() => setShowGradeForm(false)} className="btn-ghost">Cancel</button>
+              <button type="submit" className="btn-primary text-sm">Save</button>
+              <button type="button" onClick={() => setShowGradeForm(false)} className="btn-ghost text-sm">Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="space-y-2">
-        {loading ? (
-          <div className="card p-8 text-center text-gray-400">Loading...</div>
-        ) : grades.length === 0 ? (
-          <div className="card p-8 text-center text-gray-400">No grades yet. Add them above or use the quick seed button.</div>
-        ) : (
-          grades.map((grade) => (
+      {/* Empty State */}
+      {grades.length === 0 && (
+        <div className="card p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center mx-auto mb-4">
+            <Layers size={28} className="text-primary/40" />
+          </div>
+          <p className="text-gray-500 text-sm mb-1">No grades yet</p>
+          <p className="text-gray-400 text-xs">Add grades above or use the quick seed to create Nursery through X.</p>
+        </div>
+      )}
+
+      {/* Grade Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {grades.map((grade) => {
+          const studentCount = grade.sections.reduce((s, sec) => s + (sec._count?.students ?? 0), 0);
+
+          return (
             <div key={grade.id} className="card overflow-hidden">
-              <div
-                className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-surface transition-colors"
-                onClick={() => toggleExpand(grade.id)}
-              >
+              {/* Grade Header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-surface/50 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  {expanded.has(grade.id) ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-                  <span className="font-semibold text-primary">{grade.name}</span>
-                  <span className="text-xs text-gray-400">
-                    {grade._count.sections} section{grade._count.sections !== 1 ? "s" : ""} · {grade._count.subjects} subject{grade._count.subjects !== 1 ? "s" : ""}
-                  </span>
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{grade.displayOrder + 1}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-primary text-sm">{grade.name}</h3>
+                    <p className="text-[10px] text-gray-400">
+                      {grade._count.subjects} subject{grade._count.subjects !== 1 ? "s" : ""} · {studentCount} student{studentCount !== 1 ? "s" : ""}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); addSection(grade.id); }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    + Section
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteGrade(grade.id); }}
-                    className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <button
+                  onClick={() => deleteGrade(grade.id)}
+                  className="p-1.5 hover:bg-red-50 rounded-lg text-gray-300 hover:text-red-500 transition-all"
+                  title="Delete grade"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
 
-              {expanded.has(grade.id) && grade.sections.length > 0 && (
-                <div className="border-t border-gray-100 bg-surface/50 px-5 py-3">
-                  <div className="flex flex-wrap gap-2">
+              {/* Sections */}
+              <div className="px-5 py-3">
+                {grade.sections.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic mb-2">No sections added</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 mb-3">
                     {grade.sections.map((sec) => (
-                      <div key={sec.id} className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
-                        <span className="font-medium">Section {sec.name}</span>
-                       <span className="text-xs text-gray-400">{sec._count?.students ?? 0} students</span>
-                        <button onClick={() => deleteSection(sec.id)} className="text-gray-300 hover:text-red-500 transition-colors">
-                          <Trash2 size={12} />
+                      <div key={sec.id} className="group inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:border-primary/30 transition-all">
+                        <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-primary">{sec.name}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{sec._count?.students ?? 0}</span>
+                        <button
+                          onClick={() => deleteSection(sec.id)}
+                          className="text-gray-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete section"
+                        >
+                          <Trash2 size={11} />
                         </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Add Section */}
+                {addingSectionFor === grade.id ? (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      className="input text-xs py-1.5 w-24"
+                      placeholder="e.g. A"
+                      value={sectionName}
+                      onChange={(e) => setSectionName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSection(grade.id); } }}
+                      autoFocus
+                    />
+                    <button onClick={() => addSection(grade.id)} className="btn-primary text-xs py-1.5 px-3">Add</button>
+                    <button onClick={() => { setAddingSectionFor(null); setSectionName(""); }} className="text-gray-400 hover:text-gray-600">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingSectionFor(grade.id); setSectionName(""); }}
+                    className="text-xs text-primary hover:text-primary-dark font-medium flex items-center gap-1 transition-colors"
+                  >
+                    <Plus size={12} /> Add Section
+                  </button>
+                )}
+              </div>
             </div>
-          ))
-        )}
+          );
+        })}
       </div>
     </div>
   );

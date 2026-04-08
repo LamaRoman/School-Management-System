@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Shuffle, X } from "lucide-react";
+import { printSeatingArrangement } from "@/lib/printUtils";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface ExamType { id: string; name: string }
@@ -160,7 +161,7 @@ export default function SeatingPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    printSeatingArrangement(allocations, selectedExamName);
   };
 
   const selectedExamName = examTypes.find((e) => e.id === selectedExam)?.name || "";
@@ -285,14 +286,6 @@ export default function SeatingPage() {
           )}
         </div>
       </div>
-
-      {/* Printable header */}
-      {allocations.length > 0 && (
-        <div className="hidden print:block text-center mb-4">
-          <h2 className="text-lg font-bold text-primary">{selectedExamName} — Exam Seating Arrangement</h2>
-          <p className="text-sm">Total Students: {totalAllocated}</p>
-        </div>
-      )}
 
       {/* Allocation results */}
       {allocations.length > 0 && (

@@ -17,7 +17,7 @@ enum StudentStatus {
 }
 
 enum UserRole {
-  SYSTEM_ADMIN
+  SUPER_ADMIN
   ADMIN
   ACCOUNTANT
   TEACHER
@@ -42,10 +42,17 @@ model School {
   logo      String?
   estdYear  String?  @map("estd_year")
   motto     String?
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   reportCardSettings ReportCardSettings?
+  users              User[]
+  academicYears      AcademicYear[]
+  teachers           Teacher[]
+  feeCategories      FeeCategory[]
+  examRooms          ExamRoom[]
+
   @@map("schools")
 }
 
@@ -53,13 +60,15 @@ model School {
 
 model AcademicYear {
   id        String   @id @default(cuid())
-  yearBS    String   @unique @map("year_bs")
+  schoolId  String   @map("school_id")
+  yearBS    String   @map("year_bs")
   startDate String?  @map("start_date")
   endDate   String?  @map("end_date")
   isActive  Boolean  @default(false) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  school           School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   grades           Grade[]
   examTypes        ExamType[]
   marks            Mark[]
@@ -74,6 +83,7 @@ model AcademicYear {
   homeworks      Homework[]
   admissions     Admission[]
 
+  @@unique([yearBS, schoolId])
   @@map("academic_years")
 }
 
@@ -229,6 +239,7 @@ model Student {
 
 model Teacher {
   id        String   @id @default(cuid())
+  schoolId  String   @map("school_id")
   name      String
   nameNp    String?  @map("name_np")
   phone     String?
@@ -237,6 +248,7 @@ model Teacher {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  school      School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   assignments TeacherAssignment[]
   user        User?
 
@@ -268,6 +280,7 @@ model TeacherAssignment {
 
 model User {
   id        String   @id @default(cuid())
+  schoolId  String?  @map("school_id")
   email     String   @unique
   password  String
   role      UserRole
@@ -277,6 +290,7 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  school         School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   parentLinks    ParentStudent[] @relation("ParentLinks")
@@ -458,6 +472,7 @@ model ExamRoutine {
 
 model ExamRoom {
   id           String   @id @default(cuid())
+  schoolId     String   @map("school_id")
   name         String
   capacity     Int
   displayOrder Int      @default(0) @map("display_order")
@@ -465,6 +480,7 @@ model ExamRoom {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @default(now()) @map("updated_at")
 
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   seatAllocations SeatAllocation[]
 
   @@map("exam_rooms")
@@ -491,16 +507,19 @@ model SeatAllocation {
 
 model FeeCategory {
   id           String   @id @default(cuid())
+  schoolId     String   @map("school_id")
   name         String
   description  String?
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @default(now()) @map("updated_at")
 
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   feeStructures     FeeStructure[]
   studentOverrides  StudentFeeOverride[]
   feePayments       FeePayment[]
 
+  @@unique([name, schoolId])
   @@map("fee_categories")
 }
 
