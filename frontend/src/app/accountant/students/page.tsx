@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { Search, User } from "lucide-react";
 
@@ -17,9 +17,14 @@ export default function AccountantStudentSearchPage() {
   const [selectedSection, setSelectedSection] = useState("");
   const [sections, setSections] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Global search
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [globalResults, setGlobalResults] = useState<Student[]>([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -32,6 +37,28 @@ export default function AccountantStudentSearchPage() {
       } catch (err) { console.error(err); } finally { setLoading(false); }
     })();
   }, []);
+
+  // Global search effect
+  useEffect(() => {
+    if (globalQuery.trim().length < 2) {
+      setGlobalResults([]);
+      setGlobalSearching(false);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setGlobalSearching(true);
+      try {
+        const data = await api.get<Student[]>("/students", { search: globalQuery.trim() });
+        setGlobalResults(Array.isArray(data) ? data : []);
+      } catch {
+        setGlobalResults([]);
+      } finally {
+        setGlobalSearching(false);
+      }
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [globalQuery]);
 
   const handleGradeChange = (gradeId: string) => {
     setSelectedGrade(gradeId);
@@ -51,15 +78,6 @@ export default function AccountantStudentSearchPage() {
     } catch { setStudents([]); }
   };
 
-  const filteredStudents = searchQuery
-    ? students.filter((s) =>
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.guardianName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.guardianPhone?.includes(searchQuery) ||
-        String(s.rollNo).includes(searchQuery)
-      )
-    : students;
-
   if (loading) {
     return <div className="max-w-4xl mx-auto p-6"><div className="card p-8 text-center text-gray-400">Loading...</div></div>;
   }
@@ -68,34 +86,44 @@ export default function AccountantStudentSearchPage() {
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-display font-bold text-primary mb-6">Student Search</h1>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-4">
-        <div className="flex-1">
-          <label className="label">Grade</label>
-          <select className="input" value={selectedGrade} onChange={(e) => handleGradeChange(e.target.value)}>
-            <option value="">Select Grade</option>
-            {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+      {/* Global Search */}
+      <div className="card p-5 mb-6">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            className="input pl-9 text-base"
+            placeholder="Type student name to search across all grades..."
+            value={globalQuery}
+            onChange={(e) => setGlobalQuery(e.target.value)}
+            autoFocus
+          />
+          {globalSearching && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 animate-pulse">Searching...</div>}
         </div>
-        <div className="flex-1">
-          <label className="label">Section</label>
-          <select className="input" value={selectedSection} onChange={(e) => handleSectionChange(e.target.value)}>
-            <option value="">Select Section</option>
-            {sections.map((s: any) => <option key={s.id} value={s.id}>Section {s.name}</option>)}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="label">Search</label>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              className="input pl-9"
-              placeholder="Name, roll, phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {globalResults.length > 0 && (
+          <div className="mt-3 border border-gray-200 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
+            {globalResults.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => { setSelectedStudent(s); setGlobalQuery(""); setGlobalResults([]); }}
+                className={`flex items-center justify-between px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-surface transition-colors ${selectedStudent?.id === s.id ? "bg-primary/5" : ""}`}
+              >
+                <div>
+                  <p className="font-medium text-primary">{s.name}</p>
+                  {s.nameNp && <p className="text-xs text-gray-400">{s.nameNp}</p>}
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold px-2 py-0.5 bg-primary/10 text-primary rounded">
+                    {s.section.grade.name} - {s.section.name}
+                  </span>
+                  {s.rollNo != null && <p className="text-[10px] text-gray-400 mt-1">Roll #{s.rollNo}</p>}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
+        {globalQuery.trim().length >= 2 && !globalSearching && globalResults.length === 0 && (
+          <p className="mt-3 text-sm text-gray-400 text-center">No students found</p>
+        )}
       </div>
 
       {/* Student Detail */}
@@ -126,7 +154,26 @@ export default function AccountantStudentSearchPage() {
         </div>
       )}
 
-      {/* Student List */}
+      {/* Browse by Grade/Section */}
+      <div className="border-t border-gray-200 pt-6 mt-2">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Or browse by grade</h2>
+        <div className="flex gap-4 mb-4">
+          <div className="flex-1">
+            <select className="input" value={selectedGrade} onChange={(e) => handleGradeChange(e.target.value)}>
+              <option value="">Select Grade</option>
+              {grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <select className="input" value={selectedSection} onChange={(e) => handleSectionChange(e.target.value)}>
+              <option value="">Select Section</option>
+              {sections.map((s: any) => <option key={s.id} value={s.id}>Section {s.name}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Student List from Section */}
       {students.length > 0 && (
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
@@ -140,7 +187,7 @@ export default function AccountantStudentSearchPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredStudents.map((s) => (
+              {students.map((s) => (
                 <tr
                   key={s.id}
                   onClick={() => setSelectedStudent(s)}
@@ -159,16 +206,11 @@ export default function AccountantStudentSearchPage() {
               ))}
             </tbody>
           </table>
-          {filteredStudents.length === 0 && <div className="p-6 text-center text-gray-400 text-sm">No students match your search.</div>}
         </div>
       )}
 
       {selectedSection && students.length === 0 && (
         <div className="card p-8 text-center text-gray-400">No students in this section.</div>
-      )}
-
-      {!selectedSection && (
-        <div className="card p-8 text-center text-gray-400">Select grade and section to view students.</div>
       )}
     </div>
   );

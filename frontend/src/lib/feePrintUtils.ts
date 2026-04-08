@@ -137,7 +137,6 @@ export function printReceipt(receipt: any) {
   <div class="signatures">
     <div class="sig"><div class="sig-line"></div>Received By</div>
     <div class="sig"><div class="sig-line"></div>Accountant</div>
-    <div class="sig"><div class="sig-line"></div>Principal</div>
   </div>
   <div class="footer">Computer generated receipt</div>
 </div>

@@ -181,13 +181,13 @@ function PaymentHistory({ activeYear, onBack }: { activeYear: any; onBack: () =>
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (p: number = page, s: string = search, df: string = dateFrom, dt: string = dateTo) => {
     setLoading(true);
     try {
-      let url = `/accountant-reports/payment-history?academicYearId=${activeYear.id}&page=${page}`;
-      if (search) url += `&search=${encodeURIComponent(search)}`;
-      if (dateFrom) url += `&dateFrom=${dateFrom}`;
-      if (dateTo) url += `&dateTo=${dateTo}`;
+      let url = `/accountant-reports/payment-history?academicYearId=${activeYear.id}&page=${p}`;
+      if (s) url += `&search=${encodeURIComponent(s)}`;
+      if (df) url += `&dateFrom=${df}`;
+      if (dt) url += `&dateTo=${dt}`;
       const result = await api.get<any>(url);
       setPayments(result.payments || []);
       setTotal(result.total || 0);
@@ -195,7 +195,20 @@ function PaymentHistory({ activeYear, onBack }: { activeYear: any; onBack: () =>
     } catch { setPayments([]); } finally { setLoading(false); }
   };
 
+  // Auto-search on typing with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchData(1, search, dateFrom, dateTo);
+    }, search.length > 0 ? 400 : 0);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Re-fetch on page change
   useEffect(() => { fetchData(); }, [page]);
+
+  // Manual search for date filters
+  const handleDateSearch = () => { setPage(1); fetchData(1, search, dateFrom, dateTo); };
 
   return (
     <div>
@@ -203,12 +216,16 @@ function PaymentHistory({ activeYear, onBack }: { activeYear: any; onBack: () =>
       <h1 className="text-2xl font-display font-bold text-primary mb-4">Payment History</h1>
 
       <div className="card p-4 mb-4">
-        <div className="flex gap-3 items-end flex-wrap">
-          <div className="flex-1 min-w-[200px]"><label className="label">Search (name or receipt)</label>
-            <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input className="input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Student name or RCP-..." /></div></div>
-          <div><label className="label">From (BS)</label><input className="input" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="2082/01/01" /></div>
-          <div><label className="label">To (BS)</label><input className="input" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="2082/12/30" /></div>
-          <button onClick={() => { setPage(1); fetchData(); }} className="btn-primary text-sm"><Search size={14} /> Search</button>
+        <div className="mb-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input className="input pl-9 text-base" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Type student name or receipt number..." autoFocus />
+          </div>
+        </div>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1"><label className="label text-xs">From (BS) — optional</label><input className="input text-sm" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="2082/01/01" /></div>
+          <div className="flex-1"><label className="label text-xs">To (BS) — optional</label><input className="input text-sm" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="2082/12/30" /></div>
+          <button onClick={handleDateSearch} className="btn-primary text-xs">Filter by date</button>
         </div>
       </div>
 
@@ -364,29 +381,70 @@ function MonthlySummary({ activeYear, onBack }: { activeYear: any; onBack: () =>
     api.get<any>(`/accountant-reports/monthly-summary?academicYearId=${activeYear.id}`).then(setData).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  const handlePrint = () => {
+    if (!data) return;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const totalExpectedYear = data.totalExpected || 0;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Monthly Summary</title>
+    <style>body{font-family:-apple-system,sans-serif;font-size:12px;max-width:700px;margin:0 auto;padding:20px}
+    h1{font-size:16px;text-align:center;margin-bottom:4px} h2{font-size:13px;text-align:center;color:#555;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px} th,td{border:1px solid #ddd;padding:5px 8px;font-size:11px}
+    th{background:#f5f5f5;font-weight:600;text-align:left} .text-right{text-align:right} .bold{font-weight:700}
+    .summary{display:flex;gap:24px;margin-bottom:16px} .summary div{text-align:center}
+    @page{size:A4;margin:15mm}</style></head><body>
+    <h1>Monthly Financial Summary</h1>
+    <h2>Academic Year ${activeYear.yearNp || ""} · ${data.studentCount || 0} Active Students</h2>
+    <table><thead><tr><th>Month</th><th class="text-right">Expected</th><th class="text-right">Collected</th><th class="text-right">Receipts</th><th class="text-right">Collection %</th></tr></thead>
+    <tbody>${data.months?.map((m: any) => {
+      const expected = m.expected || 0;
+      const pct = expected > 0 ? Math.round((m.collected / expected) * 100) : 0;
+      return `<tr><td>${m.month}</td><td class="text-right">Rs ${expected.toLocaleString()}</td><td class="text-right">${m.collected > 0 ? `Rs ${m.collected.toLocaleString()}` : "—"}</td><td class="text-right">${m.receiptCount || "—"}</td><td class="text-right">${m.collected > 0 ? `${pct}%` : "—"}</td></tr>`;
+    }).join("") || ""}</tbody>
+    <tfoot><tr class="bold"><td>Total</td><td class="text-right">Rs ${totalExpectedYear.toLocaleString()}</td><td class="text-right">Rs ${(data.totalCollected || 0).toLocaleString()}</td><td></td><td class="text-right">${totalExpectedYear > 0 ? Math.round(((data.totalCollected || 0) / totalExpectedYear) * 100) : 0}%</td></tr></tfoot></table>
+    ${data.byCategory?.length > 0 ? `<h3 style="font-size:13px;margin-bottom:8px">Collection by Category</h3><table><tbody>${data.byCategory.map((c: any) => `<tr><td>${c.name}</td><td class="text-right bold">Rs ${c.amount.toLocaleString()}</td></tr>`).join("")}</tbody></table>` : ""}
+    </body></html>`);
+    win.document.close();
+    win.onload = () => win.print();
+  };
+
   if (loading) return <div className="card p-8 text-center text-gray-400 animate-pulse">Loading...</div>;
 
   return (
     <div>
-      <button onClick={onBack} className="text-sm text-primary hover:underline mb-4">← Back to Reports</button>
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={onBack} className="text-sm text-primary hover:underline">← Back to Reports</button>
+        {data && <button onClick={handlePrint} className="btn-outline text-xs"><Printer size={14} /> Print Report</button>}
+      </div>
       <h1 className="text-2xl font-display font-bold text-primary mb-4">Monthly Financial Summary</h1>
 
       <div className="flex gap-4 mb-4">
         <div className="card p-3 flex-1 text-center"><p className="text-2xl font-bold text-emerald-600">Rs {data?.totalCollected?.toLocaleString() || 0}</p><p className="text-xs text-gray-500">Total Collected</p></div>
-        <div className="card p-3 flex-1 text-center"><p className="text-2xl font-bold text-primary">{data?.studentCount || 0}</p><p className="text-xs text-gray-500">Active Students</p></div>
+        <div className="card p-3 flex-1 text-center"><p className="text-2xl font-bold text-primary">Rs {data?.totalExpected?.toLocaleString() || 0}</p><p className="text-xs text-gray-500">Annual Expected</p></div>
+        <div className="card p-3 flex-1 text-center"><p className="text-2xl font-bold text-blue-600">{data?.studentCount || 0}</p><p className="text-xs text-gray-500">Active Students</p></div>
       </div>
 
       {data?.months && (
         <div className="card overflow-hidden mb-4">
           <table className="w-full text-sm">
-            <thead><tr className="table-header"><th className="text-left px-4 py-2">Month</th><th className="text-right px-4 py-2">Collected</th><th className="text-right px-4 py-2">Receipts</th></tr></thead>
-            <tbody>{data.months.map((m: any) => (
-              <tr key={m.month} className="border-t border-gray-100">
-                <td className="px-4 py-2 font-medium">{m.month}</td>
-                <td className="px-4 py-2 text-right font-semibold text-emerald-600">{m.collected > 0 ? `Rs ${m.collected.toLocaleString()}` : "—"}</td>
-                <td className="px-4 py-2 text-right text-gray-500">{m.receiptCount || "—"}</td>
-              </tr>
-            ))}</tbody>
+            <thead><tr className="table-header"><th className="text-left px-4 py-2">Month</th><th className="text-right px-4 py-2">Expected</th><th className="text-right px-4 py-2">Collected</th><th className="text-right px-4 py-2">Receipts</th><th className="text-right px-4 py-2">%</th></tr></thead>
+            <tbody>{data.months.map((m: any) => {
+              const expected = m.expected || 0;
+              const pct = expected > 0 ? Math.round((m.collected / expected) * 100) : 0;
+              return (
+                <tr key={m.month} className="border-t border-gray-100">
+                  <td className="px-4 py-2 font-medium">{m.month}</td>
+                  <td className="px-4 py-2 text-right text-gray-500">Rs {expected.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-emerald-600">{m.collected > 0 ? `Rs ${m.collected.toLocaleString()}` : "—"}</td>
+                  <td className="px-4 py-2 text-right text-gray-500">{m.receiptCount || "—"}</td>
+                  <td className="px-4 py-2 text-right">
+                    {m.collected > 0 ? (
+                      <span className={`text-xs font-bold ${pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>{pct}%</span>
+                    ) : "—"}
+                  </td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </div>
       )}

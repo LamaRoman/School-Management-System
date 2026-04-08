@@ -186,6 +186,30 @@ export default function AdmissionPage() {
     rejected: admissions.filter((a) => a.status === "REJECTED").length,
   };
 
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+  const isEnrolledView = filterStatus === "ENROLLED";
+
+  // Group enrolled by grade
+  const enrolledByGrade = isEnrolledView
+    ? admissions.reduce<Record<string, Admission[]>>((acc, a) => {
+        const grade = a.applyingForGrade.name;
+        if (!acc[grade]) acc[grade] = [];
+        acc[grade].push(a);
+        return acc;
+      }, {})
+    : {};
+
+  // Paginated list for non-enrolled views
+  const totalPages = Math.ceil(admissions.length / PAGE_SIZE);
+  const paginatedAdmissions = isEnrolledView
+    ? admissions
+    : admissions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Reset page when filter changes
+  useEffect(() => { setCurrentPage(1); }, [filterStatus]);
+
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
   return (
@@ -316,67 +340,114 @@ export default function AdmissionPage() {
       )}
 
       {/* Admissions list */}
-      <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="table-header">
-              <th className="text-left px-4 py-2">Student Name</th>
-              <th className="text-left px-4 py-2">Grade</th>
-              <th className="text-left px-4 py-2">Guardian</th>
-              <th className="text-left px-4 py-2">Phone</th>
-              <th className="text-left px-4 py-2">Applied</th>
-              <th className="text-center px-4 py-2">Status</th>
-              <th className="text-right px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {admissions.map((adm) => (
-              <tr key={adm.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
-                <td className="px-4 py-2">
-                  <span className="font-medium text-primary">{adm.studentName}</span>
-                  {adm.studentNameNp && <span className="text-xs text-gray-400 ml-1">({adm.studentNameNp})</span>}
-                </td>
-                <td className="px-4 py-2">{adm.applyingForGrade.name}</td>
-                <td className="px-4 py-2 text-gray-500">{adm.guardianName || adm.fatherName || "—"}</td>
-                <td className="px-4 py-2 text-gray-500">{adm.guardianPhone || "—"}</td>
-                <td className="px-4 py-2 text-gray-500">{adm.appliedDate}</td>
-                <td className="px-4 py-2 text-center">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[adm.status] || ""}`}>
-                    {adm.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <div className="flex justify-end gap-1">
-                    {adm.status === "PENDING" && (
-                      <>
-                        <button onClick={() => handleApprove(adm.id)} className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all" title="Approve">
-                          <Check size={14} />
-                        </button>
-                        <button onClick={() => handleReject(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-all" title="Reject">
-                          <X size={14} />
-                        </button>
-                      </>
-                    )}
-                    {adm.status === "APPROVED" && (
-                      <button onClick={() => handleStartEnroll(adm)} className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all" title="Enroll">
-                        <UserPlus size={14} />
-                      </button>
-                    )}
-                    {adm.status !== "ENROLLED" && (
-                      <button onClick={() => handleDelete(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-all" title="Delete">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {admissions.length === 0 && (
-          <div className="p-8 text-center text-gray-400 text-sm">No admission applications found.</div>
-        )}
-      </div>
+      {isEnrolledView ? (
+        // Grade-wise grouped view for enrolled students
+        <div className="space-y-4">
+          {Object.keys(enrolledByGrade).length === 0 ? (
+            <div className="card p-8 text-center text-gray-400 text-sm">No enrolled students found.</div>
+          ) : (
+            Object.entries(enrolledByGrade).map(([gradeName, students]) => (
+              <div key={gradeName} className="card overflow-hidden">
+                <div className="px-4 py-2 bg-primary/5 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-primary">{gradeName} — {students.length} student{students.length !== 1 ? "s" : ""}</h3>
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {students.map((adm) => (
+                      <tr key={adm.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
+                        <td className="px-4 py-2">
+                          <span className="font-medium text-primary">{adm.studentName}</span>
+                          {adm.studentNameNp && <span className="text-xs text-gray-400 ml-1">({adm.studentNameNp})</span>}
+                        </td>
+                        <td className="px-4 py-2 text-gray-500">{adm.guardianName || adm.fatherName || "—"}</td>
+                        <td className="px-4 py-2 text-gray-500">{adm.guardianPhone || "—"}</td>
+                        <td className="px-4 py-2 text-gray-500">{adm.appliedDate}</td>
+                        <td className="px-4 py-2 text-center">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">ENROLLED</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        // Standard paginated table view
+        <>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="table-header">
+                  <th className="text-left px-4 py-2">Student Name</th>
+                  <th className="text-left px-4 py-2">Grade</th>
+                  <th className="text-left px-4 py-2">Guardian</th>
+                  <th className="text-left px-4 py-2">Phone</th>
+                  <th className="text-left px-4 py-2">Applied</th>
+                  <th className="text-center px-4 py-2">Status</th>
+                  <th className="text-right px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedAdmissions.map((adm) => (
+                  <tr key={adm.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
+                    <td className="px-4 py-2">
+                      <span className="font-medium text-primary">{adm.studentName}</span>
+                      {adm.studentNameNp && <span className="text-xs text-gray-400 ml-1">({adm.studentNameNp})</span>}
+                    </td>
+                    <td className="px-4 py-2">{adm.applyingForGrade.name}</td>
+                    <td className="px-4 py-2 text-gray-500">{adm.guardianName || adm.fatherName || "—"}</td>
+                    <td className="px-4 py-2 text-gray-500">{adm.guardianPhone || "—"}</td>
+                    <td className="px-4 py-2 text-gray-500">{adm.appliedDate}</td>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[adm.status] || ""}`}>
+                        {adm.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex justify-end gap-1">
+                        {adm.status === "PENDING" && (
+                          <>
+                            <button onClick={() => handleApprove(adm.id)} className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-all" title="Approve">
+                              <Check size={14} />
+                            </button>
+                            <button onClick={() => handleReject(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-all" title="Reject">
+                              <X size={14} />
+                            </button>
+                          </>
+                        )}
+                        {adm.status === "APPROVED" && (
+                          <button onClick={() => handleStartEnroll(adm)} className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all" title="Enroll">
+                            <UserPlus size={14} />
+                          </button>
+                        )}
+                        {adm.status !== "ENROLLED" && (
+                          <button onClick={() => handleDelete(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-all" title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {paginatedAdmissions.length === 0 && (
+              <div className="p-8 text-center text-gray-400 text-sm">No admission applications found.</div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} className="btn-ghost text-xs">Previous</button>
+              <span className="text-sm text-gray-500">Page {currentPage} of {totalPages} ({admissions.length} total)</span>
+              <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages} className="btn-ghost text-xs">Next</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

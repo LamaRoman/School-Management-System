@@ -23,40 +23,31 @@ interface Teacher {
   user?: { id: string; email: string; isActive: boolean };
 }
 
-// Groups assignments by section and returns formatted summary lines
-// e.g. ["VIII-A  Class Teacher · 5 subjects", "VII-B  3 subjects"]
-function buildAssignmentSummary(assignments: Assignment[]): string[] {
+function buildAssignmentSummary(assignments: Assignment[]): { label: string; isClassTeacher: boolean; subjects: string[] }[] {
   if (!assignments || assignments.length === 0) return [];
 
-  // Group by "GradeName-SectionName"
   const sectionMap = new Map<
     string,
-    { label: string; isClassTeacher: boolean; subjectCount: number }
+    { label: string; isClassTeacher: boolean; subjects: string[] }
   >();
 
   for (const a of assignments) {
     const key = `${a.section.grade.name}-${a.section.name}`;
-    const label = `${a.section.grade.name}-${a.section.name}`;
     const existing = sectionMap.get(key);
 
     if (existing) {
       if (a.isClassTeacher) existing.isClassTeacher = true;
-      if (a.subject) existing.subjectCount++;
+      if (a.subject) existing.subjects.push(a.subject.name);
     } else {
       sectionMap.set(key, {
-        label,
+        label: key,
         isClassTeacher: a.isClassTeacher,
-        subjectCount: a.subject ? 1 : 0,
+        subjects: a.subject ? [a.subject.name] : [],
       });
     }
   }
 
-  return Array.from(sectionMap.values()).map((s) => {
-    const parts: string[] = [];
-    if (s.isClassTeacher) parts.push("Class Teacher");
-    if (s.subjectCount > 0) parts.push(`${s.subjectCount} subject${s.subjectCount !== 1 ? "s" : ""}`);
-    return `${s.label}  ${parts.join(" · ")}`;
-  });
+  return Array.from(sectionMap.values());
 }
 
 export default function AdminTeachersPage() {
@@ -269,22 +260,22 @@ export default function AdminTeachersPage() {
                     {summary.length === 0 ? (
                       <span className="text-xs text-gray-400">No assignments</span>
                     ) : (
-                      <div className="space-y-1">
-                        {summary.map((line, idx) => {
-                          // Split label from detail: "VIII-A  Class Teacher · 5 subjects"
-                          const [sectionLabel, ...rest] = line.split("  ");
-                          const detail = rest.join("  ");
-                          return (
-                            <div key={idx} className="flex items-center gap-2 flex-wrap">
+                      <div className="space-y-1.5">
+                        {summary.map((entry, idx) => (
+                          <div key={idx}>
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-semibold px-1.5 py-0.5 bg-primary/10 text-primary rounded">
-                                {sectionLabel}
+                                {entry.label}
                               </span>
-                              {detail && (
-                                <span className="text-xs text-gray-500">{detail}</span>
+                              {entry.isClassTeacher && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium">Class Teacher</span>
                               )}
                             </div>
-                          );
-                        })}
+                            {entry.subjects.length > 0 && (
+                              <p className="text-[11px] text-gray-500 mt-0.5 ml-1">{entry.subjects.join(", ")}</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </td>

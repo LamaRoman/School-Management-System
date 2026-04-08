@@ -175,11 +175,6 @@ export default function AccountantDashboardPage() {
   const pctColor = monthPct >= 80 ? "bg-emerald-500" : monthPct >= 50 ? "bg-amber-500" : "bg-red-500";
   const pctTextColor = monthPct >= 80 ? "text-emerald-600" : monthPct >= 50 ? "text-amber-600" : "text-red-600";
 
-  const criticalDefaulters = defaultersList.filter(d => d.monthsPending >= 3);
-  const moderateDefaulters = defaultersList.filter(d => d.monthsPending >= 1 && d.monthsPending < 3);
-  const criticalDue = criticalDefaulters.reduce((s, d) => s + d.balance, 0);
-  const moderateDue = moderateDefaulters.reduce((s, d) => s + d.balance, 0);
-
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="mb-6">
@@ -242,94 +237,32 @@ export default function AccountantDashboardPage() {
         </div>
       )}
 
-      {/* ── Defaulters Summary ── */}
+      {/* ── Quick Actions ── */}
       <div className="card p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-primary flex items-center gap-2">
-            <AlertTriangle size={16} /> Fee Defaulters
-          </h2>
-          <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-full font-semibold">
-            {totalDefaulters} students
-          </span>
+        <h2 className="font-semibold text-primary mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Link href="/accountant/fees" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+            <Receipt size={24} className="mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium text-gray-700">Collect Fee</p>
+          </Link>
+          <Link href="/accountant/admissions" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+            <Users size={24} className="mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium text-gray-700">New Admission</p>
+          </Link>
+          <Link href="/accountant/students" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+            <Search size={24} className="mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium text-gray-700">Find Student</p>
+          </Link>
+          <Link href="/accountant/reports" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+            <AlertTriangle size={24} className="mx-auto mb-2 text-red-500" />
+            <p className="text-sm font-medium text-gray-700">Fee Defaulters</p>
+            {totalDefaulters > 0 && <p className="text-xs text-red-500 font-semibold mt-1">{totalDefaulters} overdue</p>}
+          </Link>
+          <Link href="/accountant/reports" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
+            <FileText size={24} className="mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium text-gray-700">Reports</p>
+          </Link>
         </div>
-
-        {totalDefaulters > 0 ? (
-          <>
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
-              <span className="text-sm text-gray-500">Total Outstanding</span>
-              <span className="text-xl font-bold text-red-600">Rs {totalDue.toLocaleString()}</span>
-            </div>
-
-            <div className="space-y-2">
-              {criticalDefaulters.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-red-700">Critical (3+ months)</p>
-                    <p className="text-xs text-gray-500">{criticalDefaulters.length} students · Rs {criticalDue.toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-              {moderateDefaulters.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg">
-                  <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-amber-700">Moderate (1–2 months)</p>
-                    <p className="text-xs text-gray-500">{moderateDefaulters.length} students · Rs {moderateDue.toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <Link href="/accountant/reports" className="block text-center text-sm text-primary font-medium mt-3 hover:underline">
-              View full defaulter report →
-            </Link>
-          </>
-        ) : (
-          <p className="text-center text-emerald-600 font-semibold py-2">All fees up to date!</p>
-        )}
-      </div>
-
-      {/* ── Recent Transactions ── */}
-      <div className="card overflow-hidden mb-6">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-primary">Recent Transactions</h2>
-        </div>
-        {recentReceipts.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                <th className="text-left px-5 py-2">Receipt</th>
-                <th className="text-left px-5 py-2">Student</th>
-                <th className="text-left px-5 py-2">Class</th>
-                <th className="text-right px-5 py-2">Amount</th>
-                <th className="text-right px-5 py-2">Reprint</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentReceipts.slice(0, 10).map((r) => (
-                <tr key={r.receiptNumber} className="border-t border-gray-50 hover:bg-surface transition-colors">
-                  <td className="px-5 py-2">
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded font-mono font-semibold">{r.receiptNumber}</span>
-                  </td>
-                  <td className="px-5 py-2 font-medium text-gray-800">{r.studentName}</td>
-                  <td className="px-5 py-2 text-gray-500">{r.className} {r.section}</td>
-                  <td className="px-5 py-2 text-right font-semibold text-emerald-600">Rs {r.total.toLocaleString()}</td>
-                  <td className="px-5 py-2 text-right">
-                    <button
-                      onClick={() => handlePrintReceipt(r.receiptNumber)}
-                      className="text-xs text-primary hover:underline font-medium"
-                    >
-                      Print
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-8 text-center text-gray-400">No recent transactions.</div>
-        )}
       </div>
 
       {/* ── Receipt Search ── */}
@@ -373,27 +306,46 @@ export default function AccountantDashboardPage() {
         )}
       </div>
 
-      {/* ── Quick Actions ── */}
-      <div className="card p-5">
-        <h2 className="font-semibold text-primary mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/accountant/fees" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
-            <Receipt size={24} className="mx-auto mb-2 text-primary" />
-            <p className="text-sm font-medium text-gray-700">Collect Fee</p>
-          </Link>
-          <Link href="/accountant/admissions" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
-            <Users size={24} className="mx-auto mb-2 text-primary" />
-            <p className="text-sm font-medium text-gray-700">New Admission</p>
-          </Link>
-          <Link href="/accountant/students" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
-            <Search size={24} className="mx-auto mb-2 text-primary" />
-            <p className="text-sm font-medium text-gray-700">Find Student</p>
-          </Link>
-          <Link href="/accountant/reports" className="p-4 bg-surface rounded-lg text-center hover:bg-gray-100 transition-colors">
-            <FileText size={24} className="mx-auto mb-2 text-primary" />
-            <p className="text-sm font-medium text-gray-700">Reports</p>
-          </Link>
+      {/* ── Recent Transactions ── */}
+      <div className="card overflow-hidden mb-6">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="font-semibold text-primary">Recent Transactions</h2>
         </div>
+        {recentReceipts.length > 0 ? (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                <th className="text-left px-5 py-2">Receipt</th>
+                <th className="text-left px-5 py-2">Student</th>
+                <th className="text-left px-5 py-2">Class</th>
+                <th className="text-right px-5 py-2">Amount</th>
+                <th className="text-right px-5 py-2">Reprint</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentReceipts.slice(0, 10).map((r) => (
+                <tr key={r.receiptNumber} className="border-t border-gray-50 hover:bg-surface transition-colors">
+                  <td className="px-5 py-2">
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded font-mono font-semibold">{r.receiptNumber}</span>
+                  </td>
+                  <td className="px-5 py-2 font-medium text-gray-800">{r.studentName}</td>
+                  <td className="px-5 py-2 text-gray-500">{r.className} {r.section}</td>
+                  <td className="px-5 py-2 text-right font-semibold text-emerald-600">Rs {r.total.toLocaleString()}</td>
+                  <td className="px-5 py-2 text-right">
+                    <button
+                      onClick={() => handlePrintReceipt(r.receiptNumber)}
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      Print
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="p-8 text-center text-gray-400">No recent transactions.</div>
+        )}
       </div>
     </div>
   );
