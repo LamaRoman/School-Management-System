@@ -55,7 +55,7 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
 
   // If teacher (not admin), verify they are assigned to this subject
   if (req.user!.role === "TEACHER") {
-    const teacher = await prisma.teacher.findFirst({ where: { userId: req.user!.userId } });
+    const teacher = await prisma.teacher.findFirst({ where: { user: { id: req.user!.userId } } });
     if (!teacher) throw new AppError("Teacher profile not found", 403);
     const assignment = await prisma.teacherAssignment.findFirst({
       where: { teacherId: teacher.id, subjectId },
