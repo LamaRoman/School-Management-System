@@ -41,10 +41,9 @@ const navGroups: NavGroup[] = [
     label: "People",
     items: [
       { href: "/admin/students", label: "Students", icon: Users },
-      { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
+      { href: "/admin/staff", label: "Staff Accounts", icon: KeyRound },
       { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
       { href: "/admin/parents", label: "Parents", icon: Users2 },
-      { href: "/admin/staff", label: "Staff Accounts", icon: KeyRound },
     ],
   },
   {
