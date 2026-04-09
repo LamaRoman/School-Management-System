@@ -36,6 +36,7 @@ import examRoutineRoutes from "./routes/examRoutine.routes";
 import observationRoutes from "./routes/observation.routes";
 import feeRoutes from "./routes/fee.routes";
 import homeworkRoutes from "./routes/homework.routes";
+import staffRoutes from "./routes/staff.routes";
 import superAdminRoutes from "./routes/superAdmin.routes";
 
 
@@ -113,6 +114,7 @@ app.use("/exam-routine", examRoutineRoutes);
 app.use("/homework", homeworkRoutes);
 app.use("/admissions", admissionRoutes);
 app.use("/parents", parentRoutes);
+app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
 // Error handler (must be last)
 app.use(errorHandler);

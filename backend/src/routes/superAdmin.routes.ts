@@ -182,7 +182,7 @@ router.get("/schools/:id/admins", async (req, res) => {
   const admins = await prisma.user.findMany({
     where: {
       schoolId: req.params.id,
-      role: { in: ["ADMIN", "ACCOUNTANT"] },
+      role: { in: ["ADMIN"] },
     },
     select: {
       id: true,
@@ -201,7 +201,6 @@ router.get("/schools/:id/admins", async (req, res) => {
 const addAdminSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(["ADMIN", "ACCOUNTANT"]).default("ADMIN"),
 });
 
 router.post("/schools/:id/admins", async (req, res) => {
@@ -218,7 +217,7 @@ router.post("/schools/:id/admins", async (req, res) => {
     data: {
       email: data.email,
       password: hashed,
-      role: data.role,
+      role: "ADMIN",
       schoolId: school.id,
     },
   });

@@ -44,6 +44,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/teachers", label: "Teachers", icon: UserCheck },
       { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
       { href: "/admin/parents", label: "Parents", icon: Users2 },
+      { href: "/admin/staff", label: "Staff Accounts", icon: KeyRound },
     ],
   },
   {
