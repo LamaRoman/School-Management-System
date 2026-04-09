@@ -458,6 +458,54 @@ async function main() {
   console.log(`✅ ${totalStudents} students, ${totalParents} parent accounts`);
 
   // ══════════════════════════════════════════════════════
+  // 10b. EXAM ROUTINES
+  // ══════════════════════════════════════════════════════
+  console.log("\n📅 Seeding exam routines...");
+
+  // Exam schedule: First Terminal = Poush (month 9), Second Terminal = Falgun (month 11), Final = Chaitra (month 12)
+  const examSchedule: { examName: string; startMonth: number; startDay: number }[] = [
+    { examName: "First Terminal", startMonth: 9, startDay: 5 },
+    { examName: "Second Terminal", startMonth: 11, startDay: 5 },
+    { examName: "Final", startMonth: 12, startDay: 3 },
+  ];
+
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  let routineCount = 0;
+
+  for (const gn of gradeNames) {
+    const grade = gradeMap[gn];
+    const subjects = subjectMap[gn];
+
+    for (const schedule of examSchedule) {
+      const et = examTypes.find((e: any) => e.name === schedule.examName);
+      if (!et) continue;
+
+      for (let j = 0; j < subjects.length; j++) {
+        const sub = subjects[j];
+        const day = schedule.startDay + j;
+        const examDate = `2082/${String(schedule.startMonth).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
+        const dayName = dayNames[(j + 1) % 7]; // rotate through weekdays
+
+        await prisma.examRoutine.upsert({
+          where: { examTypeId_gradeId_subjectId: { examTypeId: et.id, gradeId: grade.id, subjectId: sub.id } },
+          update: {},
+          create: {
+            examTypeId: et.id,
+            gradeId: grade.id,
+            subjectId: sub.id,
+            examDate,
+            dayName,
+            startTime: "11:00 AM",
+            endTime: "2:00 PM",
+          },
+        });
+        routineCount++;
+      }
+    }
+  }
+  console.log(`✅ ${routineCount} exam routine entries`);
+
+  // ══════════════════════════════════════════════════════
   // 11. FEE CATEGORIES + STRUCTURES
   // ══════════════════════════════════════════════════════
   const tuitionCat = await prisma.feeCategory.upsert({
@@ -470,28 +518,49 @@ async function main() {
     update: {},
     create: { name: "Admission Fee", description: "One-time admission fee", schoolId: school.id },
   });
+  const examFeeCat = await prisma.feeCategory.upsert({
+    where: { name_schoolId: { name: "Exam Fee", schoolId: school.id } },
+    update: {},
+    create: { name: "Exam Fee", description: "Per-exam fee charged when exam is conducted", schoolId: school.id },
+  });
 
   const feeAmounts: Record<string, number> = { Nursery: 1500, LKG: 1500, UKG: 1500, I: 2000, II: 2000, III: 2000, IV: 2000, V: 2000, VI: 2500, VII: 2500, VIII: 2500, IX: 3000, X: 3000 };
+  const examFeeAmounts: Record<string, number> = { Nursery: 300, LKG: 300, UKG: 300, I: 500, II: 500, III: 500, IV: 500, V: 500, VI: 700, VII: 700, VIII: 700, IX: 1000, X: 1000 };
 
   for (const gn of gradeNames) {
     const grade = gradeMap[gn];
+
+    // Monthly tuition
     await prisma.feeStructure.upsert({
       where: { feeCategoryId_gradeId_academicYearId_examTypeId: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: "" } },
       update: {},
       create: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, amount: feeAmounts[gn] || 2000, frequency: "MONTHLY" },
     }).catch(async () => {
-      // Unique constraint might fail with empty examTypeId, use findFirst + create
       const existing = await prisma.feeStructure.findFirst({ where: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: null } });
       if (!existing) {
         await prisma.feeStructure.create({ data: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, amount: feeAmounts[gn] || 2000, frequency: "MONTHLY" } });
       }
     });
+
+    // One-time admission
     const existingAdm = await prisma.feeStructure.findFirst({ where: { feeCategoryId: admissionCat.id, gradeId: grade.id, academicYearId: year.id } });
     if (!existingAdm) {
       await prisma.feeStructure.create({ data: { feeCategoryId: admissionCat.id, gradeId: grade.id, academicYearId: year.id, amount: 5000, frequency: "ONE_TIME" } });
     }
+
+    // PER_EXAM fee — one per exam type
+    for (const et of examTypes) {
+      const existingExamFee = await prisma.feeStructure.findFirst({
+        where: { feeCategoryId: examFeeCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: et.id },
+      });
+      if (!existingExamFee) {
+        await prisma.feeStructure.create({
+          data: { feeCategoryId: examFeeCat.id, gradeId: grade.id, academicYearId: year.id, amount: examFeeAmounts[gn] || 500, frequency: "PER_EXAM", examTypeId: et.id },
+        });
+      }
+    }
   }
-  console.log("✅ Fee categories + structures for all grades");
+  console.log("✅ Fee categories + structures (Tuition + Admission + Exam Fee per exam type)");
 
   // ══════════════════════════════════════════════════════
   // 12. MARKS
@@ -657,6 +726,7 @@ async function main() {
 ║  Teachers    : ${String(classTeachers.length + subjectSpecialists.length + sectionBTeachers.length).padEnd(24)}║
 ║  Parents     : ${String(totalParents).padEnd(24)}║
 ║  Marks       : ${String(marksCount).padEnd(24)}║
+║  Exam Routine: ${String(routineCount).padEnd(24)}║
 ║  Payments    : ${String(paymentCount).padEnd(24)}║
 ║  Attendance  : ${String(dailyCount).padEnd(24)}║
 ╚══════════════════════════════════════════╝
