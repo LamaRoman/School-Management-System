@@ -14,6 +14,9 @@ interface ColumnSettings {
   showAttendance: boolean;
   showRemarks: boolean;
   showPromotion: boolean;
+  showNepaliName: boolean;
+  logoPosition: "left" | "center" | "right";
+  logoSize: "small" | "medium" | "large";
 }
 
 const defaultSettings: ColumnSettings = {
@@ -26,6 +29,9 @@ const defaultSettings: ColumnSettings = {
   showAttendance: true,
   showRemarks: true,
   showPromotion: true,
+  showNepaliName: false,
+  logoPosition: "center",
+  logoSize: "medium",
 };
 
 function getDivision(pct: number): { division: string; result: string } {
@@ -209,9 +215,27 @@ export default function StudentReportPage() {
           <div className="bg-white border-2 rounded mx-6" style={{ borderColor: t.primary }}>
             {/* Header */}
             <div className="p-4 border-b-2 text-center" style={{ borderColor: t.primary }}>
-              <h2 className="text-lg font-bold" style={{ color: t.primary }}>{reportData.school?.nameNp}</h2>
-              <p className="text-sm" style={{ color: t.primary }}>{reportData.school?.name}</p>
-              <p className="text-xs text-gray-500">{reportData.school?.address}</p>
+              {(() => {
+                const logo = reportData.school?.logo;
+                const sizeMap = { small: "w-9 h-9", medium: "w-14 h-14", large: "w-[75px] h-[75px]" };
+                const sizeClass = sizeMap[cols.logoSize as keyof typeof sizeMap] || sizeMap.medium;
+                const pos = cols.logoPosition || "center";
+                const nameBlock = (align?: string) => (
+                  <div style={align ? { textAlign: align as any } : undefined}>
+                    <h2 className="text-lg font-bold" style={{ color: t.primary }}>{reportData.school?.name}</h2>
+                    {cols.showNepaliName && reportData.school?.nameNp && (
+                      <p className="text-sm" style={{ color: t.primary }}>{reportData.school.nameNp}</p>
+                    )}
+                    <p className="text-xs text-gray-500">{reportData.school?.address}</p>
+                  </div>
+                );
+                const logoImg = <img src={logo} alt="" className={`${sizeClass} object-contain rounded`} />;
+
+                if (!logo) return nameBlock();
+                if (pos === "center") return <>{<div className="mb-1">{logoImg}</div>}{nameBlock()}</>;
+                if (pos === "left") return <div className="flex items-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>;
+                return <div className="flex items-center gap-3 mb-1"><div className="flex-1" style={{ textAlign: "right" }}>{nameBlock("right")}</div>{logoImg}</div>;
+              })()}
               <div className="inline-block mt-2 px-4 py-1 text-white text-xs font-bold uppercase tracking-wider rounded" style={{ background: t.accent }}>
                 {reportData.examType} — {reportData.academicYear} B.S.
               </div>

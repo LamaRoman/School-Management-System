@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifyAcademicYear, verifyGrade, verifySection, verifyStudent, verifyFeeCategory } from "../utils/schoolScope";
+import { verifyAcademicYear, verifyGrade, verifySection, verifyStudent, verifyFeeCategory, verifyExamType } from "../utils/schoolScope";
 import { logAudit } from "../utils/audit";
 
 const router = Router();
@@ -270,10 +270,17 @@ router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, r
 // ─── FEE STRUCTURE ────────────────────────────────────────────────────────────
 
 router.get("/structure", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, gradeId } = req.query;
   const where: any = {};
-  if (academicYearId) where.academicYearId = String(academicYearId);
-  if (gradeId) where.gradeId = String(gradeId);
+  if (academicYearId) {
+    await verifyAcademicYear(String(academicYearId), schoolId);
+    where.academicYearId = String(academicYearId);
+  }
+  if (gradeId) {
+    await verifyGrade(String(gradeId), schoolId);
+    where.gradeId = String(gradeId);
+  }
   const structures = await prisma.feeStructure.findMany({
     where,
     include: {
@@ -297,6 +304,13 @@ router.post("/structure", authenticate, authorize("ADMIN"), async (req, res) => 
   });
   const data = schema.parse(req.body);
   if (data.frequency === "PER_EXAM" && !data.examTypeId) throw new AppError("examTypeId required for PER_EXAM");
+  const schoolId = getSchoolId(req);
+  await Promise.all([
+    verifyFeeCategory(data.feeCategoryId, schoolId),
+    verifyGrade(data.gradeId, schoolId),
+    verifyAcademicYear(data.academicYearId, schoolId),
+    ...(data.examTypeId ? [verifyExamType(data.examTypeId, schoolId)] : []),
+  ]);
   const structure = await prisma.feeStructure.upsert({
     where: {
       feeCategoryId_gradeId_academicYearId_examTypeId: {
@@ -335,6 +349,11 @@ router.post("/structure/bulk", authenticate, authorize("ADMIN"), async (req, res
     })),
   });
   const { academicYearId, gradeId, entries } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await Promise.all([
+    verifyAcademicYear(academicYearId, schoolId),
+    verifyGrade(gradeId, schoolId),
+  ]);
   await prisma.feeStructure.deleteMany({ where: { academicYearId, gradeId } });
   const created = await prisma.$transaction(
     entries.map(e =>
@@ -354,6 +373,10 @@ router.post("/structure/bulk", authenticate, authorize("ADMIN"), async (req, res
 });
 
 router.delete("/structure/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const structure = await prisma.feeStructure.findUnique({ where: { id: req.params.id }, select: { gradeId: true } });
+  if (!structure) throw new AppError("Fee structure not found", 404);
+  await verifyGrade(structure.gradeId, schoolId);
   await prisma.feeStructure.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Deleted" } });
 });
@@ -361,10 +384,17 @@ router.delete("/structure/:id", authenticate, authorize("ADMIN"), async (req, re
 // ─── OVERRIDES (Scholarships) ─────────────────────────────────────────────────
 
 router.get("/overrides", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.query;
   const where: any = {};
-  if (studentId) where.studentId = String(studentId);
-  if (academicYearId) where.academicYearId = String(academicYearId);
+  if (studentId) {
+    await verifyStudent(String(studentId), schoolId);
+    where.studentId = String(studentId);
+  }
+  if (academicYearId) {
+    await verifyAcademicYear(String(academicYearId), schoolId);
+    where.academicYearId = String(academicYearId);
+  }
   const overrides = await prisma.studentFeeOverride.findMany({
     where,
     include: {
@@ -388,6 +418,12 @@ router.post("/overrides", authenticate, authorize("ADMIN"), async (req, res) => 
   const data = schema.parse(req.body);
   if (data.discountType === "PERCENTAGE" && !data.discountPercent) throw new AppError("discountPercent required");
   if (data.discountType === "FLAT" && data.overrideAmount === undefined) throw new AppError("overrideAmount required");
+  const schoolId = getSchoolId(req);
+  await Promise.all([
+    verifyStudent(data.studentId, schoolId),
+    verifyFeeCategory(data.feeCategoryId, schoolId),
+    verifyAcademicYear(data.academicYearId, schoolId),
+  ]);
   const override = await prisma.studentFeeOverride.upsert({
     where: {
       studentId_feeCategoryId_academicYearId: {
@@ -416,6 +452,10 @@ router.post("/overrides", authenticate, authorize("ADMIN"), async (req, res) => 
 });
 
 router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const override = await prisma.studentFeeOverride.findUnique({ where: { id: req.params.id }, select: { studentId: true } });
+  if (!override) throw new AppError("Override not found", 404);
+  await verifyStudent(override.studentId, schoolId);
   await prisma.studentFeeOverride.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Removed" } });
 });
@@ -423,10 +463,17 @@ router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, re
 // ─── PAYMENTS ─────────────────────────────────────────────────────────────────
 
 router.get("/payments", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.query;
   const where: any = { deletedAt: null };
-  if (studentId) where.studentId = String(studentId);
-  if (academicYearId) where.academicYearId = String(academicYearId);
+  if (studentId) {
+    await verifyStudent(String(studentId), schoolId);
+    where.studentId = String(studentId);
+  }
+  if (academicYearId) {
+    await verifyAcademicYear(String(academicYearId), schoolId);
+    where.academicYearId = String(academicYearId);
+  }
   const payments = await prisma.feePayment.findMany({
     where,
     include: {
@@ -454,6 +501,12 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
   const { studentId, academicYearId, paymentDate, paymentMethod, remarks, items } = schema.parse(req.body);
 
   if (items.length === 0) throw new AppError("At least one payment item required");
+
+  const schoolId = getSchoolId(req);
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyAcademicYear(academicYearId, schoolId),
+  ]);
 
   // Atomic receipt generation: interactive transaction ensures no two requests
   // can read the same count before either has written its payments.
@@ -504,9 +557,11 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
 
 // ─── SOFT DELETE PAYMENT ──────────────────────────────────────────────────────
 router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const payment = await prisma.feePayment.findUnique({ where: { id: req.params.id } });
   if (!payment) throw new AppError("Payment not found", 404);
   if (payment.deletedAt) throw new AppError("Payment already deleted", 400);
+  await verifyStudent(payment.studentId, schoolId);
   await prisma.feePayment.update({
     where: { id: req.params.id },
     data: { deletedAt: new Date() },
@@ -531,8 +586,13 @@ router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res
 // ─── SECTION OVERVIEW ─────────────────────────────────────────────────────────
 
 router.get("/section-overview", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, academicYearId, currentMonth } = req.query;
   if (!sectionId || !academicYearId) throw new AppError("sectionId and academicYearId required");
+  await Promise.all([
+    verifySection(String(sectionId), schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
 
   const monthIndex = currentMonth ? nepaliMonths.indexOf(String(currentMonth)) : 9;
   if (monthIndex === -1) throw new AppError("Invalid currentMonth");
@@ -625,9 +685,14 @@ router.get("/section-overview", authenticate, async (req, res) => {
 // ─── STUDENT FEE LEDGER ───────────────────────────────────────────────────────
 
 router.get("/student-ledger/:studentId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId } = req.params;
   const { academicYearId } = req.query;
   if (!academicYearId) throw new AppError("academicYearId required");
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
 
   const [student, structures, overrides, payments, examRoutines] = await Promise.all([
     prisma.student.findUniqueOrThrow({
@@ -777,18 +842,22 @@ router.get("/student-ledger/:studentId", authenticate, async (req, res) => {
 // ─── RECEIPT ──────────────────────────────────────────────────────────────────
 
 router.get("/receipt/:receiptNumber", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const [payments, school] = await Promise.all([
     prisma.feePayment.findMany({
       where: { receiptNumber: req.params.receiptNumber },
       include: {
-        student: { include: { section: { include: { grade: true } } } },
+        student: { include: { section: { include: { grade: { include: { academicYear: { select: { schoolId: true } } } } } } } },
         feeCategory: true,
       },
     }),
-    prisma.school.findFirst(),
+    prisma.school.findFirst({ where: { id: schoolId } }),
   ]);
 
   if (payments.length === 0) throw new AppError("Receipt not found", 404);
+  // Verify the receipt belongs to the requesting user's school
+  const ownerSchoolId = payments[0].student.section.grade.academicYear.schoolId;
+  if (ownerSchoolId !== schoolId) throw new AppError("Receipt not found or access denied", 404);
 
   const first = payments[0];
   res.json({
@@ -822,11 +891,13 @@ router.get("/months", authenticate, (_req, res) => {
 // GET /api/fees/invoice/:studentId
 // Returns grouped fee items: arrears (mandatory) + current month + other + advance support data.
 router.get("/invoice/:studentId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, month } = req.query;
   if (!academicYearId || !month) throw new AppError("academicYearId and month required");
+  await verifyStudent(req.params.studentId, schoolId);
 
   const invoice = await buildInvoice(req.params.studentId, String(academicYearId), String(month));
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findFirst({ where: { id: schoolId } });
 
   res.json({ data: { school: school ?? {}, ...invoice } });
 });
@@ -836,10 +907,15 @@ router.get("/invoice/:studentId", authenticate, async (req, res) => {
 // GET /api/fees/invoices-bulk
 // FIX: was using fragile internal HTTP self-fetch — now calls buildInvoice directly.
 router.get("/invoices-bulk", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, academicYearId, month } = req.query;
   if (!sectionId || !academicYearId || !month) {
     throw new AppError("sectionId, academicYearId, and month required");
   }
+  await Promise.all([
+    verifySection(String(sectionId), schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
 
   const students = await prisma.student.findMany({
     where: { sectionId: String(sectionId), isActive: true, status: "ACTIVE" },

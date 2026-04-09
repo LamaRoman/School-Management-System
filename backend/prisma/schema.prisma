@@ -400,6 +400,9 @@ model ReportCardSettings {
   showAttendance    Boolean @default(true) @map("show_attendance")
   showRemarks       Boolean @default(true) @map("show_remarks")
   showPromotion     Boolean @default(true) @map("show_promotion")
+  showNepaliName    Boolean @default(false) @map("show_nepali_name")
+  logoPosition      String  @default("center") @map("logo_position")
+  logoSize          String  @default("medium") @map("logo_size")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @default(now()) @map("updated_at")
 

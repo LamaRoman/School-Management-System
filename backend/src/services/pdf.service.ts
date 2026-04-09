@@ -81,6 +81,9 @@ export interface ReportCardColumnSettings {
   showAttendance: boolean;
   showRemarks: boolean;
   showPromotion: boolean;
+  showNepaliName: boolean;
+  logoPosition: "left" | "center" | "right";
+  logoSize: "small" | "medium" | "large";
 }
 
 export const defaultColumnSettings: ReportCardColumnSettings = {
@@ -93,6 +96,9 @@ export const defaultColumnSettings: ReportCardColumnSettings = {
   showAttendance: true,
   showRemarks: true,
   showPromotion: true,
+  showNepaliName: false,
+  logoPosition: "center",
+  logoSize: "medium",
 };
 
 export function buildReportCardHtml(
@@ -107,10 +113,18 @@ export function buildReportCardHtml(
   const paperSize = reportData.paperSize || "A4";
 
   const isA5 = paperSize === "A5";
+  const logoSizeMap: Record<string, string> = {
+    small: isA5 ? "28px" : "35px",
+    medium: isA5 ? "40px" : "55px",
+    large: isA5 ? "55px" : "75px",
+  };
+  const computedLogoSize = logoSizeMap[cols.logoSize] || logoSizeMap["medium"];
   const fs = {
-    schoolNp: isA5 ? "13px" : "16px",
+    schoolName: isA5 ? "14px" : "18px",
+    schoolNp: isA5 ? "11px" : "13px",
     schoolEn: isA5 ? "10px" : "12px",
     address: isA5 ? "8px" : "10px",
+    logoSize: computedLogoSize,
     badge: isA5 ? "8px" : "10px",
     info: isA5 ? "9px" : "10px",
     th: isA5 ? "8px" : "10px",
@@ -294,6 +308,38 @@ export function buildReportCardHtml(
     .map(([label, value]) => `<div style="display:flex;gap:6px;"><span style="color:#888;min-width:${isA5 ? "70px" : "90px"};font-size:${fs.info};">${label}:</span><span style="font-weight:600;color:${t.primary};font-size:${fs.info};">${value}</span></div>`)
     .join("");
 
+  const logoUrl = reportData.school?.logo || "";
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" style="width:${fs.logoSize};height:${fs.logoSize};object-fit:contain;border-radius:4px;" />`
+    : "";
+  const nepaliNameHtml = cols.showNepaliName && reportData.school?.nameNp
+    ? `<p style="font-size:${fs.schoolNp};color:${t.primary};font-family:Georgia,'Noto Serif',serif;margin-bottom:1px;">${reportData.school.nameNp}</p>`
+    : "";
+  const schoolNameBlock = `
+    <h2 style="font-size:${fs.schoolName};font-weight:700;color:${t.primary};margin-bottom:2px;">${reportData.school?.name || ""}</h2>
+    ${nepaliNameHtml}
+    <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${reportData.school?.address || ""}</p>`;
+
+  const pos = cols.logoPosition || "center";
+  let headerInnerHtml = "";
+  if (!logoHtml) {
+    // No logo — just centered text
+    headerInnerHtml = `${schoolNameBlock}`;
+  } else if (pos === "center") {
+    headerInnerHtml = `<div style="margin-bottom:4px;">${logoHtml}</div>${schoolNameBlock}`;
+  } else if (pos === "left") {
+    headerInnerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      ${logoHtml}
+      <div style="text-align:left;">${schoolNameBlock}</div>
+    </div>`;
+  } else {
+    // right
+    headerInnerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      <div style="text-align:right;flex:1;">${schoolNameBlock}</div>
+      ${logoHtml}
+    </div>`;
+  }
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -308,9 +354,7 @@ export function buildReportCardHtml(
 <body>
   <div style="border:2px solid ${t.primary};border-radius:4px;overflow:hidden;margin:${isA5 ? "2mm" : "3mm"};">
     <div style="padding:${pad.header};border-bottom:2px solid ${t.primary};text-align:center;">
-      <h2 style="font-size:${fs.schoolNp};font-weight:700;color:${t.primary};font-family:Georgia,'Noto Serif',serif;margin-bottom:2px;">${reportData.school?.nameNp || ""}</h2>
-      <p style="font-size:${fs.schoolEn};color:${t.primary};margin-bottom:1px;">${reportData.school?.name || ""}</p>
-      <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${reportData.school?.address || ""}</p>
+      ${headerInnerHtml}
       <div style="display:inline-block;padding:3px 14px;background:${t.accent};color:#fff;font-size:${fs.badge};font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:4px;">
         ${reportData.examType} — ${reportData.academicYear} B.S.
       </div>

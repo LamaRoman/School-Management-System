@@ -59,10 +59,11 @@ export async function getSchoolInfo(): Promise<{ name: string; nameNp: string; a
 
 function schoolHeaderHtml(school: any): string {
   const phoneLine = school.phone ? ` • ${school.phone}` : "";
+  const nepaliLine = school.nameNp ? `<h2>${school.nameNp}</h2>` : "";
   return `
     <div class="header">
-      <h1>${school.nameNp || school.name || "School"}</h1>
-      <h2>${school.name || ""}</h2>
+      <h1>${school.name || "School"}</h1>
+      ${nepaliLine}
       <p>${school.address || ""}${phoneLine}</p>
     </div>
   `;

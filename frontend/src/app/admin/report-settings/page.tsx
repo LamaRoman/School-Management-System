@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Settings } from "lucide-react";
+import { Save, Settings, Upload } from "lucide-react";
 
 interface SettingsData {
   showPassMarks: boolean;
@@ -14,9 +14,19 @@ interface SettingsData {
   showAttendance: boolean;
   showRemarks: boolean;
   showPromotion: boolean;
+  showNepaliName: boolean;
+  logoPosition: string;
+  logoSize: string;
 }
 
 const settingsConfig = [
+  {
+    group: "School Header",
+    description: "Configure how your school appears on the report card",
+    items: [
+      { key: "showNepaliName", label: "Show Nepali Name", desc: "Display the school's Nepali name below the English name on the report card" },
+    ],
+  },
   {
     group: "Table Columns",
     description: "Choose which columns appear in the marks table",
@@ -46,13 +56,19 @@ export default function ReportCardSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [originalSettings, setOriginalSettings] = useState<SettingsData | null>(null);
+  const [school, setSchool] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await api.get<SettingsData>("/report-card-settings");
+        const [data, schoolData] = await Promise.all([
+          api.get<SettingsData>("/report-card-settings"),
+          api.get<any>("/school"),
+        ]);
         setSettings(data);
         setOriginalSettings(data);
+        setSchool(schoolData);
       } catch {
         toast.error("Failed to load settings");
       } finally {
@@ -91,6 +107,34 @@ export default function ReportCardSettingsPage() {
     }
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error("Logo must be under 2MB"); return; }
+    if (!file.type.startsWith("image/")) { toast.error("Only image files allowed"); return; }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const token = api.getToken();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/school/logo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const json = await res.json();
+      setSchool((prev: any) => ({ ...prev, logo: json.data.logo }));
+      toast.success("Logo uploaded");
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading settings...</div>;
   if (!settings) return <div className="card p-8 text-center text-gray-400">Failed to load settings</div>;
 
@@ -120,6 +164,29 @@ export default function ReportCardSettingsPage() {
       )}
 
       <div className="space-y-6">
+        {/* Logo Upload */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Upload size={16} className="text-primary" />
+            <h2 className="font-display font-bold text-primary">School Logo</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">Upload your school logo to display on report cards. Recommended: square image, PNG or JPG, under 2MB.</p>
+          <div className="flex items-center gap-4">
+            {school?.logo ? (
+              <img src={school.logo} alt="School logo" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white p-1" />
+            ) : (
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">No logo</div>
+            )}
+            <div>
+              <label className="btn-outline text-xs cursor-pointer inline-flex items-center gap-1">
+                <Upload size={14} /> {uploading ? "Uploading..." : school?.logo ? "Change Logo" : "Upload Logo"}
+                <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploading} className="hidden" />
+              </label>
+              {school?.logo && <p className="text-xs text-gray-400 mt-1">Logo will appear on all report cards</p>}
+            </div>
+          </div>
+        </div>
+
         {settingsConfig.map((group) => (
           <div key={group.group} className="card p-5">
             <div className="flex items-center gap-2 mb-1">
@@ -155,6 +222,36 @@ export default function ReportCardSettingsPage() {
                   </div>
                 );
               })}
+              {group.group === "School Header" && (
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 block mb-1">Logo Position</label>
+                    <p className="text-xs text-gray-500 mb-2">Where the logo appears relative to the school name</p>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      value={settings.logoPosition || "center"}
+                      onChange={(e) => { const updated = { ...settings, logoPosition: e.target.value }; setSettings(updated); setHasChanges(JSON.stringify(updated) !== JSON.stringify(originalSettings)); }}
+                    >
+                      <option value="left">Left</option>
+                      <option value="center">Center (above name)</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 block mb-1">Logo Size</label>
+                    <p className="text-xs text-gray-500 mb-2">Size of the school logo on the report card</p>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      value={settings.logoSize || "medium"}
+                      onChange={(e) => { const updated = { ...settings, logoSize: e.target.value }; setSettings(updated); setHasChanges(JSON.stringify(updated) !== JSON.stringify(originalSettings)); }}
+                    >
+                      <option value="small">Small</option>
+                      <option value="medium">Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}

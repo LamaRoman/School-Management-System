@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { ArrowLeft, Plus, UserCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, UserCheck, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 
 interface SchoolDetail {
@@ -14,6 +14,7 @@ interface SchoolDetail {
   email?: string;
   estdYear?: string;
   motto?: string;
+  logo?: string;
   isActive: boolean;
   _count: { users: number; teachers: number; academicYears: number };
 }
@@ -38,6 +39,31 @@ export default function SchoolDetailPage() {
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", address: "", phone: "", email: "" });
+  const [uploading, setUploading] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("Logo must be under 2MB"); return; }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const token = api.getToken();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/super-admin/schools/${id}/logo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -115,12 +141,23 @@ export default function SchoolDetailPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-display font-bold text-gray-800">{school.name}</h1>
-            {school.nameNp && <p className="text-gray-500">{school.nameNp}</p>}
-            <div className="flex gap-4 mt-2 text-sm text-gray-500">
-              {school.address && <span>{school.address}</span>}
-              {school.phone && <span>{school.phone}</span>}
+          <div className="flex items-start gap-4">
+            {school.logo ? (
+              <img src={school.logo} alt="" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white p-1" />
+            ) : (
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-[10px]">No logo</div>
+            )}
+            <div>
+              <h1 className="text-2xl font-display font-bold text-gray-800">{school.name}</h1>
+              {school.nameNp && <p className="text-gray-500">{school.nameNp}</p>}
+              <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                {school.address && <span>{school.address}</span>}
+                {school.phone && <span>{school.phone}</span>}
+              </div>
+              <label className="mt-2 inline-flex items-center gap-1 text-xs text-primary cursor-pointer hover:underline">
+                <Upload size={12} /> {uploading ? "Uploading..." : "Change Logo"}
+                <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploading} className="hidden" />
+              </label>
             </div>
           </div>
           <div className="flex gap-2">

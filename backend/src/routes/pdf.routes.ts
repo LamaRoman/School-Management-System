@@ -38,6 +38,9 @@ async function getColumnSettings(): Promise<ReportCardColumnSettings> {
     showAttendance: settings.showAttendance,
     showRemarks: settings.showRemarks,
     showPromotion: settings.showPromotion,
+    showNepaliName: settings.showNepaliName,
+    logoPosition: (settings.logoPosition as "left" | "center" | "right") || "center",
+    logoSize: (settings.logoSize as "small" | "medium" | "large") || "medium",
   };
 }
 

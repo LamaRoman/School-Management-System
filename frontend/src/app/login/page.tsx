@@ -45,11 +45,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white font-display text-2xl font-bold mb-4 shadow-lg">
-            श्री
-          </div>
-          <h1 className="font-display text-2xl font-bold text-primary">Report Card System</h1>
-          <p className="text-gray-500 text-sm mt-1">Nepali School Management</p>
+          <h1 className="font-display text-2xl font-bold text-primary">School Management System</h1>
+          <p className="text-gray-500 text-sm mt-1">Powered by Zentara Labs Pvt Ltd</p>
         </div>
 
         {/* Form */}

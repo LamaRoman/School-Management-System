@@ -121,7 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <GraduationCap size={22} className="text-white" />
             </div>
             <div>
-              <h1 className="font-display font-bold text-sm leading-tight">Report Card</h1>
+              <h1 className="font-display font-bold text-sm leading-tight">School Management</h1>
               <p className="text-[10px] text-white/50 uppercase tracking-widest">Admin Panel</p>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifyAcademicYear, verifyExamType, verifyExamRoom } from "../utils/schoolScope";
+import { verifyAcademicYear, verifyExamType, verifyExamRoom, verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -76,10 +76,15 @@ router.delete("/rooms/:id", authenticate, authorize("ADMIN"), async (req, res) =
 
 // GET /api/seating/allocations?examTypeId=xxx&academicYearId=xxx
 router.get("/allocations", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { examTypeId, academicYearId } = req.query;
   if (!examTypeId || !academicYearId) {
     throw new AppError("examTypeId and academicYearId are required");
   }
+  await Promise.all([
+    verifyExamType(String(examTypeId), schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
 
   const allocations = await prisma.seatAllocation.findMany({
     where: {
@@ -101,7 +106,7 @@ router.get("/allocations", authenticate, async (req, res) => {
 
   // Group by room
   const rooms = await prisma.examRoom.findMany({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     orderBy: { displayOrder: "asc" },
   });
 
@@ -138,10 +143,16 @@ router.post("/generate", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { examTypeId, academicYearId, gradeIds, method } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await Promise.all([
+    verifyExamType(examTypeId, schoolId),
+    verifyAcademicYear(academicYearId, schoolId),
+    ...gradeIds.map(gId => verifyGrade(gId, schoolId)),
+  ]);
 
-  // Get all active rooms
+  // Get all active rooms for this school
   const rooms = await prisma.examRoom.findMany({
-    where: { isActive: true },
+    where: { isActive: true, schoolId },
     orderBy: { displayOrder: "asc" },
   });
 
@@ -280,10 +291,15 @@ router.post("/generate", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/seating/allocations?examTypeId=xxx&academicYearId=xxx
 router.delete("/allocations", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { examTypeId, academicYearId } = req.query;
   if (!examTypeId || !academicYearId) {
     throw new AppError("examTypeId and academicYearId are required");
   }
+  await Promise.all([
+    verifyExamType(String(examTypeId), schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
 
   await prisma.seatAllocation.deleteMany({
     where: {

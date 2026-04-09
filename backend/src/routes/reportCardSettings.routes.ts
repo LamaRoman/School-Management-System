@@ -24,13 +24,16 @@ router.get("/", authenticate, async (req, res) => {
         schoolId: school.id,
         showPassMarks: true,
         showTheoryPrac: true,
-        showPercentage: false, // Hidden by default
+        showPercentage: false,
         showGrade: true,
         showGpa: true,
         showRank: true,
         showAttendance: true,
         showRemarks: true,
         showPromotion: true,
+        showNepaliName: false,
+        logoPosition: "center",
+        logoSize: "medium",
       },
     });
   }
@@ -51,6 +54,9 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
     showAttendance: z.boolean().optional(),
     showRemarks: z.boolean().optional(),
     showPromotion: z.boolean().optional(),
+    showNepaliName: z.boolean().optional(),
+    logoPosition: z.enum(["left", "center", "right"]).optional(),
+    logoSize: z.enum(["small", "medium", "large"]).optional(),
   });
 
   const data = schema.parse(req.body);

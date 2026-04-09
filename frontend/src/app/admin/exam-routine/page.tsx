@@ -179,7 +179,7 @@ export default function ExamRoutinePage() {
       </tr>`;
     }).join("");
 
-    const schoolName = school?.nameNp || school?.name || "School";
+    const schoolName = school?.name || school?.nameNp || "School";
     const schoolAddr = school?.address || "";
     const schoolPhone = school?.phone ? ` • ${school.phone}` : "";
 

@@ -1,11 +1,21 @@
 import { Router } from "express";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import multer from "multer";
 import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { uploadLogo, deleteLogo } from "../services/upload.service";
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) cb(null, true);
+    else cb(new Error("Only image files are allowed"));
+  },
+});
 
 // All routes require SUPER_ADMIN role
 router.use(authenticate, authorize("SUPER_ADMIN"));
@@ -157,6 +167,25 @@ router.put("/schools/:id", async (req, res) => {
     data,
   });
   res.json({ data: school });
+});
+
+// ─── UPLOAD SCHOOL LOGO ────────────────────────────────────────────────────
+
+router.post("/schools/:id/logo", upload.single("logo"), async (req, res) => {
+  if (!req.file) throw new AppError("No file uploaded", 400);
+
+  const existing = await prisma.school.findUnique({ where: { id: req.params.id }, select: { logo: true } });
+  if (!existing) throw new AppError("School not found", 404);
+  if (existing.logo) await deleteLogo(existing.logo);
+
+  const result = await uploadLogo(req.file.buffer, req.file.mimetype, req.params.id);
+
+  const school = await prisma.school.update({
+    where: { id: req.params.id },
+    data: { logo: result.url },
+  });
+
+  res.json({ data: { logo: school.logo, storageType: result.storageType } });
 });
 
 // ─── DEACTIVATE SCHOOL ──────────────────────────────────────────────────────

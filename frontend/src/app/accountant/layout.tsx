@@ -52,7 +52,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Landmark size={22} />
-            <span className="font-display font-bold">Report Card System</span>
+            <span className="font-display font-bold">School Management System</span>
             <span className="text-xs bg-amber-400/30 px-2 py-0.5 rounded">Accountant</span>
           </div>
           <div className="flex items-center gap-4">

@@ -35,7 +35,8 @@ const baseStyles = `
 // Single source of truth for the invoice slip HTML used in all 3 print modes.
 
 function buildInvoiceSlipHtml(inv: any): string {
-  const items = inv.items || [];
+  // currentItems = selected month's unpaid MONTHLY fees only.
+  const items = inv.currentItems || inv.items || [];
   const school = inv.school || {};
   const student = inv.student || {};
   const phoneLine = school.phone ? ` • ${school.phone}` : "";
@@ -50,11 +51,13 @@ function buildInvoiceSlipHtml(inv: any): string {
         </table>`
       : `<div style="text-align:center;color:#15803d;font-weight:600;font-size:11px;padding:8px 0;">All dues cleared for this month.</div>`;
 
-  const totalAmount = items.length > 0 ? inv.totalDue || items.reduce((s: number, i: any) => s + (i.amount || 0), 0) : 0;
+  const totalAmount = items.length > 0
+    ? items.reduce((s: number, i: any) => s + (i.amount || 0), 0)
+    : 0;
 
   return `
     <div class="cell-header">
-      <b>${school.nameNp || school.name || "School"}</b>
+      <b>${school.name || school.nameNp || "School"}</b>
       <span>${school.address || ""}${phoneLine}</span>
     </div>
     <div class="cell-title">Fee Invoice — ${inv.month} ${inv.yearBS}</div>
@@ -115,8 +118,8 @@ export function printReceipt(receipt: any) {
 </style></head><body>
 <div class="receipt">
   <div class="header">
-    <h1>${school.nameNp || school.name || "School"}</h1>
-    <h2>${school.name || ""}</h2>
+    <h1>${school.name || "School"}</h1>
+    <h2>${school.nameNp || ""}</h2>
     <p>${school.address || ""}${phoneLine}</p>
   </div>
   <div class="receipt-label">Fee Receipt</div>
