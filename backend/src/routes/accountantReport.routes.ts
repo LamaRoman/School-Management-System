@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyAcademicYear } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -12,6 +13,7 @@ const nepaliMonths = ["Baisakh", "Jestha", "Ashadh", "Shrawan", "Bhadra", "Ashwi
 
 // GET /api/accountant-reports/daily-cashbook?date=2082/12/12&academicYearId=xxx
 router.get("/daily-cashbook", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { date, academicYearId } = req.query;
   if (!date || !academicYearId) {
     return res.status(400).json({ error: "date and academicYearId are required" });
@@ -19,6 +21,7 @@ router.get("/daily-cashbook", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res
 
   const dateStr = String(date);
   const yearId = String(academicYearId);
+  await verifyAcademicYear(yearId, schoolId);
 
   // Get all payments for this date
   const payments = await prisma.feePayment.findMany({
@@ -108,10 +111,12 @@ router.get("/daily-cashbook", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res
 
 // GET /api/accountant-reports/payment-history?academicYearId=xxx&search=xxx&dateFrom=xxx&dateTo=xxx&gradeId=xxx&sectionId=xxx
 router.get("/payment-history", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, search, dateFrom, dateTo, gradeId, sectionId, page = "1", limit = "50" } = req.query;
   if (!academicYearId) {
     return res.status(400).json({ error: "academicYearId is required" });
   }
+  await verifyAcademicYear(String(academicYearId), schoolId);
 
   const where: any = { academicYearId: String(academicYearId), deletedAt: null };
 
@@ -191,12 +196,14 @@ router.get("/payment-history", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
 
 // GET /api/accountant-reports/defaulters?academicYearId=xxx&gradeId=xxx&sectionId=xxx&currentMonth=Magh
 router.get("/defaulters", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, gradeId, sectionId, currentMonth = "Magh" } = req.query;
   if (!academicYearId) {
     return res.status(400).json({ error: "academicYearId is required" });
   }
 
   const yearId = String(academicYearId);
+  await verifyAcademicYear(yearId, schoolId);
   const monthName = String(currentMonth);
   const monthIndex = nepaliMonths.indexOf(monthName);
   if (monthIndex < 0) {
@@ -304,10 +311,12 @@ router.get("/defaulters", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =>
 
 // GET /api/accountant-reports/discounts?academicYearId=xxx
 router.get("/discounts", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId } = req.query;
   if (!academicYearId) {
     return res.status(400).json({ error: "academicYearId is required" });
   }
+  await verifyAcademicYear(String(academicYearId), schoolId);
 
   const overrides = await prisma.studentFeeOverride.findMany({
     where: { academicYearId: String(academicYearId) },
@@ -366,12 +375,14 @@ router.get("/discounts", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => 
 
 // GET /api/accountant-reports/monthly-summary?academicYearId=xxx&month=Magh
 router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, month } = req.query;
   if (!academicYearId) {
     return res.status(400).json({ error: "academicYearId is required" });
   }
 
   const yearId = String(academicYearId);
+  await verifyAcademicYear(yearId, schoolId);
 
   // Get all payments, optionally filtered by month
   const paymentWhere: any = { academicYearId: yearId, deletedAt: null };
@@ -452,10 +463,12 @@ router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
 
 // GET /api/accountant-reports/student-count?academicYearId=xxx
 router.get("/student-count", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId } = req.query;
   if (!academicYearId) {
     return res.status(400).json({ error: "academicYearId is required" });
   }
+  await verifyAcademicYear(String(academicYearId), schoolId);
 
   const grades = await prisma.grade.findMany({
     where: { academicYearId: String(academicYearId) },

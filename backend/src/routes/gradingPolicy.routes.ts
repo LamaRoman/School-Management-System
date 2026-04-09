@@ -1,13 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/grading-policy?gradeId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { gradeId } = req.query;
+  if (gradeId) await verifyGrade(String(gradeId), schoolId);
   const policies = await prisma.gradingPolicy.findMany({
     where: gradeId ? { gradeId: String(gradeId) } : undefined,
     include: {
@@ -32,6 +35,8 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { gradeId, policies } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyGrade(gradeId, schoolId);
 
   // Validate total = 100
   const total = policies.reduce((sum, p) => sum + p.weightagePercent, 0);

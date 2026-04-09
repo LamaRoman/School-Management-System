@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyStudent, verifySection, verifyAcademicYear, verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -16,6 +17,9 @@ router.post("/transfer", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { studentId, newSectionId } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyStudent(studentId, schoolId);
+  await verifySection(newSectionId, schoolId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
@@ -52,6 +56,9 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
   });
 
   const { sourceYearId, targetYearId } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyAcademicYear(sourceYearId, schoolId);
+  await verifyAcademicYear(targetYearId, schoolId);
 
   // Check target year exists and has no grades yet
   const targetYear = await prisma.academicYear.findUniqueOrThrow({ where: { id: targetYearId } });
@@ -187,8 +194,10 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
 
 // GET /api/promotion/students?sourceYearId=xxx&gradeId=xxx — get students with pass/fail status for promotion
 router.get("/students", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sourceYearId, gradeId } = req.query;
   if (!sourceYearId || !gradeId) throw new AppError("sourceYearId and gradeId are required");
+  await verifyGrade(String(gradeId), schoolId);
 
   const grade = await prisma.grade.findUniqueOrThrow({
     where: { id: String(gradeId) },
@@ -249,6 +258,10 @@ router.post("/promote", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { sourceYearId, targetYearId, sourceGradeId, promotions } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyAcademicYear(sourceYearId, schoolId);
+  await verifyAcademicYear(targetYearId, schoolId);
+  await verifyGrade(sourceGradeId, schoolId);
 
   const sourceGrade = await prisma.grade.findUniqueOrThrow({
     where: { id: sourceGradeId },

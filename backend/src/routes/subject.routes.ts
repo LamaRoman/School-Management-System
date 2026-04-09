@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyGrade, verifySubject } from "../utils/schoolScope";
 import { Prisma } from "@prisma/client";
 
 const router = Router();
@@ -19,9 +20,13 @@ const subjectSchema = z.object({
 
 // GET /api/subjects?gradeId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { gradeId } = req.query;
+  if (gradeId) await verifyGrade(String(gradeId), schoolId);
   const subjects = await prisma.subject.findMany({
-    where: gradeId ? { gradeId: String(gradeId) } : undefined,
+    where: gradeId
+      ? { gradeId: String(gradeId) }
+      : { grade: { academicYear: { schoolId } } },
     orderBy: { displayOrder: "asc" },
     include: { grade: { select: { name: true } } },
   });
@@ -30,6 +35,8 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET /api/subjects/:id
 router.get("/:id", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifySubject(req.params.id, schoolId);
   const subject = await prisma.subject.findUniqueOrThrow({
     where: { id: req.params.id },
     include: { grade: true },
@@ -39,7 +46,9 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/subjects
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = subjectSchema.parse(req.body);
+  await verifyGrade(data.gradeId, schoolId);
   const createData: Prisma.SubjectCreateInput = {
     name: data.name,
     nameNp: data.nameNp,
@@ -56,11 +65,13 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // POST /api/subjects/bulk — create multiple subjects at once for a grade
 router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     gradeId: z.string().min(1),
     subjects: z.array(subjectSchema.omit({ gradeId: true })),
   });
   const { gradeId, subjects } = schema.parse(req.body);
+  await verifyGrade(gradeId, schoolId);
 
   const created = await prisma.$transaction(
     subjects.map((sub, i) =>
@@ -83,6 +94,8 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // PUT /api/subjects/:id
 router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifySubject(req.params.id, schoolId);
   const data = subjectSchema.partial().parse(req.body);
   const subject = await prisma.subject.update({ where: { id: req.params.id }, data });
   res.json({ data: subject });
@@ -90,6 +103,8 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/subjects/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifySubject(req.params.id, schoolId);
   await prisma.subject.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Subject deleted" } });
 });

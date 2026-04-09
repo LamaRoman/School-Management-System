@@ -1,14 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifySection, verifySubject, verifyExamType, verifyAcademicYear } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/marks?sectionId=xxx&subjectId=xxx&examTypeId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, subjectId, examTypeId, studentId } = req.query;
+  if (sectionId) await verifySection(String(sectionId), schoolId);
+  if (examTypeId) await verifyExamType(String(examTypeId), schoolId);
   const where: any = {};
   if (studentId) where.studentId = String(studentId);
   if (subjectId) where.subjectId = String(subjectId);
@@ -44,6 +48,10 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   });
 
   const { subjectId, examTypeId, academicYearId, marks } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifySubject(subjectId, schoolId);
+  await verifyExamType(examTypeId, schoolId);
+  await verifyAcademicYear(academicYearId, schoolId);
 
   // If teacher (not admin), verify they are assigned to this subject
   if (req.user!.role === "TEACHER") {

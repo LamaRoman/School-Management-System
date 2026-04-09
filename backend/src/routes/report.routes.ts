@@ -1,7 +1,8 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyStudent } from "../utils/schoolScope";
 import {
   getGradeFromPercentage,
   calculatePercentage,
@@ -147,7 +148,9 @@ async function calculateFinalRank(
 
 // GET /api/reports/term/:studentId/:examTypeId
 router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
+  await verifyStudent(studentId, schoolId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
@@ -173,7 +176,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
     throw new AppError("No marks found for this student and exam", 404);
   }
 
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findFirst({ where: { id: schoolId } });
 
   const hasPracticalSubjects = marks.some((m) => m.subject.fullPracticalMarks > 0);
 
@@ -250,7 +253,9 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
 // GET /api/reports/final/:studentId/:academicYearId
 router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
+  await verifyStudent(studentId, schoolId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
@@ -284,7 +289,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
     include: { subject: true, examType: true },
   });
 
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findFirst({ where: { id: schoolId } });
 
   const finalSubjects = subjects.map((subject) => {
     const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;

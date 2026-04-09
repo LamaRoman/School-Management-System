@@ -3,7 +3,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import NepaliDate from "nepali-date-converter";
 import prisma from "../utils/prisma";
-import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
+import { verifySection, verifyStudent } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
 
@@ -107,7 +108,7 @@ async function authorizeStudentRead(userId: string, role: string, studentId: str
  * Email: firstname.lastname@school.edu.np (uuid suffix guarantees uniqueness in one query)
  * Default password: student123
  */
-async function autoCreateStudentUser(studentId: string, studentName: string): Promise<void> {
+async function autoCreateStudentUser(studentId: string, studentName: string, schoolId: string): Promise<void> {
   const baseName = studentName.toLowerCase().trim().replace(/\s+/g, ".");
   // Use the studentId suffix to guarantee uniqueness without any DB lookup loop
   const email = `${baseName}.${studentId.slice(-6)}@school.edu.np`;
@@ -121,6 +122,7 @@ async function autoCreateStudentUser(studentId: string, studentName: string): Pr
       password: hashedPassword,
       role: "STUDENT",
       studentId,
+      schoolId,
       isActive: true,
     },
   });
@@ -132,11 +134,15 @@ async function autoCreateStudentUser(studentId: string, studentName: string): Pr
 // Admin/Accountant: all students. Teacher: only their assigned sections. Student/Parent: denied (use /me or /my-children).
 router.get("/", authenticate, async (req, res) => {
   const user = req.user!;
+  const schoolId = getSchoolId(req);
   const { sectionId, gradeId, search } = req.query;
-  const where: any = { isActive: true };
+  const where: any = { isActive: true, section: { grade: { academicYear: { schoolId } } } };
   if (search) where.name = { contains: String(search), mode: "insensitive" };
-  if (sectionId) where.sectionId = String(sectionId);
-  if (gradeId) where.section = { gradeId: String(gradeId) };
+  if (sectionId) {
+    await verifySection(String(sectionId), schoolId);
+    where.sectionId = String(sectionId);
+  }
+  if (gradeId) where.section = { ...where.section, gradeId: String(gradeId) };
 
   // Students and parents should use /students/me or /parents/my-children
   if (user.role === "STUDENT" || user.role === "PARENT") {
@@ -190,6 +196,8 @@ router.get("/me", authenticate, async (req, res) => {
 });
 
 router.get("/:id", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {
@@ -208,7 +216,9 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/students — Admin only. Creates student + user account + admission paper trail.
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = studentSchema.parse(req.body);
+  await verifySection(data.sectionId, schoolId);
 
   // Resolve section → grade → academic year for the admission record
   const section = await prisma.section.findUniqueOrThrow({
@@ -236,7 +246,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   // Auto-create login account
   try {
-    await autoCreateStudentUser(student.id, student.name);
+    await autoCreateStudentUser(student.id, student.name, schoolId);
   } catch (err) {
     console.error("Failed to auto-create student user:", err);
   }
@@ -273,11 +283,13 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // POST /api/students/bulk — create multiple + auto-create user accounts
 router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     sectionId: z.string().min(1),
     students: z.array(studentSchema.omit({ sectionId: true })),
   });
   const { sectionId, students } = schema.parse(req.body);
+  await verifySection(sectionId, schoolId);
   const user = req.user!;
 
   await authorizeForSection(user, sectionId);
@@ -303,7 +315,7 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
 
   for (const student of created) {
     try {
-      await autoCreateStudentUser(student.id, student.name);
+      await autoCreateStudentUser(student.id, student.name, schoolId);
     } catch (err) {
       console.error(`Failed to auto-create user for ${student.name}:`, err);
     }
@@ -314,6 +326,8 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // PUT /api/students/:id
 router.put("/:id", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
   const data = studentSchema.partial().parse(req.body);
   const user = req.user!;
 
@@ -336,6 +350,7 @@ router.put("/:id", authenticate, async (req, res) => {
 
 // POST /api/students/assign-rolls
 router.post("/assign-rolls", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     sectionId: z.string().min(1),
     assignments: z.array(z.object({
@@ -345,6 +360,7 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
   });
 
   const { sectionId, assignments } = schema.parse(req.body);
+  await verifySection(sectionId, schoolId);
   const user = req.user!;
 
   await authorizeForSection(user, sectionId);
@@ -377,6 +393,8 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
 
 // DELETE /api/students/:id (soft delete — admin only)
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
   await prisma.student.update({
     where: { id: req.params.id },
     data: { isActive: false },

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
 
@@ -16,9 +16,10 @@ const router = Router();
 // GET /api/notices — admin sees all, others see filtered
 router.get("/", authenticate, async (req, res) => {
   const user = req.user!;
+  const schoolId = getSchoolId(req);
   const { type, audience, gradeId } = req.query;
 
-  const where: any = {};
+  const where: any = { createdBy: { schoolId } };
 
   if (user.role === "STUDENT" || user.role === "PARENT") {
     // Students/parents only see published notices targeted at them
@@ -79,8 +80,9 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET /api/notices/:id
 router.get("/:id", authenticate, async (req, res) => {
-  const notice = await prisma.notice.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const notice = await prisma.notice.findFirstOrThrow({
+    where: { id: req.params.id, createdBy: { schoolId } },
     include: {
       grade: { select: { id: true, name: true } },
       createdBy: { select: { id: true, email: true, role: true } },
@@ -92,6 +94,7 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/notices — admin or teacher can create
 router.post("/", authenticate, async (req, res) => {
   const user = req.user!;
+  const schoolId = getSchoolId(req);
   if (user.role !== "ADMIN" && user.role !== "TEACHER" && user.role !== "ACCOUNTANT") {
     throw new AppError("Not authorized to create notices", 403);
   }
@@ -143,7 +146,8 @@ router.post("/", authenticate, async (req, res) => {
 // PUT /api/notices/:id
 router.put("/:id", authenticate, async (req, res) => {
   const user = req.user!;
-  const notice = await prisma.notice.findUniqueOrThrow({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const notice = await prisma.notice.findFirstOrThrow({ where: { id: req.params.id, createdBy: { schoolId } } });
 
   // Only creator or admin can edit
   if (user.role !== "ADMIN" && notice.createdById !== user.userId) {
@@ -180,7 +184,8 @@ router.put("/:id", authenticate, async (req, res) => {
 // DELETE /api/notices/:id
 router.delete("/:id", authenticate, async (req, res) => {
   const user = req.user!;
-  const notice = await prisma.notice.findUniqueOrThrow({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const notice = await prisma.notice.findFirstOrThrow({ where: { id: req.params.id, createdBy: { schoolId } } });
 
   if (user.role !== "ADMIN" && notice.createdById !== user.userId) {
     throw new AppError("You can only delete notices you created", 403);

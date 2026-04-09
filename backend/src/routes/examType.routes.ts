@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyAcademicYear, verifyExamType } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -16,9 +17,13 @@ const examTypeSchema = z.object({
 
 // GET /api/exam-types?academicYearId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId } = req.query;
+  if (academicYearId) await verifyAcademicYear(String(academicYearId), schoolId);
   const examTypes = await prisma.examType.findMany({
-    where: academicYearId ? { academicYearId: String(academicYearId) } : undefined,
+    where: academicYearId
+      ? { academicYearId: String(academicYearId) }
+      : { academicYear: { schoolId } },
     orderBy: { displayOrder: "asc" },
   });
   res.json({ data: examTypes });
@@ -26,6 +31,8 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET /api/exam-types/:id
 router.get("/:id", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyExamType(req.params.id, schoolId);
   const examType = await prisma.examType.findUniqueOrThrow({
     where: { id: req.params.id },
     include: { gradingPolicies: true },
@@ -35,7 +42,9 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/exam-types
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = examTypeSchema.parse(req.body);
+  await verifyAcademicYear(data.academicYearId, schoolId);
   const createData: Prisma.ExamTypeCreateInput = {
     name: data.name,
     displayOrder: data.displayOrder,
@@ -49,6 +58,8 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // PUT /api/exam-types/:id
 router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyExamType(req.params.id, schoolId);
   const data = examTypeSchema.partial().parse(req.body);
   const examType = await prisma.examType.update({ where: { id: req.params.id }, data });
   res.json({ data: examType });
@@ -56,6 +67,8 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/exam-types/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyExamType(req.params.id, schoolId);
   await prisma.examType.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Exam type deleted" } });
 });

@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyAcademicYear, verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -14,9 +15,13 @@ const gradeSchema = z.object({
 
 // GET /api/grades?academicYearId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId } = req.query;
+  if (academicYearId) await verifyAcademicYear(String(academicYearId), schoolId);
   const grades = await prisma.grade.findMany({
-    where: academicYearId ? { academicYearId: String(academicYearId) } : undefined,
+    where: academicYearId
+      ? { academicYearId: String(academicYearId) }
+      : { academicYear: { schoolId } },
     orderBy: { displayOrder: "asc" },
     include: {
       sections: {
@@ -31,6 +36,8 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET /api/grades/:id
 router.get("/:id", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyGrade(req.params.id, schoolId);
   const grade = await prisma.grade.findUniqueOrThrow({
     where: { id: req.params.id },
     include: {
@@ -43,7 +50,9 @@ router.get("/:id", authenticate, async (req, res) => {
 
 // POST /api/grades
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const data = gradeSchema.parse(req.body);
+  await verifyAcademicYear(data.academicYearId, schoolId);
 
   // Create grade and auto-create default section "A"
   const createData: Prisma.GradeCreateInput = {
@@ -71,6 +80,8 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // PUT /api/grades/:id
 router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyGrade(req.params.id, schoolId);
   const data = gradeSchema.partial().parse(req.body);
   const grade = await prisma.grade.update({ where: { id: req.params.id }, data });
   res.json({ data: grade });
@@ -78,6 +89,8 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/grades/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyGrade(req.params.id, schoolId);
   await prisma.grade.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Grade deleted" } });
 });

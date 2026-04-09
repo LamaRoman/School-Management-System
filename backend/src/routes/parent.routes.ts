@@ -2,8 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import bcrypt from "bcryptjs";
-import { authenticate, authorize, invalidateUserCache } from "../middleware/auth";
+import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyStudent } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -31,12 +32,16 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  const schoolId = getSchoolId(req);
+  for (const sid of studentIds) await verifyStudent(sid, schoolId);
+
   // Create parent user
   const parentUser = await prisma.user.create({
     data: {
       email,
       password: hashedPassword,
       role: "PARENT",
+      schoolId,
       isActive: true,
     },
   });
@@ -63,9 +68,10 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // GET /api/parents — admin lists all parent users with their linked students
-router.get("/", authenticate, authorize("ADMIN"), async (_req, res) => {
+router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const parents = await prisma.user.findMany({
-    where: { role: "PARENT", isActive: true },
+    where: { role: "PARENT", isActive: true, schoolId },
     select: {
       id: true,
       email: true,
@@ -99,6 +105,8 @@ router.post("/:parentId/link", authenticate, authorize("ADMIN"), async (req, res
   });
 
   const { studentId, relationship } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyStudent(studentId, schoolId);
 
   const link = await prisma.parentStudent.create({
     data: {
@@ -171,7 +179,8 @@ router.get("/child/:studentId/fees", authenticate, async (req, res) => {
     include: { section: { include: { grade: true } } },
   });
 
-  const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true } });
+  const schoolId = getSchoolId(req);
+  const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true, schoolId } });
   if (!activeYear) return res.json({ data: { payments: [], totalPaid: 0 } });
 
   const payments = await prisma.feePayment.findMany({
@@ -209,7 +218,8 @@ router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
     if (!link) throw new AppError("Not authorized", 403);
   }
 
-  const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true } });
+  const schoolId2 = getSchoolId(req);
+  const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true, schoolId: schoolId2 } });
   if (!activeYear) return res.json({ data: null });
 
   const attendance = await prisma.attendance.findUnique({

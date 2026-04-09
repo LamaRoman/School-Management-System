@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifySection, verifyAcademicYear } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -39,7 +40,8 @@ router.get("/", authenticate, async (req, res) => {
   const user = req.user!;
   const { sectionId, subjectId, academicYearId } = req.query;
 
-  const where: any = { isActive: true };
+  const schoolId = getSchoolId(req);
+  const where: any = { isActive: true, section: { grade: { academicYear: { schoolId } } } };
   if (sectionId) where.sectionId = String(sectionId);
   if (subjectId) where.subjectId = String(subjectId);
   if (academicYearId) where.academicYearId = String(academicYearId);
@@ -110,6 +112,9 @@ router.post("/", authenticate, async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifySection(data.sectionId, schoolId);
+  await verifyAcademicYear(data.academicYearId, schoolId);
 
   // If teacher, verify they're assigned to this section + subject
   if (user.role === "TEACHER") {

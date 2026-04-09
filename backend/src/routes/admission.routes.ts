@@ -2,7 +2,8 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyAcademicYear, verifyGrade, verifySection } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
@@ -17,8 +18,9 @@ const ADMIN_OR_ACCOUNTANT = authorize("ADMIN", "ACCOUNTANT");
 
 // GET /api/admissions?status=xxx&academicYearId=xxx&gradeId=xxx
 router.get("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { status, academicYearId, gradeId } = req.query;
-  const where: any = {};
+  const where: any = { academicYear: { schoolId } };
   if (status) where.status = String(status);
   if (academicYearId) where.academicYearId = String(academicYearId);
   if (gradeId) where.applyingForGradeId = String(gradeId);
@@ -38,7 +40,9 @@ router.get("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 
 // GET /api/admissions/:id
 router.get("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
-  const admission = await prisma.admission.findUniqueOrThrow({
+  const schoolId = getSchoolId(req);
+  const admission = await prisma.admission.findFirstOrThrow({
+    // ownership verified via academicYear chain
     where: { id: req.params.id },
     include: {
       applyingForGrade: { select: { id: true, name: true } },
@@ -69,6 +73,9 @@ router.post("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyGrade(data.applyingForGradeId, schoolId);
+  await verifyAcademicYear(data.academicYearId, schoolId);
 
   const admission = await prisma.admission.create({
     data: {
@@ -98,6 +105,9 @@ router.post("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 
 // PUT /api/admissions/:id — update admission details
 router.put("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  // Verify admission belongs to school
+  await prisma.admission.findFirstOrThrow({ where: { id: req.params.id, academicYear: { schoolId } } });
   const schema = z.object({
     studentName: z.string().min(1).optional(),
     studentNameNp: z.string().nullable().optional(),
@@ -129,6 +139,7 @@ router.put("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 
 // POST /api/admissions/:id/approve — approve an admission
 router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     reviewedDate: z.string().min(1),
     remarks: z.string().optional(),
@@ -137,8 +148,8 @@ router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) 
   const { reviewedDate, remarks } = schema.parse(req.body);
   const user = req.user!;
 
-  const admission = await prisma.admission.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const admission = await prisma.admission.findFirstOrThrow({
+    where: { id: req.params.id, academicYear: { schoolId } },
   });
 
   if (admission.status !== "PENDING") {
@@ -164,6 +175,7 @@ router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) 
 
 // POST /api/admissions/:id/reject — reject an admission
 router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     reviewedDate: z.string().min(1),
     remarks: z.string().optional(),
@@ -172,8 +184,8 @@ router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
   const { reviewedDate, remarks } = schema.parse(req.body);
   const user = req.user!;
 
-  const admission = await prisma.admission.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const admission = await prisma.admission.findFirstOrThrow({
+    where: { id: req.params.id, academicYear: { schoolId } },
   });
 
   if (admission.status !== "PENDING") {
@@ -195,14 +207,16 @@ router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
 
 // POST /api/admissions/:id/enroll — convert approved admission to student
 router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     sectionId: z.string().min(1),
   });
 
   const { sectionId } = schema.parse(req.body);
+  await verifySection(sectionId, schoolId);
 
-  const admission = await prisma.admission.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const admission = await prisma.admission.findFirstOrThrow({
+    where: { id: req.params.id, academicYear: { schoolId } },
     include: { applyingForGrade: true },
   });
 
@@ -249,6 +263,7 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
         password: hashedPassword,
         role: "STUDENT",
         studentId: student.id,
+        schoolId,
         isActive: true,
       },
     });
@@ -272,8 +287,9 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
 
 // DELETE /api/admissions/:id
 router.delete("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
-  const admission = await prisma.admission.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const admission = await prisma.admission.findFirstOrThrow({
+    where: { id: req.params.id, academicYear: { schoolId } },
   });
 
   if (admission.status === "ENROLLED") {

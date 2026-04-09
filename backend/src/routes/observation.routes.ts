@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
+import { verifyGrade, verifyExamType, verifySection, verifyStudent } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -11,8 +12,10 @@ const router = Router();
 
 // GET /api/observations/categories?gradeId=xxx
 router.get("/categories", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { gradeId } = req.query;
   if (!gradeId) throw new AppError("gradeId is required");
+  await verifyGrade(String(gradeId), schoolId);
 
   const categories = await prisma.observationCategory.findMany({
     where: { gradeId: String(gradeId), isActive: true },
@@ -24,6 +27,7 @@ router.get("/categories", authenticate, async (req, res) => {
 
 // POST /api/observations/categories
 router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     name: z.string().min(1),
     nameNp: z.string().optional(),
@@ -32,6 +36,7 @@ router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) =>
   });
 
   const data = schema.parse(req.body);
+  await verifyGrade(data.gradeId, schoolId);
   const createData: Prisma.ObservationCategoryCreateInput = {
     name: data.name,
     nameNp: data.nameNp,
@@ -44,6 +49,7 @@ router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) =>
 
 // POST /api/observations/categories/bulk
 router.post("/categories/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     gradeId: z.string().min(1),
     categories: z.array(z.object({
@@ -54,6 +60,7 @@ router.post("/categories/bulk", authenticate, authorize("ADMIN"), async (req, re
   });
 
   const { gradeId, categories } = schema.parse(req.body);
+  await verifyGrade(gradeId, schoolId);
 
   const created = await prisma.$transaction(
     categories.map((cat, i) =>
@@ -102,8 +109,11 @@ router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, r
 
 // GET /api/observations/results?sectionId=xxx&examTypeId=xxx
 router.get("/results", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, examTypeId } = req.query;
   if (!sectionId || !examTypeId) throw new AppError("sectionId and examTypeId are required");
+  await verifySection(String(sectionId), schoolId);
+  await verifyExamType(String(examTypeId), schoolId);
 
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: String(sectionId) },
@@ -150,6 +160,7 @@ router.get("/results", authenticate, async (req, res) => {
 
 // POST /api/observations/results/bulk
 router.post("/results/bulk", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     examTypeId: z.string().min(1),
     academicYearId: z.string().min(1),
@@ -161,6 +172,7 @@ router.post("/results/bulk", authenticate, async (req, res) => {
   });
 
   const { examTypeId, academicYearId, entries } = schema.parse(req.body);
+  await verifyExamType(examTypeId, schoolId);
 
   await prisma.$transaction(
     entries.map((entry) =>
@@ -190,7 +202,9 @@ router.post("/results/bulk", authenticate, async (req, res) => {
 
 // GET /api/observations/student/:studentId/:examTypeId — for report card
 router.get("/student/:studentId/:examTypeId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
+  await verifyStudent(studentId, schoolId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },

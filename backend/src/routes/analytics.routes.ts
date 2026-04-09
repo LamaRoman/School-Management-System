@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { verifyAcademicYear } from "../utils/schoolScope";
 import {
   calculatePercentage,
 } from "../services/grading.service";
@@ -9,11 +10,14 @@ const router = Router();
 
 // GET /api/analytics/dashboard?academicYearId=xxx&todayBS=2081/12/14
 router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { academicYearId, todayBS } = req.query;
 
   const yearId = academicYearId
     ? String(academicYearId)
-    : (await prisma.academicYear.findFirst({ where: { isActive: true } }))?.id;
+    : (await prisma.academicYear.findFirst({ where: { isActive: true, schoolId } }))?.id;
+
+  if (yearId) await verifyAcademicYear(yearId, schoolId);
 
   if (!yearId) {
     return res.json({ data: null });
@@ -205,7 +209,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
 
   // ─── Summary stats ────────────────────────────────
   const totalStudents = grades.reduce((a, g) => a + g.sections.reduce((b, s) => b + s.students.length, 0), 0);
-  const totalTeachers = await prisma.teacher.count({ where: { isActive: true } });
+  const totalTeachers = await prisma.teacher.count({ where: { isActive: true, schoolId } });
 
   res.json({
     data: {
@@ -231,6 +235,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
 // GET /api/analytics/absent-students?date=2081/12/14&academicYearId=xxx
 // Returns absent students for a given BS date, grouped by grade → section
 router.get("/absent-students", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { date, academicYearId } = req.query;
 
   if (!date) {
@@ -239,7 +244,9 @@ router.get("/absent-students", authenticate, authorize("ADMIN"), async (req, res
 
   const yearId = academicYearId
     ? String(academicYearId)
-    : (await prisma.academicYear.findFirst({ where: { isActive: true } }))?.id;
+    : (await prisma.academicYear.findFirst({ where: { isActive: true, schoolId } }))?.id;
+
+  if (yearId) await verifyAcademicYear(yearId, schoolId);
 
   if (!yearId) {
     return res.json({ data: [] });

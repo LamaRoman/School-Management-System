@@ -1,14 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyExamType, verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/exam-routine?examTypeId=xxx&gradeId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { examTypeId, gradeId } = req.query;
+  if (examTypeId) await verifyExamType(String(examTypeId), schoolId);
+  if (gradeId) await verifyGrade(String(gradeId), schoolId);
   const where: any = {};
   if (examTypeId) where.examTypeId = String(examTypeId);
   if (gradeId) where.gradeId = String(gradeId);
@@ -39,6 +43,9 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyExamType(data.examTypeId, schoolId);
+  await verifyGrade(data.gradeId, schoolId);
   const routine = await prisma.examRoutine.create({
     data: {
       examTypeId: data.examTypeId,
@@ -74,6 +81,9 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { examTypeId, gradeId, entries } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyExamType(examTypeId, schoolId);
+  await verifyGrade(gradeId, schoolId);
 
   // Delete existing entries for this exam type + grade first
   await prisma.examRoutine.deleteMany({
@@ -137,6 +147,10 @@ router.post("/copy", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const { examTypeId, sourceGradeId, targetGradeId } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyExamType(examTypeId, schoolId);
+  await verifyGrade(sourceGradeId, schoolId);
+  await verifyGrade(targetGradeId, schoolId);
 
   const sourceEntries = await prisma.examRoutine.findMany({
     where: { examTypeId, gradeId: sourceGradeId },

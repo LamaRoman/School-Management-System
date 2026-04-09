@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 
 const router = Router();
 
 // GET /api/report-card-settings
-router.get("/", authenticate, async (_req, res) => {
-  const school = await prisma.school.findFirst();
+router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     return res.json({ data: null });
   }
@@ -39,6 +40,7 @@ router.get("/", authenticate, async (_req, res) => {
 
 // PUT /api/report-card-settings
 router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
   const schema = z.object({
     showPassMarks: z.boolean().optional(),
     showTheoryPrac: z.boolean().optional(),
@@ -53,7 +55,7 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const data = schema.parse(req.body);
 
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
   if (!school) {
     return res.status(404).json({ error: "School not found" });
   }

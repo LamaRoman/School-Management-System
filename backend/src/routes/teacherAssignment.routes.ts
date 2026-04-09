@@ -1,15 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyTeacher, verifySection } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/teacher-assignments?sectionId=xxx&teacherId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, teacherId, gradeId } = req.query;
-  const where: any = {};
+  const where: any = { section: { grade: { academicYear: { schoolId } } } };
   if (sectionId) where.sectionId = String(sectionId);
   if (teacherId) where.teacherId = String(teacherId);
   if (gradeId) where.section = { gradeId: String(gradeId) };
@@ -114,6 +116,9 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifyTeacher(data.teacherId, schoolId);
+  await verifySection(data.sectionId, schoolId);
 // If assigning as class teacher, check no class teacher already exists for this section
   if (data.isClassTeacher) {
     const existing = await prisma.teacherAssignment.findFirst({

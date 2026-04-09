@@ -1,7 +1,8 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifyStudent, verifySection } from "../utils/schoolScope";
 import {
   getGradeFromPercentage,
   calculatePercentage,
@@ -351,7 +352,9 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
 
 // GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
 router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
+  await verifyStudent(studentId, schoolId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const reportData = await buildTermReportData(studentId, examTypeId);
@@ -375,7 +378,9 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
 // GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw
 router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
+  await verifyStudent(studentId, schoolId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const reportData = await buildFinalReportData(studentId, academicYearId);
@@ -399,7 +404,9 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
 
 // GET /api/pdf/class/term/:sectionId/:examTypeId?mode=color|bw
 router.get("/class/term/:sectionId/:examTypeId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, examTypeId } = req.params;
+  await verifySection(sectionId, schoolId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const students = await prisma.student.findMany({
@@ -443,7 +450,9 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, async (req, res) 
 
 // GET /api/pdf/class/final/:sectionId/:academicYearId?mode=color|bw
 router.get("/class/final/:sectionId/:academicYearId", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.params;
+  await verifySection(sectionId, schoolId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const students = await prisma.student.findMany({

@@ -1,17 +1,21 @@
 import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
-import { authenticate, authorize } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifySection, verifyAcademicYear } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/daily-attendance?sectionId=xxx&date=xxx&academicYearId=xxx
 router.get("/", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, date, academicYearId } = req.query;
   if (!sectionId || !date || !academicYearId) {
     throw new AppError("sectionId, date, and academicYearId are required");
   }
+  await verifySection(String(sectionId), schoolId);
+  await verifyAcademicYear(String(academicYearId), schoolId);
 
   const students = await prisma.student.findMany({
     where: { sectionId: String(sectionId), isActive: true },
@@ -59,6 +63,9 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   });
 
   const { sectionId, date, academicYearId, records } = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await verifySection(sectionId, schoolId);
+  await verifyAcademicYear(academicYearId, schoolId);
 
   // Get the teacher's id from the user
   const user = await prisma.user.findUnique({
@@ -132,10 +139,12 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
 
 // GET /api/daily-attendance/summary?sectionId=xxx&academicYearId=xxx
 router.get("/summary", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.query;
   if (!sectionId || !academicYearId) {
     throw new AppError("sectionId and academicYearId are required");
   }
+  await verifySection(String(sectionId), schoolId);
 
   const students = await prisma.student.findMany({
     where: { sectionId: String(sectionId), isActive: true },

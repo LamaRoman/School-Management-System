@@ -1,7 +1,8 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate } from "../middleware/auth";
+import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { verifySection } from "../utils/schoolScope";
 import {
   getGradeFromPercentage,
   calculatePercentage,
@@ -12,10 +13,12 @@ const router = Router();
 
 // GET /api/grade-sheet/term?sectionId=xxx&examTypeId=xxx&academicYearId=xxx
 router.get("/term", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, examTypeId, academicYearId } = req.query;
   if (!sectionId || !examTypeId || !academicYearId) {
     throw new AppError("sectionId, examTypeId, and academicYearId are required");
   }
+  await verifySection(String(sectionId), schoolId);
 
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: String(sectionId) },
@@ -126,10 +129,12 @@ router.get("/term", authenticate, async (req, res) => {
 
 // GET /api/grade-sheet/final?sectionId=xxx&academicYearId=xxx
 router.get("/final", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.query;
   if (!sectionId || !academicYearId) {
     throw new AppError("sectionId and academicYearId are required");
   }
+  await verifySection(String(sectionId), schoolId);
 
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: String(sectionId) },
