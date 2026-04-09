@@ -163,9 +163,9 @@ export default function SchoolDetailPage() {
       {/* Admins Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-800">Admins & Accountants</h2>
+          <h2 className="font-semibold text-gray-800">School Admins</h2>
           <button onClick={() => setShowAddAdmin(!showAddAdmin)} className="flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-sm hover:bg-gray-800">
-            <Plus size={14} /> Add
+            <Plus size={14} /> Add Admin
           </button>
         </div>
 
