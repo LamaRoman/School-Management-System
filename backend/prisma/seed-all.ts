@@ -531,16 +531,10 @@ async function main() {
     const grade = gradeMap[gn];
 
     // Monthly tuition
-    await prisma.feeStructure.upsert({
-      where: { feeCategoryId_gradeId_academicYearId_examTypeId: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: "" } },
-      update: {},
-      create: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, amount: feeAmounts[gn] || 2000, frequency: "MONTHLY" },
-    }).catch(async () => {
-      const existing = await prisma.feeStructure.findFirst({ where: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: null } });
-      if (!existing) {
-        await prisma.feeStructure.create({ data: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, amount: feeAmounts[gn] || 2000, frequency: "MONTHLY" } });
-      }
-    });
+    const existingTuition = await prisma.feeStructure.findFirst({ where: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, examTypeId: null } });
+    if (!existingTuition) {
+      await prisma.feeStructure.create({ data: { feeCategoryId: tuitionCat.id, gradeId: grade.id, academicYearId: year.id, amount: feeAmounts[gn] || 2000, frequency: "MONTHLY" } });
+    }
 
     // One-time admission
     const existingAdm = await prisma.feeStructure.findFirst({ where: { feeCategoryId: admissionCat.id, gradeId: grade.id, academicYearId: year.id } });

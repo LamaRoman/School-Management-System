@@ -351,7 +351,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
                     className={`p-3 border-b border-r cursor-pointer transition-all ${entry.status === "PAID" ? "bg-emerald-50 cursor-default" : entry.status === "PARTIAL" ? "bg-amber-50" : isPast ? "bg-red-50 hover:bg-red-100" : "bg-gray-50 cursor-default opacity-50"} ${isSelected ? "ring-2 ring-primary ring-inset" : ""}`}>
                     <p className="text-xs font-semibold">{entry.month}</p>
                     <p className="text-sm font-bold mt-1">{entry.status === "PAID" ? <span className="text-emerald-600">Paid</span> : <span className="text-red-600">Rs {remaining.toLocaleString()}</span>}</p>
-                    {entry.categories.map((c) => (<p key={c.categoryId} className="text-[10px] text-gray-500">{c.categoryName}: Rs {c.amount}</p>))}
+                    {entry.categories.map((c, ci) => (<p key={`${c.categoryId}-${ci}`} className="text-[10px] text-gray-500">{c.categoryName}: Rs {c.amount}</p>))}
                   </div>
                 );
               })}
