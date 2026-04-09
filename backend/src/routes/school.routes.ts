@@ -64,4 +64,15 @@ router.post("/logo", authenticate, authorize("ADMIN"), upload.single("logo"), as
   res.json({ data: { logo: school.logo, storageType: result.storageType } });
 });
 
+// DELETE /api/school/logo — remove school logo
+router.delete("/logo", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const existing = await prisma.school.findUnique({ where: { id: schoolId }, select: { logo: true } });
+  if (existing?.logo) {
+    await deleteLogo(existing.logo);
+  }
+  await prisma.school.update({ where: { id: schoolId }, data: { logo: null } });
+  res.json({ data: { message: "Logo removed" } });
+});
+
 export default router;

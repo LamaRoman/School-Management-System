@@ -188,6 +188,15 @@ router.post("/schools/:id/logo", upload.single("logo"), async (req, res) => {
   res.json({ data: { logo: school.logo, storageType: result.storageType } });
 });
 
+// DELETE /api/super-admin/schools/:id/logo — remove school logo
+router.delete("/schools/:id/logo", async (req, res) => {
+  const existing = await prisma.school.findUnique({ where: { id: req.params.id }, select: { logo: true } });
+  if (!existing) throw new AppError("School not found", 404);
+  if (existing.logo) await deleteLogo(existing.logo);
+  await prisma.school.update({ where: { id: req.params.id }, data: { logo: null } });
+  res.json({ data: { message: "Logo removed" } });
+});
+
 // ─── DEACTIVATE SCHOOL ──────────────────────────────────────────────────────
 
 router.delete("/schools/:id", async (req, res) => {

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Settings, Upload } from "lucide-react";
+import { Save, Settings, Upload, Trash2 } from "lucide-react";
 
 interface SettingsData {
   showPassMarks: boolean;
@@ -58,6 +58,7 @@ export default function ReportCardSettingsPage() {
   const [originalSettings, setOriginalSettings] = useState<SettingsData | null>(null);
   const [school, setSchool] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -135,6 +136,25 @@ export default function ReportCardSettingsPage() {
     }
   };
 
+  const handleRemoveLogo = async () => {
+    if (!confirm("Remove the school logo?")) return;
+    setRemoving(true);
+    try {
+      const token = api.getToken();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/school/logo`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to remove logo");
+      setSchool((prev: any) => ({ ...prev, logo: null }));
+      toast.success("Logo removed");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove logo");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading settings...</div>;
   if (!settings) return <div className="card p-8 text-center text-gray-400">Failed to load settings</div>;
 
@@ -182,7 +202,14 @@ export default function ReportCardSettingsPage() {
                 <Upload size={14} /> {uploading ? "Uploading..." : school?.logo ? "Change Logo" : "Upload Logo"}
                 <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploading} className="hidden" />
               </label>
-              {school?.logo && <p className="text-xs text-gray-400 mt-1">Logo will appear on all report cards</p>}
+              {school?.logo && (
+                <>
+                  <button onClick={handleRemoveLogo} disabled={removing} className="btn-outline text-xs text-red-500 border-red-200 hover:bg-red-50 ml-2 inline-flex items-center gap-1">
+                    <Trash2 size={14} /> {removing ? "Removing..." : "Remove Logo"}
+                  </button>
+                  <p className="text-xs text-gray-400 mt-1">Logo will appear on all report cards</p>
+                </>
+              )}
             </div>
           </div>
         </div>

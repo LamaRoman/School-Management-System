@@ -9,7 +9,6 @@
  */
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import crypto from "crypto";
 
 let s3: S3Client | null = null;
 let s3Checked = false;
@@ -56,8 +55,8 @@ export async function uploadLogo(
   const s3Config = getS3();
 
   if (s3Config) {
-    const ext = mimetype.split("/")[1] || "png";
-    const key = `logos/${schoolId}-${crypto.randomBytes(4).toString("hex")}.${ext}`;
+    const ext = mimetype.split("/")[1].replace(/\+.*/, "") || "png";
+    const key = `logos/${schoolId}/logo.${ext}`;
 
     await s3Config.client.send(
       new PutObjectCommand({
