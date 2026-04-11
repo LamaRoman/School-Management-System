@@ -210,12 +210,17 @@ router.get("/defaulters", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =>
     return res.status(400).json({ error: "Invalid month name" });
   }
 
-  // Get all active students with optional grade/section filter
-  const studentWhere: any = { isActive: true, status: "ACTIVE" };
+  // Always scope to this school via the verified academicYearId (section -> grade -> academicYear).
+  // Without this, a request with no gradeId/sectionId would return students from every school.
+  const studentWhere: any = {
+    isActive: true,
+    status: "ACTIVE",
+    section: { grade: { academicYearId: yearId } },
+  };
   if (sectionId) {
     studentWhere.sectionId = String(sectionId);
   } else if (gradeId) {
-    studentWhere.section = { gradeId: String(gradeId) };
+    studentWhere.section = { gradeId: String(gradeId), grade: { academicYearId: yearId } };
   }
 
   const students = await prisma.student.findMany({
