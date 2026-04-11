@@ -515,13 +515,28 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     verifyAcademicYear(academicYearId, schoolId),
   ]);
 
-  // Atomic receipt generation via PostgreSQL SEQUENCE (industry standard).
-  // nextval() is atomic and lock-free — no Serializable isolation required.
-  // The sequence is global (system-wide), so RCP-NNNNN is unique across
-  // all schools and all academic years on this platform, forever.
+  // Atomic per-school receipt generation.
+  // Uses the school's short code (e.g. "GHS") as the receipt prefix.
+  // Falls back to last 6 chars of schoolId if no code is set yet.
+  // Receipt format: RCP-GHS-000001
+  const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { code: true } });
+  const schoolPrefix = school?.code ?? schoolId.slice(-6).toUpperCase();
+
   const { created, receiptNumber } = await prisma.$transaction(async (tx) => {
-    const [{ nextval }] = await tx.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('receipt_number_seq')`;
-    const receipt = `RCP-${String(Number(nextval)).padStart(6, "0")}`;
+    // Upsert ensures the counter row exists even for brand-new schools
+    await tx.$executeRaw`
+      INSERT INTO receipt_counters (school_id, last_value)
+      VALUES (${schoolId}, 0)
+      ON CONFLICT (school_id) DO NOTHING
+    `;
+    // Lock the row and increment atomically
+    const [{ last_value }] = await tx.$queryRaw<[{ last_value: number }]>`
+      UPDATE receipt_counters
+      SET last_value = last_value + 1
+      WHERE school_id = ${schoolId}
+      RETURNING last_value
+    `;
+    const receipt = `RCP-${schoolPrefix}-${String(last_value).padStart(6, "0")}`;
 
     const results = [];
     for (const item of items) {

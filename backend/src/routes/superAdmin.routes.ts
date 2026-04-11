@@ -83,6 +83,7 @@ router.get("/schools/:id", async (req, res) => {
 const createSchoolSchema = z.object({
   name: z.string().min(1),
   nameNp: z.string().optional(),
+  code: z.string().min(2).max(6).toUpperCase().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional(),
@@ -110,6 +111,7 @@ router.post("/schools", async (req, res) => {
       data: {
         name: data.name,
         nameNp: data.nameNp,
+        code: data.code ?? null,
         address: data.address,
         phone: data.phone,
         email: data.email,

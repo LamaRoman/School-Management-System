@@ -36,6 +36,7 @@ model School {
   id        String   @id @default(cuid())
   name      String
   nameNp    String?  @map("name_np")
+  code      String?  @unique           // Short receipt prefix e.g. "GHS", "SPS"
   address   String?
   phone     String?
   email     String?
@@ -47,6 +48,7 @@ model School {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   reportCardSettings ReportCardSettings?
+  receiptCounter     ReceiptCounter?
   users              User[]
   academicYears      AcademicYear[]
   teachers           Teacher[]
@@ -679,6 +681,17 @@ model ParentStudent {
   @@unique([parentId, studentId])
   @@map("parent_students")
 }
+// ─── RECEIPT COUNTER ────────────────────────────────────
+
+model ReceiptCounter {
+  schoolId  String @id @map("school_id")
+  lastValue Int    @default(0) @map("last_value")
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("receipt_counters")
+}
+
 // ─── AUDIT LOG ──────────────────────────────────────────
 
 model AuditLog {

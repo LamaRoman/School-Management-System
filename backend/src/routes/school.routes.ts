@@ -18,6 +18,7 @@ const upload = multer({
 const schoolSchema = z.object({
   name: z.string().min(1),
   nameNp: z.string().optional(),
+  code: z.string().min(2).max(6).toUpperCase().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional(),

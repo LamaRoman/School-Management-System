@@ -38,7 +38,7 @@ export default function SchoolDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", address: "", phone: "", email: "" });
+  const [editForm, setEditForm] = useState({ name: "", code: "", address: "", phone: "", email: "" });
   const [uploading, setUploading] = useState(false);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +73,7 @@ export default function SchoolDetailPage() {
       ]);
       setSchool(s);
       setAdmins(a);
-      setEditForm({ name: s.name, address: s.address || "", phone: s.phone || "", email: s.email || "" });
+      setEditForm({ name: s.name, code: s.code || "", address: s.address || "", phone: s.phone || "", email: s.email || "" });
     } catch (err) {
       console.error(err);
     } finally {
@@ -177,6 +177,7 @@ export default function SchoolDetailPage() {
           <div className="border-t pt-4 mt-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" className="border rounded-lg px-3 py-2 text-sm" />
+              <input value={editForm.code} onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })} placeholder="School Code (e.g. GHS) — used in receipt numbers" maxLength={6} className="border rounded-lg px-3 py-2 text-sm uppercase" />
               <input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} placeholder="Address" className="border rounded-lg px-3 py-2 text-sm" />
               <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" className="border rounded-lg px-3 py-2 text-sm" />
               <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Email" className="border rounded-lg px-3 py-2 text-sm" />
