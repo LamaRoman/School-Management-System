@@ -39,7 +39,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <GraduationCap size={22} />
-            <span className="font-display font-bold">School Management System</span>
+            <span className="font-display font-bold">Zentara <span className="text-accent-light">शिक्षा</span></span>
             <span className="text-xs bg-white/10 px-2 py-0.5 rounded">Student</span>
           </div>
           <div className="flex items-center gap-4">

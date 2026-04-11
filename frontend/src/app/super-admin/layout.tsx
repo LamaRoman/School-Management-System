@@ -9,7 +9,6 @@ import {
   School,
   LogOut,
   KeyRound,
-  Shield,
 } from "lucide-react";
 
 const navItems = [
@@ -40,14 +39,9 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen flex bg-surface">
       <aside className="w-64 bg-gray-900 text-white flex flex-col shadow-xl shrink-0">
         <div className="p-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-              <Shield size={22} className="text-white" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-sm leading-tight">Zentara Labs</h1>
-              <p className="text-[10px] text-white/50 uppercase tracking-widest">Super Admin</p>
-            </div>
+          <div>
+            <h1 className="font-display font-bold text-sm leading-tight">Zentara <span style={{color: '#e8384f'}}>शिक्षा</span></h1>
+            <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Super Admin</p>
           </div>
         </div>
 
@@ -70,6 +64,11 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
             );
           })}
         </nav>
+
+        {/* Brand footer */}
+        <div className="px-4 py-2 text-center">
+          <p className="text-[9px] text-white/30 tracking-wide">A product of Zentara Labs Pvt Ltd</p>
+        </div>
 
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center justify-between">

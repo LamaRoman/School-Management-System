@@ -164,8 +164,8 @@ export default function ProfileScreen() {
           <View style={s.menuItem}>
             <Text style={s.menuIcon}>🏫</Text>
             <View style={s.menuText}>
-              <Text style={s.menuLabel}>Shree Himalayan Secondary School</Text>
-              <Text style={s.menuSub}>School Management System</Text>
+              <Text style={s.menuLabel}>Zentara शिक्षा</Text>
+              <Text style={s.menuSub}>A product of Zentara Labs Pvt Ltd</Text>
             </View>
           </View>
           <View style={s.menuDivider} />

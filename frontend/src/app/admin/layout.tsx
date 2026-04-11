@@ -116,14 +116,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="w-64 bg-primary text-white flex flex-col shadow-xl shrink-0">
         {/* Logo */}
         <div className="p-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-              <GraduationCap size={22} className="text-white" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-sm leading-tight">School Management</h1>
-              <p className="text-[10px] text-white/50 uppercase tracking-widest">Admin Panel</p>
-            </div>
+          <div>
+            <h1 className="font-display font-bold text-sm leading-tight">Zentara <span className="text-accent-light">शिक्षा</span></h1>
+            <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Admin Panel</p>
           </div>
         </div>
 
@@ -180,6 +175,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           ))}
         </nav>
+
+        {/* Brand footer */}
+        <div className="px-4 py-2 text-center">
+          <p className="text-[9px] text-white/30 tracking-wide">A product of Zentara Labs Pvt Ltd</p>
+        </div>
 
         {/* User footer */}
         <div className="p-4 border-t border-white/10">

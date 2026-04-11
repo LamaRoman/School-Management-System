@@ -1,7 +1,7 @@
 export default ({ config }) => ({
   ...config,
-  name: 'School Parent',
-  slug: 'school-parent',
+  name: 'Zentara Parent',
+  slug: 'zentara-parent',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',

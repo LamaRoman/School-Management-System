@@ -1,6 +1,8 @@
-# Nepali School Report Card System
+# Zentara Shikshya (शिक्षा)
 
-A web-based report card management system for Nepali schools (Nursery to Class X).
+A complete digital solution for modern schools — built for Nepali schools (Nursery to Class X).
+
+> A product of Zentara Labs Pvt Ltd
 
 ## Tech Stack
 

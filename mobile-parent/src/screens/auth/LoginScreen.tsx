@@ -42,8 +42,8 @@ export default function LoginScreen() {
           <View style={styles.logoBox}>
             <Text style={styles.logoText}>श्री</Text>
           </View>
-          <Text style={styles.appName}>Report Card System</Text>
-          <Text style={styles.appSub}>Nepali School Management</Text>
+          <Text style={styles.appName}>Zentara शिक्षा</Text>
+          <Text style={styles.appSub}>A complete digital solution for modern schools</Text>
         </View>
 
         {/* Form */}
@@ -83,7 +83,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        <Text style={styles.footer}>Shree Himalayan Secondary School</Text>
+        <Text style={styles.footer}>A product of Zentara Labs Pvt Ltd</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

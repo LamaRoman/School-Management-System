@@ -5,8 +5,8 @@ import { ConfirmDialogMount } from "@/components/ui/ConfirmDialog";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "School Management System",
-  description: "School Management System — Powered by Zentara Labs",
+  title: "Zentara Shikshya",
+  description: "Zentara Shikshya — A complete digital solution for modern schools",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

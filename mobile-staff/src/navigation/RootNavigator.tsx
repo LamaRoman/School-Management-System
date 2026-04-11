@@ -56,7 +56,7 @@ function WrongAppScreen() {
     <View style={s.wrongApp}>
       <Text style={s.icon}>🏫</Text>
       <Text style={s.title}>Wrong App</Text>
-      <Text style={s.msg}>This app is for school staff only (teachers and accountants).{'\n\n'}Parents and students should use the <Text style={s.bold}>School Parent</Text> app.</Text>
+      <Text style={s.msg}>This app is for school staff only (teachers and accountants).{'\n\n'}Parents and students should use the <Text style={s.bold}>Zentara Parent</Text> app.</Text>
       <TouchableOpacity style={s.btn} onPress={logout}><Text style={s.btnText}>Log out</Text></TouchableOpacity>
     </View>
   );

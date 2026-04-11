@@ -1,7 +1,7 @@
 export default ({ config }) => ({
   ...config,
-  name: 'School Staff',
-  slug: 'school-staff',
+  name: 'Zentara Staff',
+  slug: 'zentara-staff',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
