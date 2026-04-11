@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate, getSchoolId } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyStudent, verifySection } from "../utils/schoolScope";
 import {
@@ -354,7 +354,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
 // ─── ROUTES ─────────────────────────────────────────────
 
 // GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
-router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
+router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
   await verifyStudent(studentId, schoolId);
@@ -380,7 +380,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 });
 
 // GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw
-router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) => {
+router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
   await verifyStudent(studentId, schoolId);
@@ -406,7 +406,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
 });
 
 // GET /api/pdf/class/term/:sectionId/:examTypeId?mode=color|bw
-router.get("/class/term/:sectionId/:examTypeId", authenticate, async (req, res) => {
+router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, examTypeId } = req.params;
   await verifySection(sectionId, schoolId);
@@ -452,7 +452,7 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, async (req, res) 
 });
 
 // GET /api/pdf/class/final/:sectionId/:academicYearId?mode=color|bw
-router.get("/class/final/:sectionId/:academicYearId", authenticate, async (req, res) => {
+router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.params;
   await verifySection(sectionId, schoolId);

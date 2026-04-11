@@ -354,10 +354,10 @@ router.post("/structure/bulk", authenticate, authorize("ADMIN"), async (req, res
     verifyAcademicYear(academicYearId, schoolId),
     verifyGrade(gradeId, schoolId),
   ]);
-  await prisma.feeStructure.deleteMany({ where: { academicYearId, gradeId } });
-  const created = await prisma.$transaction(
-    entries.map(e =>
-      prisma.feeStructure.create({
+  await prisma.$transaction(async (tx) => {
+    await tx.feeStructure.deleteMany({ where: { academicYearId, gradeId } });
+    for (const e of entries) {
+      await tx.feeStructure.create({
         data: {
           feeCategoryId: e.feeCategoryId,
           gradeId,
@@ -366,10 +366,10 @@ router.post("/structure/bulk", authenticate, authorize("ADMIN"), async (req, res
           frequency: e.frequency,
           examTypeId: e.examTypeId || null,
         },
-      })
-    )
-  );
-  res.status(201).json({ data: { message: `${created.length} fee structure entries saved` } });
+      });
+    }
+  });
+  res.status(201).json({ data: { message: `${entries.length} fee structure entries saved` } });
 });
 
 router.delete("/structure/:id", authenticate, authorize("ADMIN"), async (req, res) => {
@@ -464,7 +464,7 @@ router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, re
 
 router.get("/payments", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
-  const { studentId, academicYearId } = req.query;
+  const { studentId, academicYearId, page = "1", limit = "100" } = req.query;
   const where: any = { deletedAt: null };
   if (studentId) {
     await verifyStudent(String(studentId), schoolId);
@@ -474,15 +474,22 @@ router.get("/payments", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (r
     await verifyAcademicYear(String(academicYearId), schoolId);
     where.academicYearId = String(academicYearId);
   }
-  const payments = await prisma.feePayment.findMany({
-    where,
-    include: {
-      student: { select: { id: true, name: true, rollNo: true } },
-      feeCategory: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  res.json({ data: payments });
+  const pageNum = Math.max(1, parseInt(String(page)));
+  const pageSize = Math.min(500, Math.max(1, parseInt(String(limit))));
+  const [payments, total] = await Promise.all([
+    prisma.feePayment.findMany({
+      where,
+      include: {
+        student: { select: { id: true, name: true, rollNo: true } },
+        feeCategory: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.feePayment.count({ where }),
+  ]);
+  res.json({ data: payments, total, page: pageNum, pages: Math.ceil(total / pageSize) });
 });
 
 router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
@@ -508,8 +515,8 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     verifyAcademicYear(academicYearId, schoolId),
   ]);
 
-  // Atomic receipt generation: interactive transaction ensures no two requests
-  // can read the same count before either has written its payments.
+  // Atomic receipt generation: Serializable isolation prevents two concurrent
+  // requests from reading the same count before either commits.
   const { created, receiptNumber } = await prisma.$transaction(async (tx) => {
     const count = await tx.feePayment.count({ where: { academicYearId } });
     const receipt = `RCP-${String(count + 1).padStart(5, "0")}`;
@@ -533,7 +540,7 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     }
 
     return { created: results, receiptNumber: receipt };
-  });
+  }, { isolationLevel: "Serializable" });
 
   const userId = req.user!.userId;
   for (const p of created) {
@@ -694,24 +701,21 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
     verifyAcademicYear(String(academicYearId), schoolId),
   ]);
 
-  const [student, structures, overrides, payments, examRoutines] = await Promise.all([
+  const [student, overrides, payments] = await Promise.all([
     prisma.student.findUniqueOrThrow({
       where: { id: studentId },
       include: { section: { include: { grade: true } } },
     }),
-    // Structures fetched after student for gradeId — sequential is acceptable here
-    // because we can't parallelise without gradeId. Handled below.
-    Promise.resolve(null as any), // placeholder
     prisma.studentFeeOverride.findMany({ where: { studentId, academicYearId: String(academicYearId) } }),
     prisma.feePayment.findMany({
       where: { studentId, academicYearId: String(academicYearId), deletedAt: null },
       orderBy: { createdAt: "desc" },
     }),
-    Promise.resolve(null as any), // placeholder
   ]);
 
   const gradeId = student.section.gradeId;
 
+  // Structures and exam routines depend on gradeId from student, fetched separately
   const [gradeStructures, gradeExamRoutines] = await Promise.all([
     prisma.feeStructure.findMany({
       where: { gradeId, academicYearId: String(academicYearId) },
@@ -845,7 +849,7 @@ router.get("/receipt/:receiptNumber", authenticate, authorize("ADMIN", "ACCOUNTA
   const schoolId = getSchoolId(req);
   const [payments, school] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { receiptNumber: req.params.receiptNumber },
+      where: { receiptNumber: req.params.receiptNumber, deletedAt: null },
       include: {
         student: { include: { section: { include: { grade: { include: { academicYear: { select: { schoolId: true } } } } } } } },
         feeCategory: true,

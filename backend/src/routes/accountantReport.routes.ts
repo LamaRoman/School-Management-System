@@ -244,44 +244,58 @@ router.get("/defaulters", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =>
 
   // Get all payments for these students
   const studentIds = students.map((s) => s.id);
-  const payments = await prisma.feePayment.findMany({
-    where: { studentId: { in: studentIds }, academicYearId: yearId, deletedAt: null },
-  });
+  const [payments, overrides] = await Promise.all([
+    prisma.feePayment.findMany({
+      where: { studentId: { in: studentIds }, academicYearId: yearId, deletedAt: null },
+    }),
+    prisma.studentFeeOverride.findMany({
+      where: { studentId: { in: studentIds }, academicYearId: yearId },
+    }),
+  ]);
 
   const paymentsByStudent = new Map<string, number>();
   for (const p of payments) {
     paymentsByStudent.set(p.studentId, (paymentsByStudent.get(p.studentId) || 0) + p.amount);
   }
 
-  // Calculate expected amount per grade up to currentMonth
-  const expectedByGrade = new Map<string, number>();
-  for (const gId of gradeIds) {
-    const gradeStructures = structures.filter((s) => s.gradeId === gId);
-    let expected = 0;
-    for (const s of gradeStructures) {
-      if (s.frequency === "MONTHLY") {
-        expected += s.amount * (monthIndex + 1); // months 0-indexed
-      } else if (s.frequency === "ANNUAL" || s.frequency === "ONE_TIME") {
-        expected += s.amount;
-      } else if (s.frequency === "PER_EXAM") {
-        expected += s.amount; // Include all per-exam fees
-      }
+  // Helper to apply discount (same logic as fee.routes.ts)
+  function applyDiscount(
+    amount: number,
+    override?: { discountType: string; overrideAmount: number; discountPercent: number | null } | null,
+  ): number {
+    if (!override) return amount;
+    if (override.discountType === "PERCENTAGE" && override.discountPercent !== null) {
+      return amount * (1 - override.discountPercent / 100);
     }
-    expectedByGrade.set(gId, expected);
+    if (override.discountType === "FLAT") return override.overrideAmount;
+    return amount;
   }
 
-  // Build defaulter list
+  // Build defaulter list — calculate expected per student (not per grade) to account for overrides
   const defaulters = [];
   for (const student of students) {
-    const expected = expectedByGrade.get(student.section.gradeId) || 0;
+    const gradeStructures = structures.filter((s) => s.gradeId === student.section.gradeId);
+    const studentOverrides = overrides.filter((o) => o.studentId === student.id);
+
+    let expected = 0;
+    let monthlyTotal = 0;
+    for (const s of gradeStructures) {
+      const ov = studentOverrides.find((o) => o.feeCategoryId === s.feeCategoryId);
+      const amount = applyDiscount(s.amount, ov as any);
+      if (s.frequency === "MONTHLY") {
+        expected += amount * (monthIndex + 1);
+        monthlyTotal += amount;
+      } else if (s.frequency === "ANNUAL" || s.frequency === "ONE_TIME") {
+        expected += amount;
+      } else if (s.frequency === "PER_EXAM") {
+        expected += amount;
+      }
+    }
+
     const paid = paymentsByStudent.get(student.id) || 0;
-    const balance = expected - paid;
+    const balance = Math.round(expected - paid);
 
     if (balance > 0) {
-      // Calculate months pending
-      const monthlyTotal = structures
-        .filter((s) => s.gradeId === student.section.gradeId && s.frequency === "MONTHLY")
-        .reduce((sum, s) => sum + s.amount, 0);
       const monthsPending = monthlyTotal > 0 ? Math.ceil(balance / monthlyTotal) : 0;
 
       defaulters.push({
@@ -422,13 +436,16 @@ router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
     categoryData[cat] = (categoryData[cat] || 0) + p.amount;
   }
 
-  // Get expected amounts — calculated PER GRADE to avoid cross-multiplication
+  // Get expected amounts — calculated PER STUDENT to account for overrides
   const grades = await prisma.grade.findMany({
     where: { academicYearId: yearId },
     include: {
       sections: {
         include: {
-          _count: { select: { students: { where: { isActive: true, status: "ACTIVE" } } } },
+          students: {
+            where: { isActive: true, status: "ACTIVE" },
+            select: { id: true },
+          },
         },
       },
       feeStructures: {
@@ -437,13 +454,49 @@ router.get("/monthly-summary", authenticate, ADMIN_OR_ACCOUNTANT, async (req, re
     },
   });
 
+  // Collect all active student IDs
+  const allStudentIds: string[] = [];
+  for (const grade of grades) {
+    for (const section of grade.sections) {
+      for (const stu of section.students) {
+        allStudentIds.push(stu.id);
+      }
+    }
+  }
+
+  // Fetch overrides for all students
+  const allOverrides = allStudentIds.length > 0
+    ? await prisma.studentFeeOverride.findMany({
+        where: { studentId: { in: allStudentIds }, academicYearId: yearId },
+      })
+    : [];
+
+  // Helper to apply discount
+  function applyDiscount(
+    amount: number,
+    override?: { discountType: string; overrideAmount: number; discountPercent: number | null } | null,
+  ): number {
+    if (!override) return amount;
+    if (override.discountType === "PERCENTAGE" && override.discountPercent !== null) {
+      return amount * (1 - override.discountPercent / 100);
+    }
+    if (override.discountType === "FLAT") return override.overrideAmount;
+    return amount;
+  }
+
   let expectedMonthly = 0;
   let studentCount = 0;
   for (const grade of grades) {
-    const gradeStudents = grade.sections.reduce((sum, s) => sum + s._count.students, 0);
-    const gradeMonthlyFee = grade.feeStructures.reduce((sum, s) => sum + s.amount, 0);
-    expectedMonthly += gradeMonthlyFee * gradeStudents;
-    studentCount += gradeStudents;
+    for (const section of grade.sections) {
+      for (const stu of section.students) {
+        studentCount++;
+        const studentOverrides = allOverrides.filter((o) => o.studentId === stu.id);
+        for (const s of grade.feeStructures) {
+          const ov = studentOverrides.find((o) => o.feeCategoryId === s.feeCategoryId);
+          expectedMonthly += applyDiscount(s.amount, ov as any);
+        }
+      }
+    }
   }
 
   const totalCollected = payments.reduce((s, p) => s + p.amount, 0);

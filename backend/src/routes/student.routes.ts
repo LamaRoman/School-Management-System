@@ -106,13 +106,16 @@ async function authorizeStudentRead(userId: string, role: string, studentId: str
 /**
  * Auto-create a User account for a newly added student.
  * Email: firstname.lastname@school.edu.np (uuid suffix guarantees uniqueness in one query)
- * Default password: student123
+ * Default password: set via DEFAULT_STUDENT_PASSWORD env var (required in production)
  */
 async function autoCreateStudentUser(studentId: string, studentName: string, schoolId: string): Promise<void> {
   const baseName = studentName.toLowerCase().trim().replace(/\s+/g, ".");
   // Use the studentId suffix to guarantee uniqueness without any DB lookup loop
   const email = `${baseName}.${studentId.slice(-6)}@school.edu.np`;
 
+  if (!process.env.DEFAULT_STUDENT_PASSWORD) {
+    console.warn("[SECURITY] DEFAULT_STUDENT_PASSWORD env var is not set. Student accounts will use the weak fallback password. Set this in production.");
+  }
   const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 

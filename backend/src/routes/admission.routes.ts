@@ -42,8 +42,7 @@ router.get("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 router.get("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schoolId = getSchoolId(req);
   const admission = await prisma.admission.findFirstOrThrow({
-    // ownership verified via academicYear chain
-    where: { id: req.params.id },
+    where: { id: req.params.id, academicYear: { schoolId } },
     include: {
       applyingForGrade: { select: { id: true, name: true } },
       academicYear: { select: { id: true, yearBS: true } },
@@ -256,6 +255,9 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
     // Use studentId suffix to guarantee uniqueness — no DB loop needed
     const email = `${baseName}.${student.id.slice(-6)}@school.edu.np`;
     const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
+    if (!process.env.DEFAULT_STUDENT_PASSWORD) {
+      console.warn("[SECURITY] DEFAULT_STUDENT_PASSWORD env var is not set. Set this in production.");
+    }
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     await prisma.user.create({
       data: {

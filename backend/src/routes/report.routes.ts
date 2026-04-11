@@ -13,6 +13,22 @@ import {
 
 const router = Router();
 
+// Helper: verify the requesting user has access to this student's academic data
+async function verifyStudentAccess(userId: string, role: string, studentId: string): Promise<void> {
+  if (role === "ADMIN" || role === "TEACHER") return; // full access
+  if (role === "STUDENT") {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { studentId: true } });
+    if (user?.studentId !== studentId) throw new AppError("You can only view your own report", 403);
+    return;
+  }
+  if (role === "PARENT") {
+    const link = await prisma.parentStudent.findFirst({ where: { parentId: userId, studentId } });
+    if (!link) throw new AppError("You can only view your linked children's reports", 403);
+    return;
+  }
+  throw new AppError("Not authorized to view reports", 403);
+}
+
 // Helper: calculate rank for a student among section peers for a given exam
 async function calculateTermRank(
   studentId: string,
@@ -151,6 +167,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
   await verifyStudent(studentId, schoolId);
+  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
@@ -256,6 +273,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
   await verifyStudent(studentId, schoolId);
+  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },

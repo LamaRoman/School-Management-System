@@ -3,21 +3,25 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifySection, verifySubject, verifyExamType, verifyAcademicYear } from "../utils/schoolScope";
+import { verifySection, verifySubject, verifyExamType, verifyAcademicYear, verifyStudent } from "../utils/schoolScope";
 
 const router = Router();
 
 // GET /api/marks?sectionId=xxx&subjectId=xxx&examTypeId=xxx
-router.get("/", authenticate, async (req, res) => {
+router.get("/", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, subjectId, examTypeId, studentId } = req.query;
   if (sectionId) await verifySection(String(sectionId), schoolId);
   if (examTypeId) await verifyExamType(String(examTypeId), schoolId);
-  const where: any = {};
+  if (studentId) await verifyStudent(String(studentId), schoolId);
+  // Mandatory school scoping — always filter marks to this school
+  const where: any = {
+    student: { section: { grade: { academicYear: { schoolId } } } },
+  };
   if (studentId) where.studentId = String(studentId);
   if (subjectId) where.subjectId = String(subjectId);
   if (examTypeId) where.examTypeId = String(examTypeId);
-  if (sectionId) where.student = { sectionId: String(sectionId) };
+  if (sectionId) where.student = { ...where.student, sectionId: String(sectionId) };
 
   const marks = await prisma.mark.findMany({
     where,

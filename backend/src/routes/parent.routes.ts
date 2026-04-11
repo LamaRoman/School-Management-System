@@ -181,13 +181,44 @@ router.get("/child/:studentId/fees", authenticate, async (req, res) => {
 
   const schoolId = getSchoolId(req);
   const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true, schoolId } });
-  if (!activeYear) return res.json({ data: { payments: [], totalPaid: 0 } });
+  if (!activeYear) return res.json({ data: { payments: [], totalPaid: 0, summary: { totalPaid: 0, totalDue: 0, balance: 0 } } });
 
-  const payments = await prisma.feePayment.findMany({
-    where: { studentId, academicYearId: activeYear.id },
-    include: { feeCategory: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const gradeId = student.section.gradeId;
+
+  const [payments, structures, overrides] = await Promise.all([
+    prisma.feePayment.findMany({
+      where: { studentId, academicYearId: activeYear.id, deletedAt: null },
+      include: { feeCategory: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.feeStructure.findMany({
+      where: { gradeId, academicYearId: activeYear.id },
+      include: { feeCategory: { select: { name: true } } },
+    }),
+    prisma.studentFeeOverride.findMany({
+      where: { studentId, academicYearId: activeYear.id },
+    }),
+  ]);
+
+  // Calculate total due for the full year
+  let totalDue = 0;
+  for (const s of structures) {
+    const ov = overrides.find((o) => o.feeCategoryId === s.feeCategoryId);
+    let amount = s.amount;
+    if (ov) {
+      if (ov.discountType === "PERCENTAGE" && ov.discountPercent !== null) {
+        amount = amount * (1 - ov.discountPercent / 100);
+      } else if (ov.discountType === "FLAT") {
+        amount = ov.overrideAmount;
+      }
+    }
+    if (s.frequency === "MONTHLY") {
+      totalDue += amount * 12;
+    } else {
+      totalDue += amount;
+    }
+  }
+  totalDue = Math.round(totalDue);
 
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -202,6 +233,11 @@ router.get("/child/:studentId/fees", authenticate, async (req, res) => {
         receiptNumber: p.receiptNumber,
       })),
       totalPaid,
+      summary: {
+        totalPaid,
+        totalDue,
+        balance: Math.round(totalDue - totalPaid),
+      },
     },
   });
 });

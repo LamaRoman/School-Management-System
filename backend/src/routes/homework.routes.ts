@@ -80,8 +80,9 @@ router.get("/", authenticate, async (req, res) => {
 
 // GET /api/homework/:id
 router.get("/:id", authenticate, async (req, res) => {
-  const homework = await prisma.homework.findUniqueOrThrow({
-    where: { id: req.params.id },
+  const schoolId = getSchoolId(req);
+  const homework = await prisma.homework.findFirstOrThrow({
+    where: { id: req.params.id, section: { grade: { academicYear: { schoolId } } } },
     include: {
       subject: { select: { id: true, name: true } },
       section: {
@@ -150,7 +151,10 @@ router.post("/", authenticate, async (req, res) => {
 // PUT /api/homework/:id
 router.put("/:id", authenticate, async (req, res) => {
   const user = req.user!;
-  const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const existing = await prisma.homework.findFirstOrThrow({
+    where: { id: req.params.id, section: { grade: { academicYear: { schoolId } } } },
+  });
 
   if (user.role !== "ADMIN" && existing.assignedById !== user.userId) {
     throw new AppError("You can only edit homework you created", 403);
@@ -184,7 +188,10 @@ router.put("/:id", authenticate, async (req, res) => {
 // DELETE /api/homework/:id
 router.delete("/:id", authenticate, async (req, res) => {
   const user = req.user!;
-  const existing = await prisma.homework.findUniqueOrThrow({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const existing = await prisma.homework.findFirstOrThrow({
+    where: { id: req.params.id, section: { grade: { academicYear: { schoolId } } } },
+  });
 
   if (user.role !== "ADMIN" && existing.assignedById !== user.userId) {
     throw new AppError("You can only delete homework you created", 403);

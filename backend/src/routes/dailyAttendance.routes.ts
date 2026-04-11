@@ -8,7 +8,7 @@ import { verifySection, verifyAcademicYear } from "../utils/schoolScope";
 const router = Router();
 
 // GET /api/daily-attendance?sectionId=xxx&date=xxx&academicYearId=xxx
-router.get("/", authenticate, async (req, res) => {
+router.get("/", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, date, academicYearId } = req.query;
   if (!sectionId || !date || !academicYearId) {

@@ -18,7 +18,7 @@ const teacherListInclude = {
 } as const;
 
 // GET /api/teachers
-router.get("/", authenticate, async (req, res) => {
+router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const teachers = await prisma.teacher.findMany({
     where: { isActive: true, schoolId },
@@ -40,7 +40,7 @@ router.get("/all", authenticate, authorize("ADMIN"), async (req, res) => {
 });
 
 // GET /api/teachers/:id
-router.get("/:id", authenticate, async (req, res) => {
+router.get("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const teacher = await prisma.teacher.findFirstOrThrow({
     where: { id: req.params.id, schoolId },

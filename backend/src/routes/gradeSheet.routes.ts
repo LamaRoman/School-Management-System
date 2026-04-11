@@ -1,6 +1,6 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
-import { authenticate, getSchoolId } from "../middleware/auth";
+import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifySection } from "../utils/schoolScope";
 import {
@@ -12,7 +12,7 @@ import {
 const router = Router();
 
 // GET /api/grade-sheet/term?sectionId=xxx&examTypeId=xxx&academicYearId=xxx
-router.get("/term", authenticate, async (req, res) => {
+router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, examTypeId, academicYearId } = req.query;
   if (!sectionId || !examTypeId || !academicYearId) {
@@ -128,7 +128,7 @@ router.get("/term", authenticate, async (req, res) => {
 });
 
 // GET /api/grade-sheet/final?sectionId=xxx&academicYearId=xxx
-router.get("/final", authenticate, async (req, res) => {
+router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.query;
   if (!sectionId || !academicYearId) {

@@ -80,6 +80,12 @@ router.post("/categories/bulk", authenticate, authorize("ADMIN"), async (req, re
 
 // PUT /api/observations/categories/:id
 router.put("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  // Verify the category belongs to this school before updating
+  await prisma.observationCategory.findFirstOrThrow({
+    where: { id: req.params.id, grade: { academicYear: { schoolId } } },
+  });
+
   const schema = z.object({
     name: z.string().min(1).optional(),
     nameNp: z.string().optional(),
@@ -98,6 +104,12 @@ router.put("/categories/:id", authenticate, authorize("ADMIN"), async (req, res)
 
 // DELETE /api/observations/categories/:id
 router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  // Verify the category belongs to this school before deactivating
+  await prisma.observationCategory.findFirstOrThrow({
+    where: { id: req.params.id, grade: { academicYear: { schoolId } } },
+  });
+
   await prisma.observationCategory.update({
     where: { id: req.params.id },
     data: { isActive: false },
@@ -159,7 +171,7 @@ router.get("/results", authenticate, async (req, res) => {
 });
 
 // POST /api/observations/results/bulk
-router.post("/results/bulk", authenticate, async (req, res) => {
+router.post("/results/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
     examTypeId: z.string().min(1),

@@ -532,7 +532,7 @@ model FeeStructure {
   gradeId         String   @map("grade_id")
   academicYearId  String   @map("academic_year_id")
   amount          Float
-  frequency       String   @default("MONTHLY")  // MONTHLY, QUARTERLY, YEARLY, ONE_TIME
+  frequency       String   @default("MONTHLY")  // MONTHLY, ANNUAL, ONE_TIME, PER_EXAM
   examTypeId      String?  @map("exam_type_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @default(now()) @map("updated_at")
