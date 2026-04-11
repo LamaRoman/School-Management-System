@@ -530,13 +530,17 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
       ON CONFLICT (school_id) DO NOTHING
     `;
     // Lock the row and increment atomically
-    const [{ last_value }] = await tx.$queryRaw<[{ last_value: number }]>`
+    const rows = await tx.$queryRaw<{ last_value: bigint | number }[]>`
       UPDATE receipt_counters
       SET last_value = last_value + 1
       WHERE school_id = ${schoolId}
       RETURNING last_value
     `;
-    const receipt = `RCP-${schoolPrefix}-${String(last_value).padStart(6, "0")}`;
+    if (!rows || rows.length === 0) {
+      throw new AppError("Failed to generate receipt number — receipt counter row missing", 500);
+    }
+    const lastValue = Number(rows[0].last_value);
+    const receipt = `RCP-${schoolPrefix}-${String(lastValue).padStart(6, "0")}`;
 
     const results = [];
     for (const item of items) {

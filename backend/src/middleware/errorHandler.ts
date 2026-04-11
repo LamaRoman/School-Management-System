@@ -35,9 +35,17 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     if (err.code === "P2002") {
       return res.status(409).json({ error: "A record with this data already exists." });
     }
+    if (err.code === "P2003") {
+      return res.status(400).json({ error: "Referenced record not found. A related entity may have been deleted." });
+    }
     if (err.code === "P2025") {
       return res.status(404).json({ error: "Record not found." });
     }
+  }
+
+  if (err instanceof Prisma.PrismaClientUnknownRequestError) {
+    console.error("[Prisma Unknown]", err.message);
+    return res.status(500).json({ error: "A database error occurred. Check that all migrations have been applied." });
   }
 
   // Fallback
