@@ -226,7 +226,7 @@ async function buildInvoice(
 
 // ─── FEE CATEGORIES ──────────────────────────────────────────────────────────
 
-router.get("/categories", authenticate, async (req, res) => {
+router.get("/categories", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const categories = await prisma.feeCategory.findMany({
     where: { isActive: true, schoolId },
@@ -269,7 +269,7 @@ router.delete("/categories/:id", authenticate, authorize("ADMIN"), async (req, r
 
 // ─── FEE STRUCTURE ────────────────────────────────────────────────────────────
 
-router.get("/structure", authenticate, async (req, res) => {
+router.get("/structure", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { academicYearId, gradeId } = req.query;
   const where: any = {};
@@ -383,7 +383,7 @@ router.delete("/structure/:id", authenticate, authorize("ADMIN"), async (req, re
 
 // ─── OVERRIDES (Scholarships) ─────────────────────────────────────────────────
 
-router.get("/overrides", authenticate, async (req, res) => {
+router.get("/overrides", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.query;
   const where: any = {};
@@ -462,7 +462,7 @@ router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, re
 
 // ─── PAYMENTS ─────────────────────────────────────────────────────────────────
 
-router.get("/payments", authenticate, async (req, res) => {
+router.get("/payments", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.query;
   const where: any = { deletedAt: null };
@@ -585,7 +585,7 @@ router.delete("/payments/:id", authenticate, authorize("ADMIN"), async (req, res
 
 // ─── SECTION OVERVIEW ─────────────────────────────────────────────────────────
 
-router.get("/section-overview", authenticate, async (req, res) => {
+router.get("/section-overview", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, academicYearId, currentMonth } = req.query;
   if (!sectionId || !academicYearId) throw new AppError("sectionId and academicYearId required");
@@ -684,7 +684,7 @@ router.get("/section-overview", authenticate, async (req, res) => {
 
 // ─── STUDENT FEE LEDGER ───────────────────────────────────────────────────────
 
-router.get("/student-ledger/:studentId", authenticate, async (req, res) => {
+router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId } = req.params;
   const { academicYearId } = req.query;
@@ -841,7 +841,7 @@ router.get("/student-ledger/:studentId", authenticate, async (req, res) => {
 
 // ─── RECEIPT ──────────────────────────────────────────────────────────────────
 
-router.get("/receipt/:receiptNumber", authenticate, async (req, res) => {
+router.get("/receipt/:receiptNumber", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const [payments, school] = await Promise.all([
     prisma.feePayment.findMany({
@@ -881,7 +881,7 @@ router.get("/receipt/:receiptNumber", authenticate, async (req, res) => {
 
 // ─── MONTHS ───────────────────────────────────────────────────────────────────
 
-router.get("/months", authenticate, (_req, res) => {
+router.get("/months", authenticate, authorize("ADMIN", "ACCOUNTANT"), (_req, res) => {
   // Returns a plain array — mobile client expects string[]
   res.json({ data: nepaliMonths });
 });
@@ -890,7 +890,7 @@ router.get("/months", authenticate, (_req, res) => {
 
 // GET /api/fees/invoice/:studentId
 // Returns grouped fee items: arrears (mandatory) + current month + other + advance support data.
-router.get("/invoice/:studentId", authenticate, async (req, res) => {
+router.get("/invoice/:studentId", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { academicYearId, month } = req.query;
   if (!academicYearId || !month) throw new AppError("academicYearId and month required");
@@ -906,7 +906,7 @@ router.get("/invoice/:studentId", authenticate, async (req, res) => {
 
 // GET /api/fees/invoices-bulk
 // FIX: was using fragile internal HTTP self-fetch — now calls buildInvoice directly.
-router.get("/invoices-bulk", authenticate, async (req, res) => {
+router.get("/invoices-bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { sectionId, academicYearId, month } = req.query;
   if (!sectionId || !academicYearId || !month) {
