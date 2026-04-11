@@ -515,11 +515,13 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     verifyAcademicYear(academicYearId, schoolId),
   ]);
 
-  // Atomic receipt generation: Serializable isolation prevents two concurrent
-  // requests from reading the same count before either commits.
+  // Atomic receipt generation via PostgreSQL SEQUENCE (industry standard).
+  // nextval() is atomic and lock-free — no Serializable isolation required.
+  // The sequence is global (system-wide), so RCP-NNNNN is unique across
+  // all schools and all academic years on this platform, forever.
   const { created, receiptNumber } = await prisma.$transaction(async (tx) => {
-    const count = await tx.feePayment.count({ where: { academicYearId } });
-    const receipt = `RCP-${String(count + 1).padStart(5, "0")}`;
+    const [{ nextval }] = await tx.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('receipt_number_seq')`;
+    const receipt = `RCP-${String(Number(nextval)).padStart(6, "0")}`;
 
     const results = [];
     for (const item of items) {
@@ -540,7 +542,7 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
     }
 
     return { created: results, receiptNumber: receipt };
-  }, { isolationLevel: "Serializable" });
+  });
 
   const userId = req.user!.userId;
   for (const p of created) {
@@ -847,9 +849,16 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
 
 router.get("/receipt/:receiptNumber", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
   const schoolId = getSchoolId(req);
+  // Scope the lookup by schoolId upfront so we never fetch another school's
+  // receipt. With the global sequence this cannot happen anyway, but this
+  // is defence-in-depth and makes the access-denied branch unreachable.
   const [payments, school] = await Promise.all([
     prisma.feePayment.findMany({
-      where: { receiptNumber: req.params.receiptNumber, deletedAt: null },
+      where: {
+        receiptNumber: req.params.receiptNumber,
+        deletedAt: null,
+        student: { section: { grade: { academicYear: { schoolId } } } },
+      },
       include: {
         student: { include: { section: { include: { grade: { include: { academicYear: { select: { schoolId: true } } } } } } } },
         feeCategory: true,

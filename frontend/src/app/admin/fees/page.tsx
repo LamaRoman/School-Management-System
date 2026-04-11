@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
 import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
 import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
@@ -28,6 +29,8 @@ type Tab = "categories" | "structure" | "collection" | "discounts";
 
 export default function FeeManagementPage() {
   const showConfirm = useConfirm();
+  const { user } = useAuth();
+  const readOnly = user?.role === "ACCOUNTANT";
   const [tab, setTab] = useState<Tab>("categories");
   const [activeYear, setActiveYear] = useState<any>(null);
   const [categories, setCategories] = useState<FeeCategory[]>([]);
@@ -63,9 +66,9 @@ export default function FeeManagementPage() {
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>{t.label}</button>
         ))}
       </div>
-      {tab === "categories" && <CategoriesTab categories={categories} setCategories={setCategories} />}
-      {tab === "structure" && activeYear && <StructureTab activeYear={activeYear} categories={categories} grades={grades} examTypes={examTypes} />}
-      {tab === "discounts" && activeYear && <DiscountsTab activeYear={activeYear} categories={categories} grades={grades} />}
+      {tab === "categories" && <CategoriesTab categories={categories} setCategories={setCategories} readOnly={readOnly} />}
+      {tab === "structure" && activeYear && <StructureTab activeYear={activeYear} categories={categories} grades={grades} examTypes={examTypes} readOnly={readOnly} />}
+      {tab === "discounts" && activeYear && <DiscountsTab activeYear={activeYear} categories={categories} grades={grades} readOnly={readOnly} />}
       {tab === "collection" && activeYear && <CollectionTab activeYear={activeYear} grades={grades} />}
     </div>
   );
@@ -73,7 +76,7 @@ export default function FeeManagementPage() {
 
 // ─── CATEGORIES TAB ─────────────────────────────────────
 
-function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[]; setCategories: (c: FeeCategory[]) => void }) {
+function CategoriesTab({ categories, setCategories, readOnly }: { categories: FeeCategory[]; setCategories: (c: FeeCategory[]) => void; readOnly?: boolean }) {
   const showConfirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState(""); const [description, setDescription] = useState("");
@@ -90,18 +93,18 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-primary">{categories.length} Categories</h2>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-xs"><Plus size={14} /> Add</button>
+        {!readOnly && <button onClick={() => setShowForm(!showForm)} className="btn-primary text-xs"><Plus size={14} /> Add</button>}
       </div>
-      {showForm && (<div className="card p-4 mb-4"><div className="flex gap-3 items-end"><div className="flex-1"><label className="label">Name *</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Tuition Fee" /></div><div className="flex-1"><label className="label">Description</label><input className="input" value={description} onChange={(e) => setDescription(e.target.value)} /></div><button onClick={handleAdd} className="btn-primary text-xs">Add</button><button onClick={() => setShowForm(false)} className="btn-ghost text-xs"><X size={14} /></button></div></div>)}
+      {!readOnly && showForm && (<div className="card p-4 mb-4"><div className="flex gap-3 items-end"><div className="flex-1"><label className="label">Name *</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Tuition Fee" /></div><div className="flex-1"><label className="label">Description</label><input className="input" value={description} onChange={(e) => setDescription(e.target.value)} /></div><button onClick={handleAdd} className="btn-primary text-xs">Add</button><button onClick={() => setShowForm(false)} className="btn-ghost text-xs"><X size={14} /></button></div></div>)}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead><tr className="table-header"><th className="text-left px-5 py-3">#</th><th className="text-left px-5 py-3">Name</th><th className="text-left px-5 py-3">Description</th><th className="text-right px-5 py-3">Actions</th></tr></thead>
+          <thead><tr className="table-header"><th className="text-left px-5 py-3">#</th><th className="text-left px-5 py-3">Name</th><th className="text-left px-5 py-3">Description</th>{!readOnly && <th className="text-right px-5 py-3">Actions</th>}</tr></thead>
           <tbody>{categories.map((cat, i) => (
             <tr key={cat.id} className="border-t border-gray-100 hover:bg-surface">
               <td className="px-5 py-3 text-gray-400">{i + 1}</td>
               <td className="px-5 py-3">{editingId === cat.id ? <input className="text-sm px-2 py-1 border border-primary rounded w-full" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus /> : <span className="font-medium text-primary">{cat.name}</span>}</td>
               <td className="px-5 py-3">{editingId === cat.id ? <input className="text-sm px-2 py-1 border border-gray-200 rounded w-full" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} /> : <span className="text-gray-500">{cat.description || "—"}</span>}</td>
-              <td className="px-5 py-3 text-right">{editingId === cat.id ? (<><button onClick={handleSaveEdit} className="text-xs text-primary hover:underline">Save</button><button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:underline ml-2">Cancel</button></>) : (<><button onClick={() => handleStartEdit(cat)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary"><Edit2 size={14} /></button><button onClick={() => handleDelete(cat.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></>)}</td>
+              {!readOnly && <td className="px-5 py-3 text-right">{editingId === cat.id ? (<><button onClick={handleSaveEdit} className="text-xs text-primary hover:underline">Save</button><button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:underline ml-2">Cancel</button></>) : (<><button onClick={() => handleStartEdit(cat)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary"><Edit2 size={14} /></button><button onClick={() => handleDelete(cat.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></>)}</td>}
             </tr>))}</tbody>
         </table>
         {categories.length === 0 && <div className="p-8 text-center text-gray-400 text-sm">No categories.</div>}
@@ -112,7 +115,7 @@ function CategoriesTab({ categories, setCategories }: { categories: FeeCategory[
 
 // ─── STRUCTURE TAB ──────────────────────────────────────
 
-function StructureTab({ activeYear, categories, grades, examTypes }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; examTypes: ExamType[] }) {
+function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; examTypes: ExamType[]; readOnly?: boolean }) {
   const showConfirm = useConfirm();
   const [selectedGrade, setSelectedGrade] = useState("");
   const [entries, setEntries] = useState<{ feeCategoryId: string; amount: number; frequency: string; examTypeId?: string }[]>([]);
@@ -144,14 +147,14 @@ function StructureTab({ activeYear, categories, grades, examTypes }: { activeYea
                 <td className="px-4 py-2"><select value={entry.frequency} onChange={(e) => handleEntryChange(i, "frequency", e.target.value)} className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded">{frequencies.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}</select></td>
                 <td className="px-4 py-2">{entry.frequency === "PER_EXAM" ? <select value={entry.examTypeId || ""} onChange={(e) => handleEntryChange(i, "examTypeId", e.target.value)} className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded"><option value="">Select</option>{examTypes.map((et) => <option key={et.id} value={et.id}>{et.name}</option>)}</select> : <span className="text-xs text-gray-400">—</span>}</td>
                 <td className="px-4 py-2 text-right font-semibold text-primary">Rs {calcAnnual(entry).toLocaleString()}</td>
-                <td className="px-4 py-2"><button onClick={() => handleRemoveRow(i)} className="p-1 hover:bg-red-50 rounded text-gray-300 hover:text-red-600"><Trash2 size={12} /></button></td>
+                <td className="px-4 py-2">{!readOnly && <button onClick={() => handleRemoveRow(i)} className="p-1 hover:bg-red-50 rounded text-gray-300 hover:text-red-600"><Trash2 size={12} /></button>}</td>
               </tr>))}</tbody>
             <tfoot><tr className="border-t-2 border-primary"><td colSpan={4} className="px-4 py-2 text-right font-bold text-primary">Total Annual</td><td className="px-4 py-2 text-right font-bold text-primary">Rs {entries.reduce((s, e) => s + calcAnnual(e), 0).toLocaleString()}</td><td></td></tr></tfoot>
           </table>
         </div>
       )}
       {selectedGrade && entries.length === 0 && <div className="card p-6 mb-4 text-center text-gray-400 text-sm">No entries. Add below.</div>}
-      {selectedGrade && (<div className="flex gap-2"><button onClick={handleAddRow} className="btn-ghost text-xs"><Plus size={14} /> Add Per-Exam Row</button><button onClick={handleSave} disabled={saving} className="btn-primary text-sm"><Save size={16} /> {saving ? "Saving..." : "Save"}</button><button onClick={handleCopyToAll} disabled={saving} className="btn-outline text-xs">Copy to All</button></div>)}
+      {selectedGrade && !readOnly && (<div className="flex gap-2"><button onClick={handleAddRow} className="btn-ghost text-xs"><Plus size={14} /> Add Per-Exam Row</button><button onClick={handleSave} disabled={saving} className="btn-primary text-sm"><Save size={16} /> {saving ? "Saving..." : "Save"}</button><button onClick={handleCopyToAll} disabled={saving} className="btn-outline text-xs">Copy to All</button></div>)}
       {!selectedGrade && <div className="card p-8 text-center text-gray-400">Select a grade.</div>}
     </div>
   );
@@ -159,7 +162,7 @@ function StructureTab({ activeYear, categories, grades, examTypes }: { activeYea
 
 // ─── DISCOUNTS TAB ──────────────────────────────────────
 
-function DiscountsTab({ activeYear, categories, grades }: { activeYear: any; categories: FeeCategory[]; grades: Grade[] }) {
+function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; readOnly?: boolean }) {
   const [selectedGrade, setSelectedGrade] = useState(""); const [sections, setSections] = useState<any[]>([]);
   const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState(""); const [overrides, setOverrides] = useState<any[]>([]);
@@ -179,7 +182,7 @@ function DiscountsTab({ activeYear, categories, grades }: { activeYear: any; cat
         <div><label className="label">Student</label><select className="input" value={selectedStudent} onChange={(e) => handleStudentChange(e.target.value)}><option value="">Select</option>{students.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div>
       {selectedStudent && (<>
-        <div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Add Discount</h3>
+        {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Add Discount</h3>
           <div className="grid grid-cols-5 gap-3 items-end">
             <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <div><label className="label">Type</label><select className="input" value={form.discountType} onChange={(e) => setForm({ ...form, discountType: e.target.value })}><option value="PERCENTAGE">Percentage</option><option value="FLAT">Flat Amount</option></select></div>
@@ -187,8 +190,8 @@ function DiscountsTab({ activeYear, categories, grades }: { activeYear: any; cat
             <div><label className="label">Reason</label><input className="input" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Merit" /></div>
             <button onClick={handleAdd} className="btn-primary text-xs">Apply</button>
           </div>
-        </div>
-        {overrides.length > 0 && (<div className="card overflow-hidden"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Type</th><th className="text-center px-4 py-2">Discount</th><th className="text-left px-4 py-2">Reason</th><th className="w-12"></th></tr></thead><tbody>{overrides.map((o: any) => (<tr key={o.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{o.feeCategory.name}</td><td className="px-4 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${o.discountType === "PERCENTAGE" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{o.discountType}</span></td><td className="px-4 py-2 text-center font-semibold">{o.discountType === "PERCENTAGE" ? `${o.discountPercent}%` : `Rs ${o.overrideAmount}`}</td><td className="px-4 py-2 text-gray-500">{o.reason || "—"}</td><td className="px-4 py-2"><button onClick={() => handleRemove(o.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td></tr>))}</tbody></table></div>)}
+        </div>)}
+        {overrides.length > 0 && (<div className="card overflow-hidden"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Type</th><th className="text-center px-4 py-2">Discount</th><th className="text-left px-4 py-2">Reason</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{overrides.map((o: any) => (<tr key={o.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{o.feeCategory.name}</td><td className="px-4 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${o.discountType === "PERCENTAGE" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{o.discountType}</span></td><td className="px-4 py-2 text-center font-semibold">{o.discountType === "PERCENTAGE" ? `${o.discountPercent}%` : `Rs ${o.overrideAmount}`}</td><td className="px-4 py-2 text-gray-500">{o.reason || "—"}</td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(o.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div>)}
         {overrides.length === 0 && <div className="card p-6 text-center text-gray-400 text-sm">No discounts.</div>}
       </>)}
       {!selectedStudent && <div className="card p-8 text-center text-gray-400">Select grade, section, and student.</div>}

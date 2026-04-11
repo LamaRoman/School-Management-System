@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, Edit2, X, KeyRound, UserCheck, UserX, ShieldOff, Shield } from "lucide-react";
+import { Plus, Edit2, X, KeyRound, UserCheck, UserX, ShieldOff, Shield, Eye, EyeOff } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 // ─── Types ──────────────────────────────────────────────
@@ -291,7 +291,9 @@ function AccountantsTab() {
   const [staff, setStaff] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [resetId, setResetId] = useState<string | null>(null);
@@ -302,10 +304,11 @@ function AccountantsTab() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.password !== form.confirmPassword) { setError("Passwords do not match"); return; }
     setSaving(true); setError("");
     try {
-      await api.post("/staff", form);
-      setForm({ email: "", password: "" }); setShowCreate(false); fetchStaff();
+      await api.post("/staff", { email: form.email, password: form.password });
+      setForm({ email: "", password: "", confirmPassword: "" }); setShowCreate(false); fetchStaff();
       toast.success("Accountant account created");
     } catch (err: any) { setError(err.message || "Failed to create account"); } finally { setSaving(false); }
   };
@@ -343,12 +346,26 @@ function AccountantsTab() {
             </div>
             <div>
               <label className="label">Password * (min 6 chars)</label>
-              <input required type="password" className="input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Login password" />
+              <div className="relative">
+                <input required type={showPassword ? "text" : "password"} className="input pr-10" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Login password" />
+                <button type="button" onClick={() => setShowPassword((p) => !p)} className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div className="md:col-start-2">
+              <label className="label">Confirm Password *</label>
+              <div className="relative">
+                <input required type={showConfirmPassword ? "text" : "password"} className="input pr-10" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Re-enter password" />
+                <button type="button" onClick={() => setShowConfirmPassword((p) => !p)} className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600">
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="btn-primary text-sm">{saving ? "Creating..." : "Create Account"}</button>
-            <button type="button" onClick={() => { setShowCreate(false); setError(""); }} className="btn-ghost text-sm"><X size={14} /> Cancel</button>
+            <button type="button" onClick={() => { setShowCreate(false); setError(""); setForm({ email: "", password: "", confirmPassword: "" }); setShowPassword(false); setShowConfirmPassword(false); }} className="btn-ghost text-sm"><X size={14} /> Cancel</button>
           </div>
         </form>
       )}

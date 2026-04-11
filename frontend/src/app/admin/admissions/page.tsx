@@ -128,6 +128,14 @@ export default function AdmissionPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleApproveAll = async () => {
+    const pending = admissions.filter((a) => a.status === "PENDING");
+    if (pending.length === 0) return;
+    for (const adm of pending) {
+      await handleApprove(adm.id);
+    }
+  };
+
   const handleReject = async (id: string) => {
     const remarks = prompt("Reason for rejection (optional):");
     try {
@@ -300,7 +308,7 @@ export default function AdmissionPage() {
       )}
 
       {/* Status filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         {[
           { key: "", label: `All (${counts.all})` },
           { key: "PENDING", label: `Pending (${counts.pending})` },
@@ -313,6 +321,11 @@ export default function AdmissionPage() {
             {f.label}
           </button>
         ))}
+        {filterStatus === "PENDING" && counts.pending > 0 && (
+          <button onClick={handleApproveAll} className="ml-auto btn-primary text-xs">
+            <Check size={14} /> Approve All ({counts.pending})
+          </button>
+        )}
       </div>
 
       {/* Enroll modal */}
