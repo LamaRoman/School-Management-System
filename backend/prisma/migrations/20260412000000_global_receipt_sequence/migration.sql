@@ -19,14 +19,17 @@ CREATE SEQUENCE IF NOT EXISTS receipt_number_seq;
 -- If no receipts exist yet, COALESCE returns 0 → next receipt is RCP-00001.
 SELECT setval(
   'receipt_number_seq',
-  COALESCE(
-    (
-      SELECT MAX(CAST(SUBSTRING(receipt_number FROM 5) AS INTEGER))
-      FROM   fee_payments
-      WHERE  receipt_number ~ '^RCP-[0-9]+$'
-        AND  deleted_at IS NULL
+  GREATEST(
+    COALESCE(
+      (
+        SELECT MAX(CAST(SUBSTRING(receipt_number FROM 5) AS INTEGER))
+        FROM   fee_payments
+        WHERE  receipt_number ~ '^RCP-[0-9]+$'
+          AND  deleted_at IS NULL
+      ),
+      0
     ),
-    0
+    1
   ),
-  true   -- is_called=true: next nextval() returns this value + 1
+  true
 );
