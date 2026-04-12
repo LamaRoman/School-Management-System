@@ -296,7 +296,7 @@ export default function ExamRoutinePage() {
       {/* Routine table */}
       {selectedExam && selectedGrade && (
         <>
-          <div className="card overflow-hidden">
+          <div className="card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
