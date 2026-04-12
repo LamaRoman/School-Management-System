@@ -86,7 +86,7 @@ export default function StudentReportPage() {
     const et = examTypes.find((e) => e.id === examTypeId);
     try {
       let data: any;
-      if (et?.name === "Final") {
+      if (et?.isFinal) {
         data = await api.get(`/reports/final/${user.student.id}/${activeYear.id}`);
       } else {
         data = await api.get(`/reports/term/${user.student.id}/${examTypeId}`);
@@ -113,10 +113,11 @@ export default function StudentReportPage() {
       const token = api.getToken();
       let url: string;
 
-      if (et?.name === "Final") {
-        url = `/api/pdf/final/${user.student.id}/${activeYear.id}?mode=${pdfMode}`;
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      if (et?.isFinal) {
+        url = `${API_BASE}/pdf/final/${user.student.id}/${activeYear.id}?mode=${pdfMode}`;
       } else {
-        url = `/api/pdf/term/${user.student.id}/${selectedExam}?mode=${pdfMode}`;
+        url = `${API_BASE}/pdf/term/${user.student.id}/${selectedExam}?mode=${pdfMode}`;
       }
 
       const res = await fetch(url, {

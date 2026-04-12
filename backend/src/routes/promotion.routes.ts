@@ -139,6 +139,7 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
     const newEt = await prisma.examType.create({
       data: {
         name: et.name,
+        isFinal: et.isFinal,
         displayOrder: et.displayOrder,
         academicYearId: targetYearId,
         paperSize: et.paperSize,

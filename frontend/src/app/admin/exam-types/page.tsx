@@ -5,14 +5,14 @@ import toast from "react-hot-toast";
 import { Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
-interface ExamType { id: string; name: string; displayOrder: number; paperSize: string; showRank: boolean }
+interface ExamType { id: string; name: string; isFinal: boolean; displayOrder: number; paperSize: string; showRank: boolean }
 
 export default function ExamTypesPage() {
   const confirm = useConfirm();
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", displayOrder: 0, paperSize: "A5", showRank: true });
+  const [form, setForm] = useState({ name: "", isFinal: false, displayOrder: 0, paperSize: "A5", showRank: true });
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -35,7 +35,7 @@ export default function ExamTypesPage() {
       await api.post("/exam-types", { ...form, academicYearId: activeYear.id });
       toast.success("Exam type created");
       setShowForm(false);
-      setForm({ name: "", displayOrder: examTypes.length + 1, paperSize: "A5", showRank: true });
+      setForm({ name: "", isFinal: false, displayOrder: examTypes.length + 1, paperSize: "A5", showRank: true });
       fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -56,9 +56,9 @@ export default function ExamTypesPage() {
   const seedDefaults = async () => {
     if (!activeYear) return toast.error("Create an academic year first");
     const defaults = [
-      { name: "First Terminal", displayOrder: 1, paperSize: "A5", showRank: true },
-      { name: "Second Terminal", displayOrder: 2, paperSize: "A5", showRank: true },
-      { name: "Final", displayOrder: 3, paperSize: "A4", showRank: true },
+      { name: "First Terminal", isFinal: false, displayOrder: 1, paperSize: "A5", showRank: true },
+      { name: "Second Terminal", isFinal: false, displayOrder: 2, paperSize: "A5", showRank: true },
+      { name: "Final", isFinal: true, displayOrder: 3, paperSize: "A4", showRank: true },
     ];
     try {
       for (const d of defaults) await api.post("/exam-types", { ...d, academicYearId: activeYear.id });
@@ -106,6 +106,12 @@ export default function ExamTypesPage() {
                 Show Rank
               </label>
             </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer mt-6">
+                <input type="checkbox" checked={form.isFinal} onChange={(e) => setForm({ ...form, isFinal: e.target.checked })} className="rounded" />
+                Is Final (Consolidated)
+              </label>
+            </div>
             <div className="flex gap-2">
               <button type="submit" className="btn-primary">Save</button>
               <button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button>
@@ -122,14 +128,15 @@ export default function ExamTypesPage() {
               <th className="text-left px-5 py-3">Exam Name</th>
               <th className="text-center px-5 py-3">Paper Size</th>
               <th className="text-center px-5 py-3">Show Rank</th>
+              <th className="text-center px-5 py-3">Is Final</th>
               <th className="text-right px-5 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">Loading...</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400">Loading...</td></tr>
             ) : examTypes.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">No exam types yet</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400">No exam types yet</td></tr>
             ) : examTypes.map((et) => (
               <tr key={et.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
                 <td className="px-5 py-3 text-gray-400">{et.displayOrder}</td>
@@ -146,6 +153,14 @@ export default function ExamTypesPage() {
                     type="checkbox"
                     checked={et.showRank}
                     onChange={(e) => updateField(et.id, "showRank", e.target.checked)}
+                    className="rounded cursor-pointer"
+                  />
+                </td>
+                <td className="px-5 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={et.isFinal}
+                    onChange={(e) => updateField(et.id, "isFinal", e.target.checked)}
                     className="rounded cursor-pointer"
                   />
                 </td>

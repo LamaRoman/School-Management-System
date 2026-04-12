@@ -114,6 +114,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       gradeName: section.grade.name,
       sectionName: section.name,
       examType: examType.name,
+      isFinal: false,
       showRank: examType.showRank,
       subjects: subjects.map((s) => ({
         id: s.id,
@@ -167,7 +168,7 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   });
 
   const finalExamType = await prisma.examType.findFirst({
-    where: { name: "Final", academicYearId: String(academicYearId) },
+    where: { isFinal: true, academicYearId: String(academicYearId) },
   });
 
   const rows = students.map((student) => {
@@ -236,6 +237,7 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       gradeName: section.grade.name,
       sectionName: section.name,
       examType: "Final (Weighted)",
+      isFinal: true,
       showRank: finalExamType?.showRank ?? true,
       subjects: subjects.map((s) => ({
         id: s.id,

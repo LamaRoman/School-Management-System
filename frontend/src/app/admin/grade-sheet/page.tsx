@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import GradeSheet from "@/components/ui/GradeSheet";
 
 interface Grade { id: string; name: string; displayOrder: number; sections: { id: string; name: string }[] }
-interface ExamType { id: string; name: string }
+interface ExamType { id: string; name: string; isFinal: boolean }
 
 export default function AdminGradeSheetPage() {
   const [grades, setGrades] = useState<Grade[]>([]);

@@ -163,6 +163,7 @@ model Subject {
 model ExamType {
   id             String       @id @default(cuid())
   name           String
+  isFinal        Boolean      @default(false) @map("is_final")
   displayOrder   Int          @default(0) @map("display_order")
   academicYearId String       @map("academic_year_id")
   paperSize      String       @default("A5") @map("paper_size")

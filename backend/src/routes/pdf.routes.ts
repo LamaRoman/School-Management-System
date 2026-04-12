@@ -273,7 +273,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
   });
 
   const finalExamType = await prisma.examType.findFirst({
-    where: { name: "Final", academicYearId },
+    where: { isFinal: true, academicYearId },
   });
   const showRank = finalExamType?.showRank ?? true;
 
@@ -330,7 +330,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
       dateOfBirth: student.dateOfBirth,
     },
     academicYear: academicYear.yearBS,
-    examType: "Final",
+    examType: finalExamType?.name || "Final",
     paperSize: finalExamType?.paperSize || "A4",
     isTermReport: false,
     hasPractical: subjects.some((s) => s.fullPracticalMarks > 0),
@@ -354,10 +354,16 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
 // ─── ROUTES ─────────────────────────────────────────────
 
 // GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
-router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
+router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
   await verifyStudent(studentId, schoolId);
+
+  if (req.user!.role === "STUDENT") {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { studentId: true } });
+    if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
+  }
+
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const reportData = await buildTermReportData(studentId, examTypeId);
@@ -380,10 +386,16 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
 });
 
 // GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw
-router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
+router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
   await verifyStudent(studentId, schoolId);
+
+  if (req.user!.role === "STUDENT") {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { studentId: true } });
+    if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
+  }
+
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const reportData = await buildFinalReportData(studentId, academicYearId);
@@ -466,7 +478,7 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
 
   if (students.length === 0) throw new AppError("No students found in this section", 404);
 
-  const finalExamType = await prisma.examType.findFirst({ where: { name: "Final", academicYearId } });
+  const finalExamType = await prisma.examType.findFirst({ where: { isFinal: true, academicYearId } });
   const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId } });
 
   const reportDataArray: any[] = [];

@@ -7,7 +7,7 @@ import { printGradeSheet } from "@/lib/printUtils";
 interface GradeSheetProps {
   sectionId: string;
   academicYearId: string;
-  examTypes: { id: string; name: string }[];
+  examTypes: { id: string; name: string; isFinal: boolean }[];
 }
 
 interface SubjectHeader { id: string; name: string; fullMarks: number; passMarks: number }
@@ -19,7 +19,7 @@ interface Row {
   percentage: number; gpa: number; grade: string; rank: number;
 }
 interface SheetData {
-  gradeName: string; sectionName: string; examType: string; showRank: boolean;
+  gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
   subjects: SubjectHeader[]; rows: Row[]; totalStudents: number;
 }
 
@@ -35,7 +35,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
 
     const et = examTypes.find((e) => e.id === examTypeId);
     try {
-      if (et?.name === "Final") {
+      if (et?.isFinal) {
         const result = await api.get<SheetData>(
           `/grade-sheet/final?sectionId=${sectionId}&academicYearId=${academicYearId}`
         );
@@ -51,7 +51,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
     } finally { setLoading(false); }
   };
 
-  const isFinal = data?.examType?.includes("Final");
+  const isFinal = data?.isFinal ?? false;
 
   return (
     <div>

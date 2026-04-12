@@ -9,6 +9,7 @@ const router = Router();
 
 const examTypeSchema = z.object({
   name: z.string().min(1),
+  isFinal: z.boolean().default(false),
   displayOrder: z.number().int().default(0),
   academicYearId: z.string().min(1),
   paperSize: z.enum(["A4", "A5"]).default("A5"),
@@ -47,6 +48,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   await verifyAcademicYear(data.academicYearId, schoolId);
   const createData: Prisma.ExamTypeCreateInput = {
     name: data.name,
+    isFinal: data.isFinal,
     displayOrder: data.displayOrder,
     paperSize: data.paperSize,
     showRank: data.showRank,

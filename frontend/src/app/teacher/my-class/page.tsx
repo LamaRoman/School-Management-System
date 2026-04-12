@@ -16,7 +16,7 @@ interface ClassTeacherSection {
 }
 
 interface Student { id: string; name: string; rollNo?: number }
-interface ExamType { id: string; name: string; paperSize: string }
+interface ExamType { id: string; name: string; isFinal: boolean; paperSize: string }
 
 interface ColumnSettings {
   showPassMarks: boolean;
@@ -370,7 +370,7 @@ export default function TeacherMyClassPage() {
     setObservations(null);
     try {
       let data: any;
-      if (selectedExam.name === "Final") {
+      if (selectedExam.isFinal) {
         data = await api.get(`/reports/final/${student.id}/${selectedSection.academicYearId}`);
       } else {
         data = await api.get(`/reports/term/${student.id}/${selectedExam.id}`);
@@ -395,10 +395,11 @@ export default function TeacherMyClassPage() {
     try {
       const token = api.getToken();
       let url: string;
-      if (selectedExam.name === "Final") {
-        url = `/api/pdf/final/${selectedStudent.id}/${selectedSection.academicYearId}?mode=${pdfMode}`;
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      if (selectedExam.isFinal) {
+        url = `${API_BASE}/pdf/final/${selectedStudent.id}/${selectedSection.academicYearId}?mode=${pdfMode}`;
       } else {
-        url = `/api/pdf/term/${selectedStudent.id}/${selectedExam.id}?mode=${pdfMode}`;
+        url = `${API_BASE}/pdf/term/${selectedStudent.id}/${selectedExam.id}?mode=${pdfMode}`;
       }
 
       const res = await fetch(url, {
@@ -445,10 +446,11 @@ export default function TeacherMyClassPage() {
     try {
       const token = api.getToken();
       let url: string;
-      if (selectedExam.name === "Final") {
-        url = `/api/pdf/class/final/${selectedSection.sectionId}/${selectedSection.academicYearId}?mode=${pdfMode}`;
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      if (selectedExam.isFinal) {
+        url = `${API_BASE}/pdf/class/final/${selectedSection.sectionId}/${selectedSection.academicYearId}?mode=${pdfMode}`;
       } else {
-        url = `/api/pdf/class/term/${selectedSection.sectionId}/${selectedExam.id}?mode=${pdfMode}`;
+        url = `${API_BASE}/pdf/class/term/${selectedSection.sectionId}/${selectedExam.id}?mode=${pdfMode}`;
       }
 
       const res = await fetch(url, {

@@ -196,11 +196,11 @@ interface GradeSheetRow {
 }
 
 export async function printGradeSheet(data: {
-  gradeName: string; sectionName: string; examType: string; showRank: boolean;
+  gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
   subjects: GradeSheetSubject[]; rows: GradeSheetRow[]; totalStudents: number;
 }) {
   const school = await getSchoolInfo();
-  const isFinal = data.examType?.includes("Final");
+  const isFinal = data.isFinal;
 
   const subjectHeaders = data.subjects.map(s =>
     `<th class="text-center" style="min-width:50px"><div>${s.name}</div><div style="font-size:9px;font-weight:normal;opacity:0.7">(${s.fullMarks})</div></th>`

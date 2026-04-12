@@ -13,7 +13,7 @@ interface ClassTeacherSection {
   academicYearId: string;
 }
 
-interface ExamType { id: string; name: string }
+interface ExamType { id: string; name: string; isFinal: boolean }
 
 export default function TeacherGradeSheetPage() {
   const [mySections, setMySections] = useState<ClassTeacherSection[]>([]);

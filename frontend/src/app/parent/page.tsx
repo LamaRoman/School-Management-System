@@ -25,7 +25,7 @@ interface AttendanceData {
   absentDays: number;
 }
 
-interface ExamType { id: string; name: string }
+interface ExamType { id: string; name: string, isFinal: boolean }
 
 export default function ParentDashboard() {
   const { user } = useAuth();
@@ -82,7 +82,7 @@ export default function ParentDashboard() {
     setSelectedExam(examTypeId);
     try {
       const et = examTypes.find((e) => e.id === examTypeId);
-      if (et?.name === "Final") {
+      if (et?.isFinal) {
         const year = await api.get<any>("/academic-years/active");
         const data = await api.get(`/reports/final/${selectedChild.id}/${year.id}`);
         setReportData(data);

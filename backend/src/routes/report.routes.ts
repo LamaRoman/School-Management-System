@@ -370,7 +370,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
 
   // Find the Final exam type to check showRank and paperSize
   const finalExamType = await prisma.examType.findFirst({
-    where: { name: "Final", academicYearId },
+    where: { isFinal: true, academicYearId },
   });
   const showRank = finalExamType?.showRank ?? true;
 
@@ -391,7 +391,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
         dateOfBirth: student.dateOfBirth,
       },
       academicYear: academicYear.yearBS,
-      examType: "Final",
+      examType: finalExamType?.name || "Final",
       paperSize: finalExamType?.paperSize || "A4",
       isTermReport: false,
       hasPractical: subjects.some((s) => s.fullPracticalMarks > 0),
