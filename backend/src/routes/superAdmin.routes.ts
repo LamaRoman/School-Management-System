@@ -159,6 +159,7 @@ const updateSchoolSchema = z.object({
   email: z.string().email().optional(),
   estdYear: z.string().optional(),
   motto: z.string().optional(),
+  code: z.string().min(2).max(6).toUpperCase().optional(),
   isActive: z.boolean().optional(),
 });
 
