@@ -81,6 +81,7 @@ model AcademicYear {
   seatAllocations SeatAllocation[]
   feeStructures      FeeStructure[]
   studentFeeOverrides StudentFeeOverride[]
+  studentFeeAssignments StudentFeeAssignment[]
   feePayments        FeePayment[]
   homeworks      Homework[]
   admissions     Admission[]
@@ -230,6 +231,7 @@ model Student {
   seatAllocations SeatAllocation[]
   feeOverrides    StudentFeeOverride[]
   feePayments     FeePayment[]
+  feeAssignments  StudentFeeAssignment[]
   parentLinks    ParentStudent[]
 
 
@@ -522,6 +524,7 @@ model FeeCategory {
   school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   feeStructures     FeeStructure[]
   studentOverrides  StudentFeeOverride[]
+  studentAssignments StudentFeeAssignment[]
   feePayments       FeePayment[]
 
   @@unique([name, schoolId])
@@ -681,6 +684,26 @@ model ParentStudent {
   @@unique([parentId, studentId])
   @@map("parent_students")
 }
+// ─── STUDENT FEE ASSIGNMENT (Individual fees: hostel, food, etc.) ────────────
+
+model StudentFeeAssignment {
+  id              String   @id @default(cuid())
+  studentId       String   @map("student_id")
+  feeCategoryId   String   @map("fee_category_id")
+  academicYearId  String   @map("academic_year_id")
+  amount          Float
+  frequency       String   @default("MONTHLY")  // MONTHLY, ANNUAL, ONE_TIME
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @default(now()) @map("updated_at")
+
+  student       Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeCategory   FeeCategory  @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
+  academicYear  AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, feeCategoryId, academicYearId])
+  @@map("student_fee_assignments")
+}
+
 // ─── RECEIPT COUNTER ────────────────────────────────────
 
 model ReceiptCounter {

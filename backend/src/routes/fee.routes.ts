@@ -76,7 +76,7 @@ async function buildInvoice(
   if (monthIndex === -1) throw new AppError("Invalid month");
 
   // Fetch everything in parallel
-  const [student, academicYear, overrides, payments] = await Promise.all([
+  const [student, academicYear, overrides, payments, individualAssignments] = await Promise.all([
     prisma.student.findUniqueOrThrow({
       where: { id: studentId },
       include: { section: { include: { grade: true } } },
@@ -84,6 +84,10 @@ async function buildInvoice(
     prisma.academicYear.findUnique({ where: { id: academicYearId } }),
     prisma.studentFeeOverride.findMany({ where: { studentId, academicYearId } }),
     prisma.feePayment.findMany({ where: { studentId, academicYearId, deletedAt: null } }),
+    prisma.studentFeeAssignment.findMany({
+      where: { studentId, academicYearId },
+      include: { feeCategory: true },
+    }),
   ]);
 
   const gradeId = student.section.gradeId;
@@ -132,6 +136,19 @@ async function buildInvoice(
     }
   }
 
+  // Individual monthly assignments — arrears
+  for (const a of individualAssignments.filter(a => a.frequency === "MONTHLY")) {
+    for (let m = 0; m < monthIndex; m++) {
+      const mName = nepaliMonths[m];
+      const paid = paidForCategory(a.feeCategoryId, mName);
+      if (paid < a.amount) {
+        const remaining = Math.round(a.amount - paid);
+        arrearItems.push({ feeCategoryId: a.feeCategoryId, category: a.feeCategory.name, amount: remaining, paidMonth: mName });
+        totalArrears += remaining;
+      }
+    }
+  }
+
   // ── 2. Current month items ──────────────────────────────────────────────────
 
   const currentItems: FeeItem[] = [];
@@ -143,6 +160,16 @@ async function buildInvoice(
     if (paid < amount) {
       const remaining = Math.round(amount - paid);
       currentItems.push({ feeCategoryId: s.feeCategoryId, category: s.feeCategory.name, amount: remaining, paidMonth: month });
+      totalCurrent += remaining;
+    }
+  }
+
+  // Individual monthly assignments — current month
+  for (const a of individualAssignments.filter(a => a.frequency === "MONTHLY")) {
+    const paid = paidForCategory(a.feeCategoryId, month);
+    if (paid < a.amount) {
+      const remaining = Math.round(a.amount - paid);
+      currentItems.push({ feeCategoryId: a.feeCategoryId, category: a.feeCategory.name, amount: remaining, paidMonth: month });
       totalCurrent += remaining;
     }
   }
@@ -180,6 +207,16 @@ async function buildInvoice(
     }
   }
 
+  // Individual annual/one-time assignments
+  for (const a of individualAssignments.filter(a => a.frequency === "ANNUAL" || a.frequency === "ONE_TIME")) {
+    const paid = paidForCategory(a.feeCategoryId);
+    if (paid < a.amount) {
+      const remaining = Math.round(a.amount - paid);
+      otherItems.push({ feeCategoryId: a.feeCategoryId, category: a.feeCategory.name, amount: remaining });
+      totalOther += remaining;
+    }
+  }
+
   // ── 4. Monthly rates — for advance calculation on the client ───────────────
 
   const monthlyRates = structures
@@ -190,15 +227,27 @@ async function buildInvoice(
       amount: Math.round(effectiveAmount(s)),
     }));
 
+  // Include individual monthly assignments in rates
+  for (const a of individualAssignments.filter(a => a.frequency === "MONTHLY")) {
+    monthlyRates.push({
+      feeCategoryId: a.feeCategoryId,
+      category: a.feeCategory.name,
+      amount: Math.round(a.amount),
+    });
+  }
+
   // ── 5. Advance months — upcoming unpaid months remaining in the year ────────
 
   const advanceMonths: string[] = [];
   for (let m = monthIndex + 1; m < nepaliMonths.length; m++) {
     const mName = nepaliMonths[m];
-    const fullyPaid = structures
+    const gradeFullyPaid = structures
       .filter(s => s.frequency === "MONTHLY")
       .every(s => paidForCategory(s.feeCategoryId, mName) >= effectiveAmount(s));
-    if (!fullyPaid) advanceMonths.push(mName);
+    const individualFullyPaid = individualAssignments
+      .filter(a => a.frequency === "MONTHLY")
+      .every(a => paidForCategory(a.feeCategoryId, mName) >= a.amount);
+    if (!gradeFullyPaid || !individualFullyPaid) advanceMonths.push(mName);
   }
 
   return {
@@ -460,6 +509,69 @@ router.delete("/overrides/:id", authenticate, authorize("ADMIN"), async (req, re
   res.json({ data: { message: "Removed" } });
 });
 
+// ─── INDIVIDUAL FEE ASSIGNMENTS (hostel, food, etc.) ─────────────────────────
+
+router.get("/assignments", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const { studentId, academicYearId } = req.query;
+  if (!studentId || !academicYearId) throw new AppError("studentId and academicYearId required");
+  await Promise.all([
+    verifyStudent(String(studentId), schoolId),
+    verifyAcademicYear(String(academicYearId), schoolId),
+  ]);
+  const assignments = await prisma.studentFeeAssignment.findMany({
+    where: { studentId: String(studentId), academicYearId: String(academicYearId) },
+    include: { feeCategory: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  res.json({ data: assignments });
+});
+
+router.post("/assignments", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const schema = z.object({
+    studentId: z.string().min(1),
+    feeCategoryId: z.string().min(1),
+    academicYearId: z.string().min(1),
+    amount: z.number().min(0),
+    frequency: z.enum(["MONTHLY", "ANNUAL", "ONE_TIME"]),
+  });
+  const data = schema.parse(req.body);
+  await Promise.all([
+    verifyStudent(data.studentId, schoolId),
+    verifyFeeCategory(data.feeCategoryId, schoolId),
+    verifyAcademicYear(data.academicYearId, schoolId),
+  ]);
+  const assignment = await prisma.studentFeeAssignment.upsert({
+    where: {
+      studentId_feeCategoryId_academicYearId: {
+        studentId: data.studentId,
+        feeCategoryId: data.feeCategoryId,
+        academicYearId: data.academicYearId,
+      },
+    },
+    create: {
+      studentId: data.studentId,
+      feeCategoryId: data.feeCategoryId,
+      academicYearId: data.academicYearId,
+      amount: data.amount,
+      frequency: data.frequency,
+    },
+    update: { amount: data.amount, frequency: data.frequency },
+    include: { feeCategory: { select: { id: true, name: true } } },
+  });
+  res.status(201).json({ data: assignment });
+});
+
+router.delete("/assignments/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const assignment = await prisma.studentFeeAssignment.findUnique({ where: { id: req.params.id }, select: { studentId: true } });
+  if (!assignment) throw new AppError("Assignment not found", 404);
+  await verifyStudent(assignment.studentId, schoolId);
+  await prisma.studentFeeAssignment.delete({ where: { id: req.params.id } });
+  res.json({ data: { message: "Removed" } });
+});
+
 // ─── PAYMENTS ─────────────────────────────────────────────────────────────────
 
 router.get("/payments", authenticate, authorize("ADMIN", "ACCOUNTANT"), async (req, res) => {
@@ -636,7 +748,7 @@ router.get("/section-overview", authenticate, authorize("ADMIN", "ACCOUNTANT"), 
 
   const studentIds = students.map(s => s.id);
 
-  const [structures, examRoutines, overrides, payments] = await Promise.all([
+  const [structures, examRoutines, overrides, payments, allAssignments] = await Promise.all([
     prisma.feeStructure.findMany({
       where: { gradeId: section.gradeId, academicYearId: String(academicYearId) },
       include: { feeCategory: true, examType: true },
@@ -648,6 +760,9 @@ router.get("/section-overview", authenticate, authorize("ADMIN", "ACCOUNTANT"), 
     prisma.feePayment.findMany({
       where: { studentId: { in: studentIds }, academicYearId: String(academicYearId), deletedAt: null },
     }),
+    prisma.studentFeeAssignment.findMany({
+      where: { studentId: { in: studentIds }, academicYearId: String(academicYearId) },
+    }),
   ]);
 
   const examMonthMap = buildExamMonthMap(examRoutines);
@@ -655,6 +770,7 @@ router.get("/section-overview", authenticate, authorize("ADMIN", "ACCOUNTANT"), 
   const overview = students.map(student => {
     const studentOverrides = overrides.filter(o => o.studentId === student.id);
     const studentPayments = payments.filter(p => p.studentId === student.id);
+    const studentAssignments = allAssignments.filter(a => a.studentId === student.id);
 
     let totalDueUpToNow = 0;
     const monthlyStructures = structures.filter(s => s.frequency === "MONTHLY");
@@ -673,14 +789,27 @@ router.get("/section-overview", authenticate, authorize("ADMIN", "ACCOUNTANT"), 
       }
     }
 
+    // Individual fee assignments (hostel, food, etc.)
+    for (const a of studentAssignments) {
+      if (a.frequency === "MONTHLY") {
+        totalDueUpToNow += a.amount * monthsUpTo;
+      } else if (a.frequency === "ANNUAL" || a.frequency === "ONE_TIME") {
+        totalDueUpToNow += a.amount;
+      }
+    }
+
     const totalPaid = studentPayments.reduce((sum, p) => sum + p.amount, 0);
 
     // Latest month that has any monthly fee payment recorded
+    const monthlyFeeCategoryIds = [
+      ...monthlyStructures.map(ms => ms.feeCategoryId),
+      ...studentAssignments.filter(a => a.frequency === "MONTHLY").map(a => a.feeCategoryId),
+    ];
     let paidUpTo = "—";
     for (let m = nepaliMonths.length - 1; m >= 0; m--) {
       const mName = nepaliMonths[m];
       const hasPayment = studentPayments.some(
-        p => p.paidMonth === mName && monthlyStructures.some(ms => ms.feeCategoryId === p.feeCategoryId)
+        p => p.paidMonth === mName && monthlyFeeCategoryIds.includes(p.feeCategoryId)
       );
       if (hasPayment) { paidUpTo = mName; break; }
     }
@@ -722,7 +851,7 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
     verifyAcademicYear(String(academicYearId), schoolId),
   ]);
 
-  const [student, overrides, payments] = await Promise.all([
+  const [student, overrides, payments, individualAssignments] = await Promise.all([
     prisma.student.findUniqueOrThrow({
       where: { id: studentId },
       include: { section: { include: { grade: true } } },
@@ -731,6 +860,10 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
     prisma.feePayment.findMany({
       where: { studentId, academicYearId: String(academicYearId), deletedAt: null },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.studentFeeAssignment.findMany({
+      where: { studentId, academicYearId: String(academicYearId) },
+      include: { feeCategory: true },
     }),
   ]);
 
@@ -805,6 +938,15 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
       });
     }
 
+    // Individual monthly assignments (hostel, food, etc.)
+    for (const a of individualAssignments.filter(a => a.frequency === "MONTHLY")) {
+      const paid = monthPayments
+        .filter(p => p.feeCategoryId === a.feeCategoryId)
+        .reduce((sum, p) => sum + p.amount, 0);
+      due += a.amount;
+      categories.push({ categoryId: a.feeCategoryId, categoryName: a.feeCategory.name, amount: Math.round(a.amount), paid: Math.round(paid) });
+    }
+
     const totalPaid = categories.reduce((s, c) => s + c.paid, 0);
     const totalDue = Math.round(due);
     return {
@@ -837,10 +979,27 @@ router.get("/student-ledger/:studentId", authenticate, authorize("ADMIN", "ACCOU
       };
     });
 
+  // Individual annual/one-time assignments
+  for (const a of individualAssignments.filter(a => a.frequency === "ANNUAL" || a.frequency === "ONE_TIME")) {
+    const paid = payments
+      .filter(p => p.feeCategoryId === a.feeCategoryId && !p.paidMonth)
+      .reduce((sum, p) => sum + p.amount, 0);
+    fixedFees.push({
+      categoryId: a.feeCategoryId,
+      categoryName: a.feeCategory.name,
+      frequency: a.frequency,
+      amount: Math.round(a.amount),
+      paid: Math.round(paid),
+      status: paid >= a.amount ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID",
+    });
+  }
+
   // Recent payments (20 most recent)
   const recentPayments = payments.slice(0, 20).map(p => ({
     id: p.id,
-    category: gradeStructures.find(s => s.feeCategoryId === p.feeCategoryId)?.feeCategory.name ?? "Unknown",
+    category: gradeStructures.find(s => s.feeCategoryId === p.feeCategoryId)?.feeCategory.name
+      ?? individualAssignments.find(a => a.feeCategoryId === p.feeCategoryId)?.feeCategory.name
+      ?? "Unknown",
     amount: p.amount,
     paidMonth: p.paidMonth,
     paymentDate: p.paymentDate,

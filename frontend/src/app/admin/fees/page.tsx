@@ -166,13 +166,21 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
   const [selectedGrade, setSelectedGrade] = useState(""); const [sections, setSections] = useState<any[]>([]);
   const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState(""); const [overrides, setOverrides] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<any[]>([]);
   const [form, setForm] = useState({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" });
+  const [assignForm, setAssignForm] = useState({ feeCategoryId: "", amount: "", frequency: "MONTHLY" });
 
-  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setOverrides([]); try { const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`); setSections(all.find((g) => g.id === id)?.sections || []); } catch { setSections([]); } };
-  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setOverrides([]); try { setStudents(await api.get<any[]>(`/students?sectionId=${id}`)); } catch { setStudents([]); } };
-  const handleStudentChange = async (id: string) => { setSelectedStudent(id); try { setOverrides(await api.get<any[]>(`/fees/overrides?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setOverrides([]); } };
+  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setOverrides([]); setAssignments([]); try { const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`); setSections(all.find((g) => g.id === id)?.sections || []); } catch { setSections([]); } };
+  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setOverrides([]); setAssignments([]); try { setStudents(await api.get<any[]>(`/students?sectionId=${id}`)); } catch { setStudents([]); } };
+  const handleStudentChange = async (id: string) => {
+    setSelectedStudent(id);
+    try { setOverrides(await api.get<any[]>(`/fees/overrides?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setOverrides([]); }
+    try { setAssignments(await api.get<any[]>(`/fees/assignments?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setAssignments([]); }
+  };
   const handleAdd = async () => { if (!selectedStudent || !form.feeCategoryId) return; try { await api.post("/fees/overrides", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, discountType: form.discountType, overrideAmount: form.discountType === "FLAT" ? parseFloat(form.overrideAmount) || 0 : 0, discountPercent: form.discountType === "PERCENTAGE" ? parseFloat(form.discountPercent) || 0 : undefined, reason: form.reason || undefined }); toast.success("Applied"); setForm({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
   const handleRemove = async (id: string) => { try { await api.delete(`/fees/overrides/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
+  const handleAssign = async () => { if (!selectedStudent || !assignForm.feeCategoryId || !assignForm.amount) return; try { await api.post("/fees/assignments", { studentId: selectedStudent, feeCategoryId: assignForm.feeCategoryId, academicYearId: activeYear.id, amount: parseFloat(assignForm.amount) || 0, frequency: assignForm.frequency }); toast.success("Fee assigned"); setAssignForm({ feeCategoryId: "", amount: "", frequency: "MONTHLY" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
+  const handleRemoveAssignment = async (id: string) => { try { await api.delete(`/fees/assignments/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
 
   return (
     <div>
@@ -182,6 +190,18 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
         <div><label className="label">Student</label><select className="input" value={selectedStudent} onChange={(e) => handleStudentChange(e.target.value)}><option value="">Select</option>{students.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div>
       {selectedStudent && (<>
+        {/* Individual Fee Assignments */}
+        {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Assign Individual Fee (Hostel, Food, etc.)</h3>
+          <div className="grid grid-cols-4 gap-3 items-end">
+            <div><label className="label">Category</label><select className="input" value={assignForm.feeCategoryId} onChange={(e) => setAssignForm({ ...assignForm, feeCategoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div><label className="label">Amount (Rs)</label><input className="input" type="number" min={0} value={assignForm.amount} onChange={(e) => setAssignForm({ ...assignForm, amount: e.target.value })} placeholder="2000" /></div>
+            <div><label className="label">Frequency</label><select className="input" value={assignForm.frequency} onChange={(e) => setAssignForm({ ...assignForm, frequency: e.target.value })}><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option><option value="ONE_TIME">One-Time</option></select></div>
+            <button onClick={handleAssign} className="btn-primary text-xs">Assign</button>
+          </div>
+        </div>)}
+        {assignments.length > 0 && (<div className="card overflow-hidden mb-4"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Amount</th><th className="text-center px-4 py-2">Frequency</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{assignments.map((a: any) => (<tr key={a.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{a.feeCategory.name}</td><td className="px-4 py-2 text-center font-semibold">Rs {a.amount.toLocaleString()}</td><td className="px-4 py-2 text-center"><span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{a.frequency}</span></td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemoveAssignment(a.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div>)}
+
+        {/* Scholarships / Discounts */}
         {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Add Discount</h3>
           <div className="grid grid-cols-5 gap-3 items-end">
             <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
@@ -192,7 +212,7 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
           </div>
         </div>)}
         {overrides.length > 0 && (<div className="card overflow-hidden"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Type</th><th className="text-center px-4 py-2">Discount</th><th className="text-left px-4 py-2">Reason</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{overrides.map((o: any) => (<tr key={o.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{o.feeCategory.name}</td><td className="px-4 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${o.discountType === "PERCENTAGE" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{o.discountType}</span></td><td className="px-4 py-2 text-center font-semibold">{o.discountType === "PERCENTAGE" ? `${o.discountPercent}%` : `Rs ${o.overrideAmount}`}</td><td className="px-4 py-2 text-gray-500">{o.reason || "—"}</td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(o.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div>)}
-        {overrides.length === 0 && <div className="card p-6 text-center text-gray-400 text-sm">No discounts.</div>}
+        {overrides.length === 0 && assignments.length === 0 && <div className="card p-6 text-center text-gray-400 text-sm">No individual fees or discounts.</div>}
       </>)}
       {!selectedStudent && <div className="card p-8 text-center text-gray-400">Select grade, section, and student.</div>}
     </div>
