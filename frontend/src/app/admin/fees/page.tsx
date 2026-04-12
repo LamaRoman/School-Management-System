@@ -167,13 +167,28 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
   const [selectedGrade, setSelectedGrade] = useState(""); const [sections, setSections] = useState<any[]>([]);
   const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState(""); const [assignments, setAssignments] = useState<any[]>([]);
+  const [gradeCategoryIds, setGradeCategoryIds] = useState<string[]>([]);
   const [form, setForm] = useState({ feeCategoryId: "", amount: "", frequency: "MONTHLY" });
 
-  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setAssignments([]); try { const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`); setSections(all.find((g) => g.id === id)?.sections || []); } catch { setSections([]); } };
+  const handleGradeChange = async (id: string) => {
+    setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setAssignments([]); setGradeCategoryIds([]);
+    try {
+      const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`);
+      setSections(all.find((g) => g.id === id)?.sections || []);
+      if (id) {
+        const structures = await api.get<FeeStructure[]>(`/fees/structure?gradeId=${id}&academicYearId=${activeYear.id}`);
+        setGradeCategoryIds(structures.map((s) => s.feeCategoryId));
+      }
+    } catch { setSections([]); }
+  };
   const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setAssignments([]); try { setStudents(await api.get<any[]>(`/students?sectionId=${id}`)); } catch { setStudents([]); } };
   const handleStudentChange = async (id: string) => { setSelectedStudent(id); try { setAssignments(await api.get<any[]>(`/fees/assignments?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setAssignments([]); } };
   const handleAssign = async () => { if (!selectedStudent || !form.feeCategoryId || !form.amount) return; try { await api.post("/fees/assignments", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, amount: parseFloat(form.amount) || 0, frequency: form.frequency }); toast.success("Fee assigned"); setForm({ feeCategoryId: "", amount: "", frequency: "MONTHLY" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
   const handleRemove = async (id: string) => { try { await api.delete(`/fees/assignments/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
+
+  // Only show categories NOT already in grade-level structure and NOT already assigned
+  const assignedCategoryIds = assignments.map((a: any) => a.feeCategoryId);
+  const availableCategories = categories.filter((c) => !gradeCategoryIds.includes(c.id) && !assignedCategoryIds.includes(c.id));
 
   return (
     <div>
@@ -186,7 +201,7 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
       {selectedStudent && (<>
         {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Assign Fee</h3>
           <div className="grid grid-cols-4 gap-3 items-end">
-            <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{availableCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <div><label className="label">Amount (Rs)</label><input className="input" type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="2000" /></div>
             <div><label className="label">Frequency</label><select className="input" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option><option value="ONE_TIME">One-Time</option></select></div>
             <button onClick={handleAssign} className="btn-primary text-xs">Assign</button>

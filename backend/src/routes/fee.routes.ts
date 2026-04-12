@@ -542,6 +542,17 @@ router.post("/assignments", authenticate, authorize("ADMIN"), async (req, res) =
     verifyFeeCategory(data.feeCategoryId, schoolId),
     verifyAcademicYear(data.academicYearId, schoolId),
   ]);
+
+  // Prevent assigning a category that already exists at the grade level
+  const student = await prisma.student.findUniqueOrThrow({
+    where: { id: data.studentId },
+    select: { section: { select: { gradeId: true } } },
+  });
+  const gradeStructure = await prisma.feeStructure.findFirst({
+    where: { gradeId: student.section.gradeId, academicYearId: data.academicYearId, feeCategoryId: data.feeCategoryId },
+  });
+  if (gradeStructure) throw new AppError("This fee category is already assigned at the grade level. Use Fee Structure tab instead.");
+
   const assignment = await prisma.studentFeeAssignment.upsert({
     where: {
       studentId_feeCategoryId_academicYearId: {
