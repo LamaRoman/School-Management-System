@@ -55,20 +55,20 @@ router.get("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 // POST /api/admissions — create new admission application
 router.post("/", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schema = z.object({
-    studentName: z.string().min(1),
-    studentNameNp: z.string().optional(),
-    dateOfBirth: z.string().optional(),
-    gender: z.string().optional(),
-    fatherName: z.string().optional(),
-    motherName: z.string().optional(),
-    guardianName: z.string().optional(),
-    guardianPhone: z.string().optional(),
-    address: z.string().optional(),
-    previousSchool: z.string().optional(),
+    studentName: z.string().min(1).max(200),
+    studentNameNp: z.string().max(200).optional(),
+    dateOfBirth: z.string().max(20).optional(),
+    gender: z.string().max(20).optional(),
+    fatherName: z.string().max(200).optional(),
+    motherName: z.string().max(200).optional(),
+    guardianName: z.string().max(200).optional(),
+    guardianPhone: z.string().max(30).optional(),
+    address: z.string().max(500).optional(),
+    previousSchool: z.string().max(200).optional(),
     applyingForGradeId: z.string().min(1),
     academicYearId: z.string().min(1),
-    appliedDate: z.string().min(1),
-    remarks: z.string().optional(),
+    appliedDate: z.string().min(1).max(20),
+    remarks: z.string().max(1_000).optional(),
   });
 
   const data = schema.parse(req.body);
@@ -108,18 +108,18 @@ router.put("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   // Verify admission belongs to school
   await prisma.admission.findFirstOrThrow({ where: { id: req.params.id, academicYear: { schoolId } } });
   const schema = z.object({
-    studentName: z.string().min(1).optional(),
-    studentNameNp: z.string().nullable().optional(),
-    dateOfBirth: z.string().nullable().optional(),
-    gender: z.string().nullable().optional(),
-    fatherName: z.string().nullable().optional(),
-    motherName: z.string().nullable().optional(),
-    guardianName: z.string().nullable().optional(),
-    guardianPhone: z.string().nullable().optional(),
-    address: z.string().nullable().optional(),
-    previousSchool: z.string().nullable().optional(),
+    studentName: z.string().min(1).max(200).optional(),
+    studentNameNp: z.string().max(200).nullable().optional(),
+    dateOfBirth: z.string().max(20).nullable().optional(),
+    gender: z.string().max(20).nullable().optional(),
+    fatherName: z.string().max(200).nullable().optional(),
+    motherName: z.string().max(200).nullable().optional(),
+    guardianName: z.string().max(200).nullable().optional(),
+    guardianPhone: z.string().max(30).nullable().optional(),
+    address: z.string().max(500).nullable().optional(),
+    previousSchool: z.string().max(200).nullable().optional(),
     applyingForGradeId: z.string().optional(),
-    remarks: z.string().nullable().optional(),
+    remarks: z.string().max(1_000).nullable().optional(),
   });
 
   const data = schema.parse(req.body);
@@ -140,8 +140,8 @@ router.put("/:id", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
 router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    reviewedDate: z.string().min(1),
-    remarks: z.string().optional(),
+    reviewedDate: z.string().min(1).max(20),
+    remarks: z.string().max(1_000).optional(),
   });
 
   const { reviewedDate, remarks } = schema.parse(req.body);
@@ -176,8 +176,8 @@ router.post("/:id/approve", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) 
 router.post("/:id/reject", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    reviewedDate: z.string().min(1),
-    remarks: z.string().optional(),
+    reviewedDate: z.string().min(1).max(20),
+    remarks: z.string().max(1_000).optional(),
   });
 
   const { reviewedDate, remarks } = schema.parse(req.body);

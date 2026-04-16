@@ -8,9 +8,15 @@ import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
+// bcrypt silently truncates inputs past 72 bytes, so there is no legitimate
+// reason to accept longer passwords. Without an upper bound, an attacker can
+// send arbitrarily large payloads to any endpoint that calls bcrypt.hash /
+// bcrypt.compare and force CPU-bound work (DoS).
+const MAX_PASSWORD = 72;
+
 const loginSchema = z.object({
-  email: z.string().email("Invalid email"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Invalid email").max(320),
+  password: z.string().min(1, "Password is required").max(MAX_PASSWORD),
 });
 
 // POST /api/auth/login
@@ -72,8 +78,8 @@ router.get("/me", authenticate, async (req, res) => {
 // POST /api/auth/change-password
 router.post("/change-password", authenticate, async (req, res) => {
   const schema = z.object({
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(6, "Password must be at least 6 characters"),
+    currentPassword: z.string().min(1).max(MAX_PASSWORD),
+    newPassword: z.string().min(6, "Password must be at least 6 characters").max(MAX_PASSWORD),
   });
   const { currentPassword, newPassword } = schema.parse(req.body);
 

@@ -2,6 +2,44 @@ import puppeteer, { Browser } from "puppeteer";
 
 let browserInstance: Browser | null = null;
 
+/**
+ * Escape user-controlled strings before interpolating into the HTML template
+ * that Puppeteer renders. Puppeteer executes the rendered HTML as a real
+ * browser page with `--no-sandbox`, which means an unescaped <script> tag in
+ * a database field (school name, student name, remarks, etc.) runs with full
+ * Node.js context. Every database field that reaches the template MUST be
+ * wrapped in esc().
+ */
+function esc(str: unknown): string {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+/**
+ * Validate a logo URL before embedding it as <img src="...">. Puppeteer will
+ * fetch whatever URL is in src — an admin who sets the logo to an internal URL
+ * (e.g. http://169.254.169.254/... for AWS IMDS) triggers SSRF. Only allow:
+ *   - data:image/... base64 URIs (inline, no network)
+ *   - https URLs on our own S3 bucket
+ */
+function isSafeLogoUrl(url: string): boolean {
+  if (!url) return false;
+  if (url.startsWith("data:image/")) return true;
+  const bucket = process.env.AWS_S3_BUCKET;
+  if (
+    bucket &&
+    url.startsWith("https://") &&
+    url.includes(`${bucket}.s3.`) &&
+    url.includes(".amazonaws.com/")
+  ) return true;
+  return false;
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.isConnected()) {
     browserInstance = await puppeteer.launch({
@@ -155,7 +193,7 @@ export function buildReportCardHtml(
     termHeaders = reportData.subjects[0].terms
       .map(
         (term: any) =>
-          `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.headerBg};color:#fff;font-size:${fs.th};font-weight:600;">${term.examTypeName.replace("Terminal", "Term")} (${term.weightage}%)</th>`
+          `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.headerBg};color:#fff;font-size:${fs.th};font-weight:600;">${esc(String(term.examTypeName || "").replace("Terminal", "Term"))} (${esc(term.weightage)}%)</th>`
       )
       .join("");
   }
@@ -168,15 +206,15 @@ export function buildReportCardHtml(
 
       if (isTermReport) {
         if (hasPractical) {
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.theoryMarks}</td>`;
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.practicalMarks || "—"}</td>`;
+          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.theoryMarks)}</td>`;
+          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.practicalMarks || "—")}</td>`;
         }
-        dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">${s.totalMarks}</td>`;
+        dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">${esc(s.totalMarks)}</td>`;
       } else {
         dataCols = (s.terms || [])
           .map(
             (term: any) =>
-              `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${term.totalMarks}</td>`
+              `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(term.totalMarks)}</td>`
           )
           .join("");
       }
@@ -185,23 +223,23 @@ export function buildReportCardHtml(
 
       let resultCols = "";
       if (cols.showPercentage) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${pctValue}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(pctValue)}</td>`;
       }
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.grade}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.grade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.gpa}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gpa)}</td>`;
       }
 
       let passMark = "";
       if (cols.showPassMarks) {
-        passMark = `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${s.passMarks}</td>`;
+        passMark = `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${esc(s.passMarks)}</td>`;
       }
 
       return `<tr style="background:${bg};">
-        <td style="padding:${pad.cell};border:1px solid ${t.border};font-size:${fs.td};font-weight:500;">${s.subjectName}</td>
-        <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.fullMarks}</td>
+        <td style="padding:${pad.cell};border:1px solid ${t.border};font-size:${fs.td};font-weight:500;">${esc(s.subjectName)}</td>
+        <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.fullMarks)}</td>
         ${passMark}
         ${dataCols}
         ${resultCols}
@@ -244,10 +282,10 @@ export function buildReportCardHtml(
   let bottomInfoHtml = "";
   const infoParts: string[] = [];
   if (cols.showRank && reportData.showRank && reportData.rank) {
-    infoParts.push(`<span style="font-weight:600;color:${t.accent};font-size:${fs.footer};">Rank: ${reportData.rank} out of ${reportData.totalStudents}</span>`);
+    infoParts.push(`<span style="font-weight:600;color:${t.accent};font-size:${fs.footer};">Rank: ${esc(reportData.rank)} out of ${esc(reportData.totalStudents)}</span>`);
   }
   if (cols.showAttendance && reportData.attendance) {
-    infoParts.push(`<span style="font-weight:600;color:${t.primary};font-size:${fs.footer};">Attendance:</span> <span style="font-size:${fs.footer};">Total: <b>${reportData.attendance.totalDays}</b></span> <span style="font-size:${fs.footer};">Present: <b>${reportData.attendance.presentDays}</b></span> <span style="font-size:${fs.footer};">Absent: <b>${reportData.attendance.absentDays}</b></span>`);
+    infoParts.push(`<span style="font-weight:600;color:${t.primary};font-size:${fs.footer};">Attendance:</span> <span style="font-size:${fs.footer};">Total: <b>${esc(reportData.attendance.totalDays)}</b></span> <span style="font-size:${fs.footer};">Present: <b>${esc(reportData.attendance.presentDays)}</b></span> <span style="font-size:${fs.footer};">Absent: <b>${esc(reportData.attendance.absentDays)}</b></span>`);
   }
   if (infoParts.length > 0) {
     bottomInfoHtml = `<div style="display:flex;gap:16px;align-items:center;font-size:${fs.footer};margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;flex-wrap:wrap;">${infoParts.join('<span style="color:#ccc;margin:0 4px;">|</span>')}</div>`;
@@ -258,7 +296,7 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">General Observation</caption>
-        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${obs.categoryName}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${obs.grade}</td></tr>`).join("")}
+        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
       </table>
     </div>` : "";
 
@@ -267,11 +305,11 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${reportData.overallPercentage}%</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Division</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${divResult.division}</td></tr>
-        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${reportData.overallGrade}</td></tr>` : ""}
-        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${reportData.overallGpa}</td></tr>` : ""}
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? "#15803d" : t.accent};">${divResult.result}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallPercentage)}%</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Division</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.division)}</td></tr>
+        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
+        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
+        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? "#15803d" : t.accent};">${esc(divResult.result)}</td></tr>
       </table>
     </div>`;
 
@@ -293,15 +331,16 @@ export function buildReportCardHtml(
 
   // Comments
   const commentsHtml = cols.showRemarks && reportData.remarks
-    ? `<div style="margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;font-size:${fs.footer};"><span style="font-weight:700;color:${t.primary};">Comments: </span><b>${reportData.remarks}</b></div>`
+    ? `<div style="margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;font-size:${fs.footer};"><span style="font-weight:700;color:${t.primary};">Comments: </span><b>${esc(reportData.remarks)}</b></div>`
     : "";
 
   // Promotion
   const promotionHtml = cols.showPromotion && reportData.promoted
-    ? `<div style="text-align:center;padding:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-size:${fs.footer};font-weight:700;color:#15803d;margin-bottom:10px;">✓ ${reportData.promotedTo || "Promoted"}</div>`
+    ? `<div style="text-align:center;padding:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-size:${fs.footer};font-weight:700;color:#15803d;margin-bottom:10px;">✓ ${esc(reportData.promotedTo || "Promoted")}</div>`
     : "";
 
-  // Student info
+  // Student info — labels are static strings (safe); values are DB-backed and
+  // must be escaped at the interpolation site below.
   const infoFields = [
     ["Student", reportData.student?.name || "—"],
     ["Class / Section", `${reportData.student?.className || ""} / ${reportData.student?.section || ""}`],
@@ -310,20 +349,24 @@ export function buildReportCardHtml(
     ["Examination", reportData.examType || "—"],
   ];
   const infoRows = infoFields
-    .map(([label, value]) => `<div style="display:flex;gap:6px;"><span style="color:#888;min-width:${isA5 ? "70px" : "90px"};font-size:${fs.info};">${label}:</span><span style="font-weight:600;color:${t.primary};font-size:${fs.info};">${value}</span></div>`)
+    .map(([label, value]) => `<div style="display:flex;gap:6px;"><span style="color:#888;min-width:${isA5 ? "70px" : "90px"};font-size:${fs.info};">${label}:</span><span style="font-weight:600;color:${t.primary};font-size:${fs.info};">${esc(value)}</span></div>`)
     .join("");
 
-  const logoUrl = reportData.school?.logo || "";
+  // Logo URL must be validated BEFORE embedding as <img src>. Puppeteer will
+  // fetch whatever URL is set here — an internal URL (e.g. AWS IMDS, localhost
+  // services, file://) would trigger SSRF on the server.
+  const rawLogoUrl = reportData.school?.logo || "";
+  const logoUrl = isSafeLogoUrl(rawLogoUrl) ? rawLogoUrl : "";
   const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" style="width:${fs.logoSize};height:${fs.logoSize};object-fit:contain;border-radius:4px;" />`
+    ? `<img src="${esc(logoUrl)}" style="width:${fs.logoSize};height:${fs.logoSize};object-fit:contain;border-radius:4px;" />`
     : "";
   const nepaliNameHtml = cols.showNepaliName && reportData.school?.nameNp
-    ? `<p style="font-size:${fs.schoolNp};color:${t.primary};font-family:Georgia,'Noto Serif',serif;margin-bottom:1px;">${reportData.school.nameNp}</p>`
+    ? `<p style="font-size:${fs.schoolNp};color:${t.primary};font-family:Georgia,'Noto Serif',serif;margin-bottom:1px;">${esc(reportData.school.nameNp)}</p>`
     : "";
   const schoolNameBlock = `
-    <h2 style="font-size:${fs.schoolName};font-weight:700;color:${t.primary};margin-bottom:2px;">${reportData.school?.name || ""}</h2>
+    <h2 style="font-size:${fs.schoolName};font-weight:700;color:${t.primary};margin-bottom:2px;">${esc(reportData.school?.name || "")}</h2>
     ${nepaliNameHtml}
-    <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${reportData.school?.address || ""}</p>`;
+    <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${esc(reportData.school?.address || "")}</p>`;
 
   const pos = cols.logoPosition || "center";
   let headerInnerHtml = "";
@@ -349,6 +392,7 @@ export function buildReportCardHtml(
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:;">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', 'Noto Sans', Arial, sans-serif; color: #333; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -361,7 +405,7 @@ export function buildReportCardHtml(
     <div style="padding:${pad.header};border-bottom:2px solid ${t.primary};text-align:center;">
       ${headerInnerHtml}
       <div style="display:inline-block;padding:3px 14px;background:${t.accent};color:#fff;font-size:${fs.badge};font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:4px;">
-        ${reportData.examType} — ${reportData.academicYear} B.S.
+        ${esc(reportData.examType)} — ${esc(reportData.academicYear)} B.S.
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;padding:${pad.info};background:${t.infoBg};border-bottom:1px solid ${t.border};">
@@ -419,6 +463,7 @@ export function buildBatchReportCardHtml(
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:;">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', 'Noto Sans', Arial, sans-serif; color: #333; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

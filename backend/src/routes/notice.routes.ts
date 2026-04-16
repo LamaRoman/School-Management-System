@@ -100,14 +100,14 @@ router.post("/", authenticate, async (req, res) => {
   }
 
   const schema = z.object({
-    title: z.string().min(1),
-    content: z.string().min(1),
+    title: z.string().min(1).max(200),
+    content: z.string().min(1).max(10_000),
     type: z.enum(["GENERAL", "EXAM", "EVENT", "HOLIDAY", "FEE"]).default("GENERAL"),
     priority: z.enum(["NORMAL", "IMPORTANT", "URGENT"]).default("NORMAL"),
     targetAudience: z.enum(["ALL", "TEACHERS", "STUDENTS", "PARENTS"]).default("ALL"),
     gradeId: z.string().optional(),
-    publishDate: z.string().min(1),
-    expiryDate: z.string().optional(),
+    publishDate: z.string().min(1).max(20),
+    expiryDate: z.string().max(20).optional(),
     isPublished: z.boolean().default(true),
     isPinned: z.boolean().default(false),
   });
@@ -155,14 +155,14 @@ router.put("/:id", authenticate, async (req, res) => {
   }
 
   const schema = z.object({
-    title: z.string().min(1).optional(),
-    content: z.string().min(1).optional(),
+    title: z.string().min(1).max(200).optional(),
+    content: z.string().min(1).max(10_000).optional(),
     type: z.enum(["GENERAL", "EXAM", "EVENT", "HOLIDAY", "FEE"]).optional(),
     priority: z.enum(["NORMAL", "IMPORTANT", "URGENT"]).optional(),
     targetAudience: z.enum(["ALL", "TEACHERS", "STUDENTS", "PARENTS"]).optional(),
     gradeId: z.string().nullable().optional(),
-    publishDate: z.string().optional(),
-    expiryDate: z.string().nullable().optional(),
+    publishDate: z.string().max(20).optional(),
+    expiryDate: z.string().max(20).nullable().optional(),
     isPublished: z.boolean().optional(),
     isPinned: z.boolean().optional(),
   });

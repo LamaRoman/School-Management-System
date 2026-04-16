@@ -103,13 +103,13 @@ router.post("/", authenticate, async (req, res) => {
   }
 
   const schema = z.object({
-    title: z.string().min(1),
-    description: z.string().optional(),
+    title: z.string().min(1).max(200),
+    description: z.string().max(5_000).optional(),
     subjectId: z.string().min(1),
     sectionId: z.string().min(1),
     academicYearId: z.string().min(1),
-    assignedDate: z.string().min(1),
-    dueDate: z.string().optional(),
+    assignedDate: z.string().min(1).max(20),
+    dueDate: z.string().max(20).optional(),
   });
 
   const data = schema.parse(req.body);
@@ -161,10 +161,10 @@ router.put("/:id", authenticate, async (req, res) => {
   }
 
   const schema = z.object({
-    title: z.string().min(1).optional(),
-    description: z.string().nullable().optional(),
-    assignedDate: z.string().optional(),
-    dueDate: z.string().nullable().optional(),
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().max(5_000).nullable().optional(),
+    assignedDate: z.string().max(20).optional(),
+    dueDate: z.string().max(20).nullable().optional(),
     isActive: z.boolean().optional(),
   });
 

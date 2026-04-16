@@ -31,7 +31,7 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
         examTypeId: z.string().min(1),
         weightagePercent: z.number().min(0).max(100),
       })
-    ),
+    ).min(1).max(20),
   });
 
   const { gradeId, policies } = schema.parse(req.body);

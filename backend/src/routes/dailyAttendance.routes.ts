@@ -51,15 +51,15 @@ router.get("/", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) =>
 router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
   const schema = z.object({
     sectionId: z.string().min(1),
-    date: z.string().min(1),
+    date: z.string().min(1).max(20),
     academicYearId: z.string().min(1),
     records: z.array(
       z.object({
         studentId: z.string().min(1),
         status: z.enum(["PRESENT", "ABSENT"]),
-        remarks: z.string().nullable().optional(),
+        remarks: z.string().max(300).nullable().optional(),
       })
-    ),
+    ).min(1).max(200),
   });
 
   const { sectionId, date, academicYearId, records } = schema.parse(req.body);

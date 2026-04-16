@@ -347,7 +347,9 @@ router.post("/structure", authenticate, authorize("ADMIN"), async (req, res) => 
     feeCategoryId: z.string().min(1),
     gradeId: z.string().min(1),
     academicYearId: z.string().min(1),
-    amount: z.number().min(0),
+    // 500,000 NPR is beyond any realistic annual school-fee line item. Capping
+    // prevents accidental/malicious over-billing and downstream numeric overflow.
+    amount: z.number().min(0).max(500_000),
     frequency: z.enum(["MONTHLY", "ANNUAL", "ONE_TIME", "PER_EXAM"]),
     examTypeId: z.string().optional(),
   });
@@ -392,10 +394,10 @@ router.post("/structure/bulk", authenticate, authorize("ADMIN"), async (req, res
     gradeId: z.string().min(1),
     entries: z.array(z.object({
       feeCategoryId: z.string().min(1),
-      amount: z.number().min(0),
+      amount: z.number().min(0).max(500_000),
       frequency: z.enum(["MONTHLY", "ANNUAL", "ONE_TIME", "PER_EXAM"]),
       examTypeId: z.string().optional(),
-    })),
+    })).min(1).max(50),
   });
   const { academicYearId, gradeId, entries } = schema.parse(req.body);
   const schoolId = getSchoolId(req);
@@ -460,9 +462,9 @@ router.post("/overrides", authenticate, authorize("ADMIN"), async (req, res) => 
     feeCategoryId: z.string().min(1),
     academicYearId: z.string().min(1),
     discountType: z.enum(["FLAT", "PERCENTAGE"]),
-    overrideAmount: z.number().min(0).optional(),
+    overrideAmount: z.number().min(0).max(500_000).optional(),
     discountPercent: z.number().min(0).max(100).optional(),
-    reason: z.string().optional(),
+    reason: z.string().max(500).optional(),
   });
   const data = schema.parse(req.body);
   if (data.discountType === "PERCENTAGE" && !data.discountPercent) throw new AppError("discountPercent required");
@@ -533,7 +535,7 @@ router.post("/assignments", authenticate, authorize("ADMIN"), async (req, res) =
     studentId: z.string().min(1),
     feeCategoryId: z.string().min(1),
     academicYearId: z.string().min(1),
-    amount: z.number().min(0),
+    amount: z.number().min(0).max(500_000),
     frequency: z.enum(["MONTHLY", "ANNUAL", "ONE_TIME"]),
   });
   const data = schema.parse(req.body);
@@ -619,14 +621,14 @@ router.post("/payments/bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), as
   const schema = z.object({
     studentId: z.string().min(1),
     academicYearId: z.string().min(1),
-    paymentDate: z.string().min(1),
-    paymentMethod: z.string().optional(),
-    remarks: z.string().optional(),
+    paymentDate: z.string().min(1).max(20),
+    paymentMethod: z.string().max(30).optional(),
+    remarks: z.string().max(500).optional(),
     items: z.array(z.object({
       feeCategoryId: z.string().min(1),
-      amount: z.number().min(0),
-      paidMonth: z.string().optional(),
-    })),
+      amount: z.number().min(0).max(500_000),
+      paidMonth: z.string().max(30).optional(),
+    })).min(1).max(50),
   });
   const { studentId, academicYearId, paymentDate, paymentMethod, remarks, items } = schema.parse(req.body);
 

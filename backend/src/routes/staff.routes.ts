@@ -22,8 +22,8 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    email: z.string().email().max(320),
+    password: z.string().min(6, "Password must be at least 6 characters").max(72),
   });
   const { email, password } = schema.parse(req.body);
 
@@ -60,7 +60,7 @@ router.put("/:id/toggle", authenticate, authorize("ADMIN"), async (req, res) => 
 // PUT /api/staff/:id/reset-password — reset password
 router.put("/:id/reset-password", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
-  const schema = z.object({ password: z.string().min(6) });
+  const schema = z.object({ password: z.string().min(6).max(72) });
   const { password } = schema.parse(req.body);
 
   const user = await prisma.user.findFirst({

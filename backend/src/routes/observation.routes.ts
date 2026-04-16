@@ -29,8 +29,8 @@ router.get("/categories", authenticate, async (req, res) => {
 router.post("/categories", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    name: z.string().min(1),
-    nameNp: z.string().optional(),
+    name: z.string().min(1).max(200),
+    nameNp: z.string().max(200).optional(),
     gradeId: z.string().min(1),
     displayOrder: z.number().int().default(0),
   });
@@ -53,10 +53,10 @@ router.post("/categories/bulk", authenticate, authorize("ADMIN"), async (req, re
   const schema = z.object({
     gradeId: z.string().min(1),
     categories: z.array(z.object({
-      name: z.string().min(1),
-      nameNp: z.string().optional(),
+      name: z.string().min(1).max(200),
+      nameNp: z.string().max(200).optional(),
       displayOrder: z.number().int().default(0),
-    })),
+    })).min(1).max(50),
   });
 
   const { gradeId, categories } = schema.parse(req.body);
@@ -87,8 +87,8 @@ router.put("/categories/:id", authenticate, authorize("ADMIN"), async (req, res)
   });
 
   const schema = z.object({
-    name: z.string().min(1).optional(),
-    nameNp: z.string().optional(),
+    name: z.string().min(1).max(200).optional(),
+    nameNp: z.string().max(200).optional(),
     displayOrder: z.number().int().optional(),
     isActive: z.boolean().optional(),
   });
@@ -179,8 +179,8 @@ router.post("/results/bulk", authenticate, authorize("ADMIN", "TEACHER"), async 
     entries: z.array(z.object({
       studentId: z.string().min(1),
       categoryId: z.string().min(1),
-      grade: z.string().min(1),
-    })),
+      grade: z.string().min(1).max(10),
+    })).min(1).max(1000),
   });
 
   const { examTypeId, academicYearId, entries } = schema.parse(req.body);

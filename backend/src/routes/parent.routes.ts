@@ -18,10 +18,10 @@ const router = Router();
 // POST /api/parents — admin creates a parent user and links to student(s)
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schema = z.object({
-    email: z.string().email(),
-    password: z.string().min(6),
-    studentIds: z.array(z.string().min(1)).min(1),
-    relationship: z.string().optional(),
+    email: z.string().email().max(320),
+    password: z.string().min(6).max(72),
+    studentIds: z.array(z.string().min(1)).min(1).max(10),
+    relationship: z.string().max(50).optional(),
   });
 
   const { email, password, studentIds, relationship } = schema.parse(req.body);

@@ -73,11 +73,11 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
     gradeId: z.string().min(1),
     entries: z.array(z.object({
       subjectId: z.string().min(1),
-      examDate: z.string().min(1),
-      dayName: z.string().optional(),
-      startTime: z.string().optional(),
-      endTime: z.string().optional(),
-    })),
+      examDate: z.string().min(1).max(20),
+      dayName: z.string().max(20).optional(),
+      startTime: z.string().max(20).optional(),
+      endTime: z.string().max(20).optional(),
+    })).min(1).max(100),
   });
 
   const { examTypeId, gradeId, entries } = schema.parse(req.body);

@@ -48,7 +48,7 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
         practicalMarks: z.number().min(0).nullable().optional(),
         isAbsent: z.boolean().default(false),
       })
-    ),
+    ).min(1).max(500),
   });
 
   const { subjectId, examTypeId, academicYearId, marks } = schema.parse(req.body);

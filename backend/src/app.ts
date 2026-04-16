@@ -69,6 +69,17 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// change-password triggers bcrypt.compare (on currentPassword) and bcrypt.hash
+// (on newPassword) — both CPU-bound. Apply a strict limiter so an authenticated
+// attacker can't repeatedly call it to burn CPU.
+const passwordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many password change attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
@@ -78,6 +89,7 @@ const apiLimiter = rateLimit({
 });
 
 app.use("/auth/login", loginLimiter);
+app.use("/auth/change-password", passwordLimiter);
 app.use("/", apiLimiter);
 
 // Health check
