@@ -732,3 +732,27 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+// ─── TOKEN BLOCKLIST (JWT revocation on logout) ─────────
+
+model TokenBlocklist {
+  id        String   @id @default(cuid())
+  jti       String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("token_blocklist")
+}
+
+// ─── LOGIN ATTEMPT TRACKING (per-account lockout) ───────
+
+model LoginAttempt {
+  email     String   @id
+  attempts  Int      @default(0)
+  lockedUntil DateTime? @map("locked_until")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("login_attempts")
+}

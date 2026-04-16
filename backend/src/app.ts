@@ -7,6 +7,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pdfRoutes from "./routes/pdf.routes";
 import { closeBrowser } from "./services/pdf.service";
+import { cleanupExpiredAuthRecords } from "./middleware/auth";
 
 // Routes
 import accountantReportRoutes from "./routes/accountantReport.routes";
@@ -130,6 +131,16 @@ app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
+
+// ─── Periodic cleanup ─────────────────────────────────────
+// Purge expired token-blocklist entries (JWT already expired, revocation record
+// is useless) and stale login-attempt records (no activity for 1 hour).
+// Runs every hour. Errors are logged but never crash the server.
+setInterval(() => {
+  cleanupExpiredAuthRecords().catch((err) =>
+    console.error("Auth cleanup failed:", err)
+  );
+}, 60 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`🚀 API server running on http://localhost:${PORT}`);

@@ -9,6 +9,9 @@ export interface AuthPayload {
   email: string;
   role: UserRole;
   schoolId: string | null;
+  jti?: string; // present on tokens issued after this change
+  exp?: number; // JWT standard expiry (epoch seconds)
+  iat?: number; // JWT standard issued-at (epoch seconds)
 }
 
 declare global {
@@ -20,8 +23,7 @@ declare global {
   }
 }
 
-// Simple in-memory cache for isActive checks (avoids DB query on every request).
-// Entries expire after 60s, so a deactivated user is locked out within 1 minute.
+// ─── isActive cache (unchanged) ──────────────────────────
 const activeCache = new Map<string, { active: boolean; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
 
@@ -43,6 +45,43 @@ export function invalidateUserCache(userId: string): void {
   activeCache.delete(userId);
 }
 
+// ─── Token blocklist cache ───────────────────────────────
+// Short-lived negative cache: "this jti was NOT blocklisted as of N seconds ago."
+// A 30-second TTL means a logged-out token may remain usable for up to 30s on
+// the same replica — the same order as the 60s activeCache and acceptable for
+// this application's threat model.
+const blocklistCache = new Map<string, { blocked: boolean; expiresAt: number }>();
+const BLOCKLIST_CACHE_TTL_MS = 30_000;
+
+async function isTokenBlocked(jti: string): Promise<boolean> {
+  const cached = blocklistCache.get(jti);
+  if (cached && cached.expiresAt > Date.now()) return cached.blocked;
+
+  const entry = await prisma.tokenBlocklist.findUnique({ where: { jti } });
+  const blocked = !!entry;
+  blocklistCache.set(jti, { blocked, expiresAt: Date.now() + BLOCKLIST_CACHE_TTL_MS });
+  return blocked;
+}
+
+/** Force-evict a jti from the negative cache after a logout writes to the DB. */
+export function invalidateBlocklistCache(jti: string): void {
+  blocklistCache.delete(jti);
+}
+
+// ─── Periodic cleanup ────────────────────────────────────
+/** Remove expired blocklist entries and stale lockout records. Safe to call on
+ *  a schedule (e.g. every hour from app.ts via setInterval). */
+export async function cleanupExpiredAuthRecords(): Promise<void> {
+  const now = new Date();
+  await prisma.tokenBlocklist.deleteMany({ where: { expiresAt: { lt: now } } });
+  // Login attempts with no activity for 1 hour are stale — either the user
+  // gave up or the lockout long expired.
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.loginAttempt.deleteMany({ where: { updatedAt: { lt: oneHourAgo } } });
+}
+
+// ─── Middleware ──────────────────────────────────────────
+
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -52,12 +91,21 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   const token = authHeader.split(" ")[1];
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthPayload;
+
+    // Check if this token has been revoked (user logged out)
+    if (payload.jti) {
+      const blocked = await isTokenBlocked(payload.jti);
+      if (blocked) {
+        throw new AppError("Token has been revoked", 401);
+      }
+    }
+
     req.user = payload;
-    // Attach schoolId to request for convenient access
     if (payload.schoolId) {
       req.schoolId = payload.schoolId;
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof AppError) throw err;
     throw new AppError("Invalid or expired token", 401);
   }
 
