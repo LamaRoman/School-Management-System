@@ -39,10 +39,9 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Logo */}
         <View style={styles.logoArea}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoText}>श्री</Text>
-          </View>
-          <Text style={styles.appName}>Zentara शिक्षा</Text>
+          <Text style={styles.appName}>
+            Zentara <Text style={styles.appNameAccent}>शिक्षा</Text>
+          </Text>
           <Text style={styles.appSub}>A complete digital solution for modern schools</Text>
         </View>
 
@@ -94,13 +93,8 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.xl },
 
   logoArea: { alignItems: 'center', marginBottom: Spacing.xxxl },
-  logoBox: {
-    width: 72, height: 72, borderRadius: 18,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.lg,
-  },
-  logoText: { fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold },
-  appName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.primary },
+  appName: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.primary },
+  appNameAccent: { color: Colors.accent },
   appSub: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 4 },
 
   formCard: {
