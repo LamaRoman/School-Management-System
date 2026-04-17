@@ -4,8 +4,10 @@ import {
   TouchableOpacity, Modal, FlatList, TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, getErrorMessage } from '../../api/client';
+import { useAuth } from '../../hooks/useAuth';
 import { Card, StatCard, LoadingScreen, EmptyState } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS } from '../../utils/bsDate';
@@ -557,6 +559,7 @@ const rcptSearch = StyleSheet.create({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function AccountantDashboard({ navigation }: any) {
+  const { user } = useAuth();
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [cashbook, setCashbook] = useState<CashbookData | null>(null);
   const [defaulters, setDefaulters] = useState<DefaulterSummary | null>(null);
@@ -672,7 +675,7 @@ export default function AccountantDashboard({ navigation }: any) {
         <View style={s.banner}>
           <View style={s.bannerTop}>
             <View>
-              <Text style={s.bannerTitle}>Accountant Dashboard</Text>
+              <Text style={s.bannerTitle}>{user?.role === 'ADMIN' ? 'Admin' : 'Accountant'} Dashboard</Text>
               {activeYear && <Text style={s.bannerYear}>Academic Year {activeYear.yearNp}</Text>}
               <Text style={s.bannerDate}>Today: {getTodayBS()}</Text>
             </View>
@@ -745,12 +748,25 @@ export default function AccountantDashboard({ navigation }: any) {
           )}
         </View>
 
-        {/* ── Defaulters summary ── */}
-        {defaulters && (
-          <View style={s.section}>
-            <DefaultersSummaryCard defaultersList={defaultersList} summary={defaulters} />
-          </View>
-        )}
+        {/* ── Quick actions ── */}
+        <Text style={s.sectionTitle}>Quick Actions</Text>
+        <View style={s.actionsGrid}>
+          {[
+            { icon: 'cash-outline' as const, label: 'Collect Fee', action: () => navigation.navigate('Collect') },
+            { icon: 'receipt-outline' as const, label: 'Find Receipt', action: () => setShowReceiptSearch(true) },
+            { icon: 'megaphone-outline' as const, label: 'Notices', action: () => navigation.navigate('Notices') },
+          ].map(item => (
+            <TouchableOpacity
+              key={item.label}
+              style={s.actionCard}
+              onPress={item.action}
+              activeOpacity={0.7}
+            >
+              <Ionicons name={item.icon} size={28} color={Colors.primary} />
+              <Text style={s.actionLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* ── Recent Transactions ── */}
         <View style={s.listSection}>
@@ -799,26 +815,6 @@ export default function AccountantDashboard({ navigation }: any) {
             ))}
           </View>
         )}
-
-        {/* ── Quick actions ── */}
-        <Text style={s.sectionTitle}>Quick Actions</Text>
-        <View style={s.actionsGrid}>
-          {[
-            { icon: '💰', label: 'Collect Fee', action: () => navigation.navigate('Collect') },
-            { icon: '🧾', label: 'Find Receipt', action: () => setShowReceiptSearch(true) },
-            { icon: '📢', label: 'Notices', action: () => navigation.navigate('Notices') },
-          ].map(item => (
-            <TouchableOpacity
-              key={item.label}
-              style={s.actionCard}
-              onPress={item.action}
-              activeOpacity={0.7}
-            >
-              <Text style={s.actionIcon}>{item.icon}</Text>
-              <Text style={s.actionLabel}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </ScrollView>
 
       {/* ── Receipt detail modal ── */}

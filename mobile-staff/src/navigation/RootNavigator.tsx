@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { LoadingScreen } from '../components/ui';
 import { Colors, FontSize, FontWeight, Spacing } from '../theme';
@@ -18,18 +20,30 @@ import ProfileScreen from '../screens/shared/ProfileScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
-const tabBarStyle = { backgroundColor: Colors.white, borderTopColor: Colors.border, paddingBottom: 4, paddingTop: 4, height: 60 };
-const makeOptions = (icons: Record<string, string>) => ({ route }: any) => ({
-  tabBarStyle, tabBarActiveTintColor: Colors.primary, tabBarInactiveTintColor: Colors.textMuted,
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+const makeOptions = (icons: Record<string, [IconName, IconName]>, bottomInset: number) => ({ route }: any) => ({
+  tabBarStyle: { backgroundColor: Colors.white, borderTopColor: Colors.border, paddingBottom: bottomInset + 4, paddingTop: 4, height: 60 + bottomInset },
+  tabBarActiveTintColor: Colors.primary, tabBarInactiveTintColor: Colors.textMuted,
   tabBarLabelStyle: { fontSize: FontSize.xs, fontWeight: FontWeight.medium as any },
-  tabBarIcon: ({ focused }: { focused: boolean }) => <Text style={{ fontSize: focused ? 22 : 19 }}>{icons[route.name] || '•'}</Text>,
+  tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => {
+    const [active, inactive] = icons[route.name] || ['ellipse', 'ellipse-outline'];
+    return <Ionicons name={focused ? active : inactive} size={22} color={color} />;
+  },
   headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white,
   headerTitleStyle: { fontWeight: FontWeight.bold as any, fontSize: FontSize.lg },
 });
 
 function TeacherTabs() {
+  const insets = useSafeAreaInsets();
   return (
-    <Tab.Navigator screenOptions={makeOptions({ Home: '🏠', Attendance: '✅', Marks: '📝', Homework: '📚', Profile: '👤' })}>
+    <Tab.Navigator screenOptions={makeOptions({
+      Home: ['home', 'home-outline'],
+      Attendance: ['checkmark-circle', 'checkmark-circle-outline'],
+      Marks: ['create', 'create-outline'],
+      Homework: ['book', 'book-outline'],
+      Profile: ['person', 'person-outline'],
+    }, insets.bottom)}>
       <Tab.Screen name="Home" component={TeacherDashboard} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
       <Tab.Screen name="Marks" component={MarksScreen} options={{ title: 'Mark Entry' }} />
@@ -40,8 +54,14 @@ function TeacherTabs() {
 }
 
 function AccountantTabs() {
+  const insets = useSafeAreaInsets();
   return (
-    <Tab.Navigator screenOptions={makeOptions({ Home: '🏠', Collect: '💰', Notices: '📢', Profile: '👤' })}>
+    <Tab.Navigator screenOptions={makeOptions({
+      Home: ['home', 'home-outline'],
+      Collect: ['cash', 'cash-outline'],
+      Notices: ['megaphone', 'megaphone-outline'],
+      Profile: ['person', 'person-outline'],
+    }, insets.bottom)}>
       <Tab.Screen name="Home" component={AccountantDashboard} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="Collect" component={FeeCollectionScreen} options={{ title: 'Fee Collection' }} />
       <Tab.Screen name="Notices" component={NoticesScreen} />
