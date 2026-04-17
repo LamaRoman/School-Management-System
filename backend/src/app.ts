@@ -7,8 +7,6 @@ import { errorHandler } from "./middleware/errorHandler";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pdfRoutes from "./routes/pdf.routes";
-import { closeBrowser } from "./services/pdf.service";
-import { cleanupExpiredAuthRecords } from "./middleware/auth";
 
 // Routes
 import accountantReportRoutes from "./routes/accountantReport.routes";
@@ -44,18 +42,8 @@ import superAdminRoutes from "./routes/superAdmin.routes";
 
 dotenv.config();
 
-// ─── Validate required env vars on startup ────────────────
-const REQUIRED_ENV = ["JWT_SECRET", "DATABASE_URL"];
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    console.error(`❌ Missing required env var: ${key}`);
-    process.exit(1);
-  }
-}
-
 const app = express();
 app.set("trust proxy", 1);
-const PORT = process.env.PORT || 4000;
 
 // ─── Security middleware ──────────────────────────────────
 app.use(helmet());
@@ -63,37 +51,39 @@ app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000", cred
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 
-// ─── Rate limiting ────────────────────────────────────────
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: "Too many login attempts. Please try again in 15 minutes." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// ─── Rate limiting (disabled in test environment) ────────
+if (process.env.NODE_ENV !== "test") {
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: "Too many login attempts. Please try again in 15 minutes." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-// change-password triggers bcrypt.compare (on currentPassword) and bcrypt.hash
-// (on newPassword) — both CPU-bound. Apply a strict limiter so an authenticated
-// attacker can't repeatedly call it to burn CPU.
-const passwordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { error: "Too many password change attempts. Please try again later." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+  // change-password triggers bcrypt.compare (on currentPassword) and bcrypt.hash
+  // (on newPassword) — both CPU-bound. Apply a strict limiter so an authenticated
+  // attacker can't repeatedly call it to burn CPU.
+  const passwordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: { error: "Too many password change attempts. Please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 500,
-  message: { error: "Too many requests. Please slow down." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    message: { error: "Too many requests. Please slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-app.use("/auth/login", loginLimiter);
-app.use("/auth/change-password", passwordLimiter);
-app.use("/", apiLimiter);
+  app.use("/auth/login", loginLimiter);
+  app.use("/auth/change-password", passwordLimiter);
+  app.use("/", apiLimiter);
+}
 
 // Health check
 app.get("/health", (_req, res) => {
@@ -133,23 +123,5 @@ app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
-
-// ─── Periodic cleanup ─────────────────────────────────────
-// Purge expired token-blocklist entries (JWT already expired, revocation record
-// is useless) and stale login-attempt records (no activity for 1 hour).
-// Runs every hour. Errors are logged but never crash the server.
-setInterval(() => {
-  cleanupExpiredAuthRecords().catch((err) =>
-    console.error("Auth cleanup failed:", err)
-  );
-}, 60 * 60 * 1000);
-
-app.listen(PORT, () => {
-  console.log(`🚀 API server running on http://localhost:${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/health`);
-});
-
-process.on("SIGTERM", closeBrowser);
-process.on("SIGINT", closeBrowser);
 
 export default app;

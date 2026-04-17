@@ -39,4 +39,4 @@ backend/prisma/*.db-journal
 *.tsbuildinfo
 
 # Misc
-*.log
+*.logbackend/.env.test

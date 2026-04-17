@@ -1,5 +1,5 @@
 import { Router, CookieOptions } from "express";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes, createHash } from "crypto";
 import bcrypt from "bcryptjs";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { z } from "zod";
@@ -9,34 +9,20 @@ import { AppError } from "../middleware/errorHandler";
 
 const router = Router();
 
-// bcrypt silently truncates inputs past 72 bytes, so there is no legitimate
-// reason to accept longer passwords. Without an upper bound, an attacker can
-// send arbitrarily large payloads to any endpoint that calls bcrypt.hash /
-// bcrypt.compare and force CPU-bound work (DoS).
 const MAX_PASSWORD = 72;
+
+// ─── Token lifetimes ─────────────────────────────────────
+// Access token is intentionally short — refresh token handles session continuity.
+const ACCESS_TOKEN_EXPIRY = "15m";
+const REFRESH_TOKEN_DAYS = parseInt(process.env.REFRESH_TOKEN_DAYS || "30", 10);
+const REFRESH_TOKEN_MS = REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000;
 
 // ─── Account lockout constants ───────────────────────────
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
-// ─── Cookie helper ───────────────────────────────────────
-// Configurable via env vars for different deployment topologies:
-//   Same domain (default):      no env vars needed, sameSite=lax
-//   Subdomains:                 COOKIE_DOMAIN=.zentara.school
-//   Cross-origin (e.g. Vercel): COOKIE_SAME_SITE=none (requires HTTPS)
-function parseExpiryMs(expiresIn: string): number {
-  const m = expiresIn.match(/^(\d+)(s|m|h|d)$/);
-  if (!m) return 8 * 3600_000;
-  const n = parseInt(m[1], 10);
-  const unit = m[2];
-  if (unit === "s") return n * 1000;
-  if (unit === "m") return n * 60_000;
-  if (unit === "h") return n * 3600_000;
-  if (unit === "d") return n * 86400_000;
-  return 8 * 3600_000;
-}
-
-function authCookieOptions(): CookieOptions {
+// ─── Cookie helpers ──────────────────────────────────────
+function accessCookieOptions(): CookieOptions {
   const sameSite = (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax";
   return {
     httpOnly: true,
@@ -44,14 +30,64 @@ function authCookieOptions(): CookieOptions {
     sameSite,
     domain: process.env.COOKIE_DOMAIN || undefined,
     path: "/",
-    maxAge: parseExpiryMs(process.env.JWT_EXPIRES_IN || "8h"),
+    maxAge: 15 * 60 * 1000, // 15 minutes
   };
 }
 
-const loginSchema = z.object({
-  email: z.string().email("Invalid email").max(320),
-  password: z.string().min(1, "Password is required").max(MAX_PASSWORD),
-});
+function refreshCookieOptions(): CookieOptions {
+  const sameSite = (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax";
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path: "/auth", // only sent to /auth endpoints — not every API call
+    maxAge: REFRESH_TOKEN_MS,
+  };
+}
+
+function clearCookieOptions(path: string): CookieOptions {
+  const sameSite = (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax";
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path,
+  };
+}
+
+// ─── Refresh token helpers ───────────────────────────────
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+async function createRefreshToken(userId: string): Promise<string> {
+  const raw = randomBytes(48).toString("base64url"); // 48 bytes = 64 chars
+  const tokenHash = hashToken(raw);
+  await prisma.refreshToken.create({
+    data: {
+      tokenHash,
+      userId,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_MS),
+    },
+  });
+  return raw;
+}
+
+function signAccessToken(user: { id: string; email: string; role: string; schoolId: string | null }): string {
+  return jwt.sign(
+    {
+      jti: randomUUID(),
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      schoolId: user.schoolId || null,
+    },
+    process.env.JWT_SECRET!,
+    { expiresIn: ACCESS_TOKEN_EXPIRY as SignOptions["expiresIn"] }
+  );
+}
 
 // ─── Lockout helper ──────────────────────────────────────
 async function recordFailedAttempt(email: string): Promise<void> {
@@ -68,11 +104,16 @@ async function recordFailedAttempt(email: string): Promise<void> {
   }
 }
 
-// POST /api/auth/login
+const loginSchema = z.object({
+  email: z.string().email("Invalid email").max(320),
+  password: z.string().min(1, "Password is required").max(MAX_PASSWORD),
+});
+
+// ─── POST /api/auth/login ────────────────────────────────
 router.post("/login", async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
 
-  // ── Check if account is locked ──
+  // Check lockout
   const attempt = await prisma.loginAttempt.findUnique({ where: { email } });
   if (attempt?.lockedUntil) {
     if (attempt.lockedUntil > new Date()) {
@@ -81,7 +122,6 @@ router.post("/login", async (req, res) => {
         429
       );
     }
-    // Lockout expired — reset counter so user gets a fresh set of attempts
     await prisma.loginAttempt.delete({ where: { email } });
   }
 
@@ -97,30 +137,21 @@ router.post("/login", async (req, res) => {
     throw new AppError("Invalid email or password", 401);
   }
 
-  // ── Success — clear failed attempts ──
+  // Success — clear failed attempts
   await prisma.loginAttempt.delete({ where: { email } }).catch(() => {});
 
-  // Include a unique jti so this token can be individually revoked via logout
-  const jti = randomUUID();
-  const token = jwt.sign(
-    {
-      jti,
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      schoolId: user.schoolId || null,
-    },
-    process.env.JWT_SECRET!,
-    { expiresIn: (process.env.JWT_EXPIRES_IN || "8h") as SignOptions["expiresIn"] }
-  );
+  // Issue tokens
+  const accessToken = signAccessToken(user);
+  const refreshToken = await createRefreshToken(user.id);
 
-  // Set HttpOnly cookie for web clients; also return token in body for mobile
-  // apps that can't use cookies (React Native / Expo).
-  res.cookie("token", token, authCookieOptions());
+  // Set cookies
+  res.cookie("token", accessToken, accessCookieOptions());
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions());
 
   res.json({
     data: {
-      token,
+      token: accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -131,7 +162,65 @@ router.post("/login", async (req, res) => {
   });
 });
 
-// GET /api/auth/me
+// ─── POST /api/auth/refresh ──────────────────────────────
+// Accepts refresh token from HttpOnly cookie (web) or request body (mobile).
+// Rotates the refresh token on every use (old one is deleted).
+router.post("/refresh", async (req, res) => {
+  const raw =
+    (req as any).cookies?.refreshToken ||
+    req.body?.refreshToken;
+
+  if (!raw || typeof raw !== "string") {
+    throw new AppError("Refresh token required", 401);
+  }
+
+  const tokenHash = hashToken(raw);
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+  if (!stored || stored.expiresAt < new Date()) {
+    // Token not found or expired — could be reuse of a rotated token (attack)
+    // or simply expired. Either way, delete all tokens for this user as a
+    // precaution if we can identify them.
+    if (stored) {
+      await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
+    }
+    throw new AppError("Invalid or expired refresh token", 401);
+  }
+
+  // Verify user is still active
+  const user = await prisma.user.findUnique({
+    where: { id: stored.userId },
+    select: { id: true, email: true, role: true, schoolId: true, isActive: true },
+  });
+  if (!user || !user.isActive) {
+    await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
+    throw new AppError("Account has been deactivated", 401);
+  }
+
+  // Rotate: delete old, create new
+  await prisma.refreshToken.delete({ where: { tokenHash } });
+  const newAccessToken = signAccessToken(user);
+  const newRefreshToken = await createRefreshToken(user.id);
+
+  // Set cookies
+  res.cookie("token", newAccessToken, accessCookieOptions());
+  res.cookie("refreshToken", newRefreshToken, refreshCookieOptions());
+
+  res.json({
+    data: {
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId || null,
+      },
+    },
+  });
+});
+
+// ─── GET /api/auth/me ────────────────────────────────────
 router.get("/me", authenticate, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.userId },
@@ -148,7 +237,7 @@ router.get("/me", authenticate, async (req, res) => {
   res.json({ data: user });
 });
 
-// POST /api/auth/change-password
+// ─── POST /api/auth/change-password ──────────────────────
 router.post("/change-password", authenticate, async (req, res) => {
   const schema = z.object({
     currentPassword: z.string().min(1).max(MAX_PASSWORD),
@@ -168,13 +257,13 @@ router.post("/change-password", authenticate, async (req, res) => {
   res.json({ data: { message: "Password changed successfully" } });
 });
 
-// POST /api/auth/logout
-// Adds the token's jti to a blocklist so it cannot be reused. The blocklist
-// entry automatically expires when the JWT itself would have expired.
-// Also clears the HttpOnly cookie.
+// ─── POST /api/auth/logout ───────────────────────────────
+// Blocklists the access token, deletes ALL refresh tokens for this user
+// (logs out all devices), and clears both cookies.
 router.post("/logout", authenticate, async (req, res) => {
   const { jti, exp } = req.user!;
 
+  // Blocklist the current access token
   if (jti && exp) {
     await prisma.tokenBlocklist.create({
       data: {
@@ -186,14 +275,12 @@ router.post("/logout", authenticate, async (req, res) => {
     invalidateBlocklistCache(jti);
   }
 
-  // Clear the HttpOnly cookie
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SAME_SITE === "none",
-    sameSite: (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax",
-    domain: process.env.COOKIE_DOMAIN || undefined,
-    path: "/",
-  });
+  // Delete all refresh tokens for this user
+  await prisma.refreshToken.deleteMany({ where: { userId: req.user!.userId } });
+
+  // Clear cookies
+  res.clearCookie("token", clearCookieOptions("/"));
+  res.clearCookie("refreshToken", clearCookieOptions("/auth"));
 
   res.json({ data: { message: "Logged out" } });
 });

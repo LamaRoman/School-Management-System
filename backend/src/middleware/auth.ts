@@ -68,6 +68,7 @@ export function invalidateBlocklistCache(jti: string): void {
 export async function cleanupExpiredAuthRecords(): Promise<void> {
   const now = new Date();
   await prisma.tokenBlocklist.deleteMany({ where: { expiresAt: { lt: now } } });
+  await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } });
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   await prisma.loginAttempt.deleteMany({ where: { updatedAt: { lt: oneHourAgo } } });
 }
