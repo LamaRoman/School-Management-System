@@ -15,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,9 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchMe();
   };
 
-  const logout = () => {
-    // Tell the server to blocklist the token and clear the cookie
-    api.post("/auth/logout", {}).catch(() => {});
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout", {});
+    } catch {
+      // Server logout failed — continue with local cleanup
+    }
     setUser(null);
     window.location.href = "/login";
   };

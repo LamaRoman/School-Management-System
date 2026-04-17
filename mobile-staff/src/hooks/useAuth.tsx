@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(me);
         }
       } catch {
-        await AsyncStorage.multiRemove(['token', 'user']);
+        await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
       } finally {
         setLoading(false);
       }
@@ -40,14 +40,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<{ token: string; user: User }>('/auth/login', { email, password });
+    const res = await api.post<{ token: string; refreshToken: string; user: User }>('/auth/login', { email, password });
     await AsyncStorage.setItem('token', res.token);
+    await AsyncStorage.setItem('refreshToken', res.refreshToken);
     const me = await api.get<User>('/auth/me');
     setUser(me);
   };
 
   const logout = async () => {
-    await AsyncStorage.multiRemove(['token', 'user']);
+    try {
+      await api.post('/auth/logout', {});
+    } catch {
+      // Server logout is best-effort — clear local state either way
+    }
+    await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
     setUser(null);
   };
 

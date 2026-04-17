@@ -18,14 +18,58 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 globally
+// ─── Refresh-token interceptor ───────────────────────────
+// On 401, try to refresh once. Deduplicates concurrent calls so only
+// one refresh request fires; all queued requests replay after it resolves.
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefresh(): Promise<string | null> {
+  const refreshToken = await AsyncStorage.getItem('refreshToken');
+  if (!refreshToken) return null;
+
+  try {
+    const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
+    const newToken: string = data?.data?.token;
+    const newRefresh: string = data?.data?.refreshToken;
+    if (!newToken || !newRefresh) return null;
+
+    await AsyncStorage.setItem('token', newToken);
+    await AsyncStorage.setItem('refreshToken', newRefresh);
+    return newToken;
+  } catch {
+    return null;
+  }
+}
+
 client.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401) {
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+    const original = err.config;
+
+    // Don't retry refresh calls themselves, or already-retried requests
+    if (
+      err.response?.status === 401 &&
+      !original._retried &&
+      !original.url?.includes('/auth/refresh') &&
+      !original.url?.includes('/auth/login')
+    ) {
+      original._retried = true;
+
+      // Deduplicate: reuse in-flight refresh promise
+      if (!refreshPromise) {
+        refreshPromise = tryRefresh().finally(() => { refreshPromise = null; });
+      }
+
+      const newToken = await refreshPromise;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return client(original);
+      }
+
+      // Refresh failed — clear everything
+      await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
     }
+
     return Promise.reject(err);
   }
 );
