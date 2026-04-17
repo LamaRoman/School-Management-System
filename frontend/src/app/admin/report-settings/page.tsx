@@ -118,10 +118,9 @@ export default function ReportCardSettingsPage() {
     try {
       const formData = new FormData();
       formData.append("logo", file);
-      const token = api.getToken();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/school/logo`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
@@ -140,10 +139,9 @@ export default function ReportCardSettingsPage() {
     if (!confirm("Remove the school logo?")) return;
     setRemoving(true);
     try {
-      const token = api.getToken();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/school/logo`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to remove logo");
       setSchool((prev: any) => ({ ...prev, logo: null }));

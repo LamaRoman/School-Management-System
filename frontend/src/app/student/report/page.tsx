@@ -110,7 +110,6 @@ export default function StudentReportPage() {
     setDownloading(true);
     try {
       const et = examTypes.find((e) => e.id === selectedExam);
-      const token = api.getToken();
       let url: string;
 
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -121,7 +120,7 @@ export default function StudentReportPage() {
       }
 
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
 
       if (!res.ok) throw new Error("PDF generation failed");

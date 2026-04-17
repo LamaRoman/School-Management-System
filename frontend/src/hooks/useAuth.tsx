@@ -29,28 +29,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const fullUser = await api.get<User>("/auth/me");
       setUser(fullUser);
     } catch {
-      api.setToken(null);
       setUser(null);
     }
   };
 
   useEffect(() => {
-    const token = api.getToken();
-    if (token) {
-      fetchMe().finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    // No token to check — the HttpOnly cookie is invisible to JS.
+    // Just call /auth/me; if the cookie is valid the server responds with
+    // the user, otherwise it returns 401 and we stay logged out.
+    fetchMe().finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post<{ token: string; user: User }>("/auth/login", { email, password });
-    api.setToken(res.token);
+    // Server sets the HttpOnly cookie via Set-Cookie header.
+    // We ignore the token in the response body (it's there for mobile apps).
+    await api.post<{ token: string; user: User }>("/auth/login", { email, password });
     await fetchMe();
   };
 
   const logout = () => {
-    api.setToken(null);
+    // Tell the server to blocklist the token and clear the cookie
+    api.post("/auth/logout", {}).catch(() => {});
     setUser(null);
     window.location.href = "/login";
   };

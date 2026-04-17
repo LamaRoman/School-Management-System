@@ -50,10 +50,9 @@ export default function SchoolDetailPage() {
     try {
       const formData = new FormData();
       formData.append("logo", file);
-      const token = api.getToken();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/super-admin/schools/${id}/logo`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");

@@ -9,7 +9,7 @@ export interface AuthPayload {
   email: string;
   role: UserRole;
   schoolId: string | null;
-  jti?: string; // present on tokens issued after this change
+  jti?: string; // present on tokens issued after Finding 5 change
   exp?: number; // JWT standard expiry (epoch seconds)
   iat?: number; // JWT standard issued-at (epoch seconds)
 }
@@ -46,10 +46,6 @@ export function invalidateUserCache(userId: string): void {
 }
 
 // ─── Token blocklist cache ───────────────────────────────
-// Short-lived negative cache: "this jti was NOT blocklisted as of N seconds ago."
-// A 30-second TTL means a logged-out token may remain usable for up to 30s on
-// the same replica — the same order as the 60s activeCache and acceptable for
-// this application's threat model.
 const blocklistCache = new Map<string, { blocked: boolean; expiresAt: number }>();
 const BLOCKLIST_CACHE_TTL_MS = 30_000;
 
@@ -69,13 +65,9 @@ export function invalidateBlocklistCache(jti: string): void {
 }
 
 // ─── Periodic cleanup ────────────────────────────────────
-/** Remove expired blocklist entries and stale lockout records. Safe to call on
- *  a schedule (e.g. every hour from app.ts via setInterval). */
 export async function cleanupExpiredAuthRecords(): Promise<void> {
   const now = new Date();
   await prisma.tokenBlocklist.deleteMany({ where: { expiresAt: { lt: now } } });
-  // Login attempts with no activity for 1 hour are stale — either the user
-  // gave up or the lockout long expired.
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   await prisma.loginAttempt.deleteMany({ where: { updatedAt: { lt: oneHourAgo } } });
 }
@@ -83,12 +75,24 @@ export async function cleanupExpiredAuthRecords(): Promise<void> {
 // ─── Middleware ──────────────────────────────────────────
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  // Dual-auth: accept HttpOnly cookie (web) OR Bearer header (mobile / API).
+  // Cookie takes precedence when both are present.
+  let token: string | undefined;
+
+  const cookieToken = (req as any).cookies?.token;
+  if (cookieToken) {
+    token = cookieToken;
+  } else {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
+    }
+  }
+
+  if (!token) {
     throw new AppError("Authentication required", 401);
   }
 
-  const token = authHeader.split(" ")[1];
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthPayload;
 
@@ -130,11 +134,6 @@ export function authorize(...roles: UserRole[]) {
   };
 }
 
-/**
- * Middleware: require that the user belongs to a school.
- * SUPER_ADMIN users are rejected — they must use super-admin-specific routes.
- * Attach after `authenticate`.
- */
 export function requireSchool(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) {
     throw new AppError("Authentication required", 401);
@@ -145,10 +144,6 @@ export function requireSchool(req: Request, _res: Response, next: NextFunction) 
   next();
 }
 
-/**
- * Helper: get schoolId from request or throw.
- * Use inside route handlers for convenience.
- */
 export function getSchoolId(req: Request): string {
   if (!req.schoolId) {
     throw new AppError("School context required", 403);

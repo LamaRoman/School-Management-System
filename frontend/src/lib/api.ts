@@ -1,44 +1,36 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 class ApiClient {
-  private token: string | null = null;
-
-  setToken(token: string | null): void {
-    this.token = token;
-    if (token) {
-      localStorage.setItem("token", token);
-    } else {
-      localStorage.removeItem("token");
-    }
+  // Token is now stored in an HttpOnly cookie — JavaScript cannot (and should
+  // not) read it. The browser sends it automatically on every request via
+  // credentials: "include". These no-op stubs exist only so call-sites that
+  // haven't been cleaned up yet don't crash at runtime.
+  setToken(_token: string | null): void {
+    // no-op — cookie is set by the server's Set-Cookie header
   }
 
   getToken(): string | null {
-    if (!this.token && typeof window !== "undefined") {
-      this.token = localStorage.getItem("token");
-    }
-    return this.token;
+    // HttpOnly cookies are invisible to JS by design.
+    return null;
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     };
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
 
     const json = await res.json();
 
     if (res.status === 401) {
-      const hadToken = !!this.token;
-      this.setToken(null);
-      // Only redirect if user was previously logged in (session expired)
-      // Don't redirect for login attempts — let the caller handle the error
-      if (hadToken && typeof window !== "undefined") {
+      // Session expired or token revoked — redirect to login
+      if (typeof window !== "undefined") {
         window.location.href = "/login";
       }
       throw new Error(json.error || "Unauthorized");

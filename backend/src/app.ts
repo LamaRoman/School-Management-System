@@ -1,6 +1,7 @@
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { errorHandler } from "./middleware/errorHandler";
 import helmet from "helmet";
@@ -60,6 +61,7 @@ const PORT = process.env.PORT || 4000;
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000", credentials: true }));
 app.use(express.json({ limit: "5mb" }));
+app.use(cookieParser());
 
 // ─── Rate limiting ────────────────────────────────────────
 const loginLimiter = rateLimit({

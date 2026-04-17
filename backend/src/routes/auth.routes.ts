@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, CookieOptions } from "express";
 import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import jwt, { SignOptions } from "jsonwebtoken";
@@ -18,6 +18,35 @@ const MAX_PASSWORD = 72;
 // ─── Account lockout constants ───────────────────────────
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+// ─── Cookie helper ───────────────────────────────────────
+// Configurable via env vars for different deployment topologies:
+//   Same domain (default):      no env vars needed, sameSite=lax
+//   Subdomains:                 COOKIE_DOMAIN=.zentara.school
+//   Cross-origin (e.g. Vercel): COOKIE_SAME_SITE=none (requires HTTPS)
+function parseExpiryMs(expiresIn: string): number {
+  const m = expiresIn.match(/^(\d+)(s|m|h|d)$/);
+  if (!m) return 8 * 3600_000;
+  const n = parseInt(m[1], 10);
+  const unit = m[2];
+  if (unit === "s") return n * 1000;
+  if (unit === "m") return n * 60_000;
+  if (unit === "h") return n * 3600_000;
+  if (unit === "d") return n * 86400_000;
+  return 8 * 3600_000;
+}
+
+function authCookieOptions(): CookieOptions {
+  const sameSite = (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax";
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || sameSite === "none",
+    sameSite,
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path: "/",
+    maxAge: parseExpiryMs(process.env.JWT_EXPIRES_IN || "8h"),
+  };
+}
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email").max(320),
@@ -85,6 +114,10 @@ router.post("/login", async (req, res) => {
     { expiresIn: (process.env.JWT_EXPIRES_IN || "8h") as SignOptions["expiresIn"] }
   );
 
+  // Set HttpOnly cookie for web clients; also return token in body for mobile
+  // apps that can't use cookies (React Native / Expo).
+  res.cookie("token", token, authCookieOptions());
+
   res.json({
     data: {
       token,
@@ -138,6 +171,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 // POST /api/auth/logout
 // Adds the token's jti to a blocklist so it cannot be reused. The blocklist
 // entry automatically expires when the JWT itself would have expired.
+// Also clears the HttpOnly cookie.
 router.post("/logout", authenticate, async (req, res) => {
   const { jti, exp } = req.user!;
 
@@ -149,13 +183,18 @@ router.post("/logout", authenticate, async (req, res) => {
         expiresAt: new Date(exp * 1000),
       },
     });
-    // Immediately evict from the "not blocked" negative cache so subsequent
-    // requests on this replica are rejected without waiting for cache expiry.
     invalidateBlocklistCache(jti);
   }
 
-  // Even for old tokens without jti — tell the client logout succeeded.
-  // The frontend will clear the token from localStorage / cookies.
+  // Clear the HttpOnly cookie
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SAME_SITE === "none",
+    sameSite: (process.env.COOKIE_SAME_SITE as "lax" | "strict" | "none") || "lax",
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path: "/",
+  });
+
   res.json({ data: { message: "Logged out" } });
 });
 

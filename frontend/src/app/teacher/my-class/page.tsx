@@ -393,7 +393,6 @@ export default function TeacherMyClassPage() {
     if (!selectedStudent || !selectedExam || !selectedSection) return;
     setDownloading(true);
     try {
-      const token = api.getToken();
       let url: string;
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
       if (selectedExam.isFinal) {
@@ -403,7 +402,7 @@ export default function TeacherMyClassPage() {
       }
 
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("PDF generation failed");
 
@@ -444,7 +443,6 @@ export default function TeacherMyClassPage() {
     if (!selectedSection || !selectedExam) return;
     setDownloading(true);
     try {
-      const token = api.getToken();
       let url: string;
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
       if (selectedExam.isFinal) {
@@ -454,7 +452,7 @@ export default function TeacherMyClassPage() {
       }
 
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Batch PDF generation failed");
 
