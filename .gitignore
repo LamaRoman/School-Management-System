@@ -40,3 +40,4 @@ backend/prisma/*.db-journal
 
 # Misc
 *.logbackend/.env.test
+backend/.env.test
