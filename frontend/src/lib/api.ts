@@ -1,20 +1,35 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 class ApiClient {
-  // Token is now stored in an HttpOnly cookie — JavaScript cannot (and should
-  // not) read it. The browser sends it automatically on every request via
-  // credentials: "include". These no-op stubs exist only so call-sites that
-  // haven't been cleaned up yet don't crash at runtime.
-  setToken(_token: string | null): void {
-    // no-op — cookie is set by the server's Set-Cookie header
+  // Deduplicates concurrent refresh attempts: if 3 requests all get 401 at
+  // the same time, only one /auth/refresh call is made.
+  private refreshPromise: Promise<boolean> | null = null;
+
+  // No-op stubs — token lives in HttpOnly cookies, invisible to JS.
+  setToken(_token: string | null): void {}
+  getToken(): string | null { return null; }
+
+  private async tryRefresh(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+    return this.refreshPromise;
   }
 
-  getToken(): string | null {
-    // HttpOnly cookies are invisible to JS by design.
-    return null;
-  }
-
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
@@ -26,15 +41,26 @@ class ApiClient {
       credentials: "include",
     });
 
-    const json = await res.json();
-
-    if (res.status === 401) {
-      // Session expired or token revoked — redirect to login
-      if (typeof window !== "undefined") {
+    // On 401, try a silent refresh once, then retry the original request.
+    // Skip if this IS the retry (prevents infinite loops) or if this is
+    // the refresh endpoint itself.
+    if (res.status === 401 && !isRetry && !path.startsWith("/auth/refresh")) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        return this.request<T>(path, options, true);
+      }
+      // Refresh failed — session is dead.
+      // Redirect to login ONLY if not already there (prevents redirect loop).
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/login")
+      ) {
         window.location.href = "/login";
       }
-      throw new Error(json.error || "Unauthorized");
+      throw new Error("Session expired");
     }
+
+    const json = await res.json();
 
     if (!res.ok) {
       throw new Error(json.error || "Something went wrong");
