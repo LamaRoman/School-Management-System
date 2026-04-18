@@ -144,7 +144,16 @@ router.post("/login", async (req, res) => {
   const accessToken = signAccessToken(user);
   const refreshToken = await createRefreshToken(user.id);
 
-  // Set cookies
+  // Clear any stale cookies from previous sessions (handles domain/path mismatches
+  // from earlier deployments where cookie options may have differed)
+  res.clearCookie("token", { path: "/" });
+  res.clearCookie("refreshToken", { path: "/auth" });
+  res.clearCookie("refreshToken", { path: "/v1/auth" });
+  res.clearCookie("token", clearCookieOptions("/"));
+  res.clearCookie("refreshToken", clearCookieOptions("/auth"));
+  res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
+
+  // Set fresh cookies
   res.cookie("token", accessToken, accessCookieOptions());
   res.cookie("refreshToken", refreshToken, refreshCookieOptions());
 
@@ -171,6 +180,10 @@ router.post("/refresh", async (req, res) => {
     req.body?.refreshToken;
 
   if (!raw || typeof raw !== "string") {
+    // No refresh token — clear any stale access token cookie so the browser
+    // doesn't keep sending an expired JWT on every request.
+    res.clearCookie("token", { path: "/" });
+    res.clearCookie("token", clearCookieOptions("/"));
     throw new AppError("Refresh token required", 401);
   }
 
@@ -178,12 +191,16 @@ router.post("/refresh", async (req, res) => {
   const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
 
   if (!stored || stored.expiresAt < new Date()) {
-    // Token not found or expired — could be reuse of a rotated token (attack)
-    // or simply expired. Either way, delete all tokens for this user as a
-    // precaution if we can identify them.
     if (stored) {
       await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
     }
+    // Clear all cookies so stale tokens don't persist
+    res.clearCookie("token", { path: "/" });
+    res.clearCookie("token", clearCookieOptions("/"));
+    res.clearCookie("refreshToken", { path: "/auth" });
+    res.clearCookie("refreshToken", { path: "/v1/auth" });
+    res.clearCookie("refreshToken", clearCookieOptions("/auth"));
+    res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
     throw new AppError("Invalid or expired refresh token", 401);
   }
 
@@ -194,6 +211,12 @@ router.post("/refresh", async (req, res) => {
   });
   if (!user || !user.isActive) {
     await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
+    res.clearCookie("token", { path: "/" });
+    res.clearCookie("token", clearCookieOptions("/"));
+    res.clearCookie("refreshToken", { path: "/auth" });
+    res.clearCookie("refreshToken", { path: "/v1/auth" });
+    res.clearCookie("refreshToken", clearCookieOptions("/auth"));
+    res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
     throw new AppError("Account has been deactivated", 401);
   }
 
