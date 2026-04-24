@@ -6,7 +6,7 @@
     "watchPatterns": ["backend/**"]
   },
   "deploy": {
-    "startCommand": "cd backend && npm run migrate:prod && node dist/app.js",
+    "startCommand": "cd backend && npm run migrate:prod && node dist/server.js",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
