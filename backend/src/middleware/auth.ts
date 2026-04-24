@@ -80,8 +80,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   // Cookie takes precedence when both are present.
   let token: string | undefined;
 
-  const cookieToken = (req as any).cookies?.token;
-  if (cookieToken) {
+const cookieToken = (req as any).cookies?.zs_access_token;  if (cookieToken) {
     token = cookieToken;
   } else {
     const authHeader = req.headers.authorization;

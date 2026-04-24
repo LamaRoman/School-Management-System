@@ -146,15 +146,15 @@ router.post("/login", async (req, res) => {
 
   // Clear any stale cookies from previous sessions (handles domain/path mismatches
   // from earlier deployments where cookie options may have differed)
-  res.clearCookie("token", { path: "/" });
+  res.clearCookie("zs_access_token", { path: "/" });
   res.clearCookie("refreshToken", { path: "/auth" });
   res.clearCookie("refreshToken", { path: "/v1/auth" });
-  res.clearCookie("token", clearCookieOptions("/"));
+  res.clearCookie("zs_access_token", clearCookieOptions("/"));
   res.clearCookie("refreshToken", clearCookieOptions("/auth"));
   res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
 
   // Set fresh cookies
-  res.cookie("token", accessToken, accessCookieOptions());
+  res.cookie("zs_access_token", accessToken, accessCookieOptions());
   res.cookie("refreshToken", refreshToken, refreshCookieOptions());
 
   res.json({
@@ -182,8 +182,8 @@ router.post("/refresh", async (req, res) => {
   if (!raw || typeof raw !== "string") {
     // No refresh token — clear any stale access token cookie so the browser
     // doesn't keep sending an expired JWT on every request.
-    res.clearCookie("token", { path: "/" });
-    res.clearCookie("token", clearCookieOptions("/"));
+    res.clearCookie("zs_access_token", { path: "/" });
+    res.clearCookie("zs_access_token", clearCookieOptions("/"));
     throw new AppError("Refresh token required", 401);
   }
 
@@ -195,8 +195,8 @@ router.post("/refresh", async (req, res) => {
       await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
     }
     // Clear all cookies so stale tokens don't persist
-    res.clearCookie("token", { path: "/" });
-    res.clearCookie("token", clearCookieOptions("/"));
+    res.clearCookie("zs_access_token", { path: "/" });
+    res.clearCookie("zs_access_token", clearCookieOptions("/"));
     res.clearCookie("refreshToken", { path: "/auth" });
     res.clearCookie("refreshToken", { path: "/v1/auth" });
     res.clearCookie("refreshToken", clearCookieOptions("/auth"));
@@ -211,8 +211,8 @@ router.post("/refresh", async (req, res) => {
   });
   if (!user || !user.isActive) {
     await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
-    res.clearCookie("token", { path: "/" });
-    res.clearCookie("token", clearCookieOptions("/"));
+    res.clearCookie("zs_access_token", { path: "/" });
+    res.clearCookie("zs_access_token", clearCookieOptions("/"));
     res.clearCookie("refreshToken", { path: "/auth" });
     res.clearCookie("refreshToken", { path: "/v1/auth" });
     res.clearCookie("refreshToken", clearCookieOptions("/auth"));
@@ -226,7 +226,7 @@ router.post("/refresh", async (req, res) => {
   const newRefreshToken = await createRefreshToken(user.id);
 
   // Set cookies
-  res.cookie("token", newAccessToken, accessCookieOptions());
+  res.cookie("zs_access_token", newAccessToken, accessCookieOptions());
   res.cookie("refreshToken", newRefreshToken, refreshCookieOptions());
 
   res.json({
@@ -302,7 +302,7 @@ router.post("/logout", authenticate, async (req, res) => {
   await prisma.refreshToken.deleteMany({ where: { userId: req.user!.userId } });
 
   // Clear cookies
-  res.clearCookie("token", clearCookieOptions("/"));
+  res.clearCookie("zs_access_token", clearCookieOptions("/"));
   res.clearCookie("refreshToken", clearCookieOptions("/auth"));
 
   res.json({ data: { message: "Logged out" } });
