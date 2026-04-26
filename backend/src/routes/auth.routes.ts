@@ -122,7 +122,7 @@ router.post("/login", async (req, res) => {
         429
       );
     }
-    await prisma.loginAttempt.delete({ where: { email } });
+    await prisma.loginAttempt.deleteMany({ where: { email } });
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -138,7 +138,7 @@ router.post("/login", async (req, res) => {
   }
 
   // Success — clear failed attempts
-  await prisma.loginAttempt.delete({ where: { email } }).catch(() => {});
+  await prisma.loginAttempt.deleteMany({ where: { email } });
 
   // Issue tokens
   const accessToken = signAccessToken(user);
@@ -221,7 +221,8 @@ router.post("/refresh", async (req, res) => {
   }
 
   // Rotate: delete old, create new
-  await prisma.refreshToken.delete({ where: { tokenHash } });
+  // Use deleteMany so a concurrent refresh does not throw "record not found"
+  await prisma.refreshToken.deleteMany({ where: { tokenHash } });
   const newAccessToken = signAccessToken(user);
   const newRefreshToken = await createRefreshToken(user.id);
 
