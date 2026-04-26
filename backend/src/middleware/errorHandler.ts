@@ -12,7 +12,11 @@ export class AppError extends Error {
 }
 
 export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
-  console.error(`[ERROR] ${err.name}: ${err.message}`);
+  // Only log unexpected errors — skip routine 401/403 auth rejections to keep logs clean
+  const statusCode = err instanceof AppError ? err.statusCode : 500;
+  if (statusCode >= 500) {
+    console.error(`[ERROR] ${err.name}: ${err.message}`);
+  }
 
   // Zod validation errors
   if (err instanceof ZodError) {
