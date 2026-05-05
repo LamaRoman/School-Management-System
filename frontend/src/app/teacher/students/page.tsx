@@ -173,7 +173,7 @@ export default function TeacherStudentsPage() {
         {sections.map((sec) => (
           <button key={sec.sectionId} onClick={() => handleSectionSelect(sec)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === sec.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
-            {formatGradeSection(sec.gradeName, sec.sectionName, sections)}
+            {formatGradeSection(sec.gradeName, sec.sectionName)}
           </button>
         ))}
       </div>
@@ -223,7 +223,7 @@ export default function TeacherStudentsPage() {
           {/* Student list */}
           <div className="card overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 text-sm font-semibold text-primary">
-              {formatGradeSection(selectedSection.gradeName, selectedSection.sectionName, sections)} ({students.length} students)
+              {formatGradeSection(selectedSection.gradeName, selectedSection.sectionName)} ({students.length} students)
             </div>
             <table className="w-full text-sm">
               <thead>

@@ -162,7 +162,7 @@ export default function TeacherHomeworkPage() {
                   <option value="">Select class and subject</option>
                   {assignments.map((a) => (
                     <option key={`${a.sectionId}-${a.subjectId}`} value={`${a.sectionId}-${a.subjectId}`}>
-                      {formatGradeSection(a.gradeName, a.sectionName, assignments)} — {a.subjectName}
+                      {formatGradeSection(a.gradeName, a.sectionName)} — {a.subjectName}
                     </option>
                   ))}
                 </select>
@@ -213,7 +213,7 @@ export default function TeacherHomeworkPage() {
                     <h3 className="font-semibold text-primary">{hw.title}</h3>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{hw.subject.name}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {formatGradeSection(hw.section.grade.name, hw.section.name, assignments.map(a => ({ gradeName: a.gradeName })))}
+                      {formatGradeSection(hw.section.grade.name, hw.section.name)}
                     </span>
                   </div>
                   {hw.description && (

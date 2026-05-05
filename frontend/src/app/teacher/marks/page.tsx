@@ -155,7 +155,7 @@ export default function MarksEntryPage() {
 
   // Group assignments by grade for display
   const groupedByGrade = myAssignments.reduce<Record<string, SubjectAssignment[]>>((acc, a) => {
-    const key = formatGradeSection(a.gradeName, a.sectionName, myAssignments);
+    const key = formatGradeSection(a.gradeName, a.sectionName);
     if (!acc[key]) acc[key] = [];
     acc[key].push(a);
     return acc;
@@ -198,7 +198,7 @@ export default function MarksEntryPage() {
         </div>
         {currentAssignment && (
           <div className="mt-3 text-sm text-gray-500">
-            {formatGradeSection(currentAssignment.gradeName, currentAssignment.sectionName, myAssignments)} · {currentAssignment.subjectName}: Theory ({currentAssignment.fullTheoryMarks})
+            {formatGradeSection(currentAssignment.gradeName, currentAssignment.sectionName)} · {currentAssignment.subjectName}: Theory ({currentAssignment.fullTheoryMarks})
             {hasPractical && ` + Practical (${currentAssignment.fullPracticalMarks})`}
             {" "}= Full Marks ({currentAssignment.fullTheoryMarks + currentAssignment.fullPracticalMarks})
             {currentAssignment.isTemporary && (

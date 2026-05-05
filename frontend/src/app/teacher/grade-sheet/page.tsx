@@ -70,7 +70,7 @@ export default function TeacherGradeSheetPage() {
         <div>
           <h1 className="text-2xl font-display font-bold text-primary">Grade Sheet</h1>
           <p className="text-sm text-gray-500">
-            {selectedSection ? formatGradeSection(selectedSection.gradeName, selectedSection.sectionName, mySections) : ""}
+            {selectedSection ? formatGradeSection(selectedSection.gradeName, selectedSection.sectionName) : ""}
           </p>
         </div>
         {mySections.length > 1 && (
@@ -84,7 +84,7 @@ export default function TeacherGradeSheetPage() {
           >
             {mySections.map((s) => (
               <option key={s.assignmentId} value={s.assignmentId}>
-                {formatGradeSection(s.gradeName, s.sectionName, mySections)}
+                {formatGradeSection(s.gradeName, s.sectionName)}
               </option>
             ))}
           </select>

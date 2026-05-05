@@ -74,13 +74,3 @@ export function calculateOverallGpa(subjectGpas: number[]): number {
 export function hasPassed(totalMarks: number, passMarks: number): boolean {
   return totalMarks >= passMarks;
 }
-
-/**
- * Get the full grading scale (for display purposes)
- */
-export function getGradingScale() {
-  return GRADING_SCALE.map((entry) => ({
-    range: entry.min === 0 ? "Below 20" : `${entry.min} – ${entry.min + 9 >= 100 ? 100 : entry.min + 9}`,
-    ...entry,
-  }));
-}

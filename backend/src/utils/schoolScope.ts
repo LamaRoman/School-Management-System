@@ -78,11 +78,3 @@ export async function verifyExamType(id: string, schoolId: string) {
   if (!entity) throw new AppError("Exam type not found or access denied", 404);
   return entity;
 }
-
-// ─── Convenience: get active academic year for a school ─────────────────────
-
-export async function getActiveYear(schoolId: string) {
-  return prisma.academicYear.findFirst({
-    where: { schoolId, isActive: true },
-  });
-}

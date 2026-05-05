@@ -10,29 +10,33 @@ A complete digital solution for modern schools — built for Nepali schools (Nur
 - **ORM:** Prisma
 - **Backend:** Express.js + TypeScript
 - **Frontend:** Next.js + TypeScript
+- **Mobile:** React Native (Expo)
 
 ## Project Structure
 
 ```
-nepali-report-card/
-├── backend/          ← Express.js backend
-│   ├── prisma/       ← Schema + migrations + seed
+School-Management-System/
+├── backend/          ← Express.js API
+│   ├── prisma/       ← Schema, migrations, seed
 │   └── src/
 │       ├── routes/
-│       ├── controllers/
 │       ├── services/
 │       ├── middleware/
-│       └── utils/
-├── frontend/         ← Next.js frontend
+│       ├── utils/
+│       └── test/
+├── frontend/         ← Next.js web app
 │   └── src/
 │       ├── app/
 │       ├── components/
 │       ├── hooks/
-│       ├── lib/
-│       └── types/
-└── packages/
-    └── shared/       ← Shared TypeScript types
+│       └── lib/
+├── mobile-staff/     ← Expo app for teachers and accountants
+│   └── src/
+└── mobile-parent/    ← Expo app for parents and students
+    └── src/
 ```
+
+Each of the four sub-projects has its own `package.json` and `package-lock.json`. There is no root-level workspace; install and run each one independently.
 
 ## Getting Started
 
@@ -41,31 +45,32 @@ nepali-report-card/
 - Node.js 18+
 - PostgreSQL 14+
 
-### Setup
+### Backend setup
 
-1. Clone and install:
-   ```bash
-   npm install
-   ```
+```bash
+cd backend
+cp .env.example .env       # then edit DATABASE_URL and JWT_SECRET
+npm install
+npm run migrate            # apply migrations
+npm run seed               # seed initial data
+npm run dev                # starts API on http://localhost:4000
+```
 
-2. Set up the database:
-   ```bash
-   cp apps/api/.env.example apps/api/.env
-   # Edit .env with your PostgreSQL connection string
-   ```
+### Frontend setup
 
-3. Run migrations and seed:
-   ```bash
-   npm run db:migrate
-   npm run db:seed
-   ```
+```bash
+cd frontend
+npm install
+npm run dev                # starts web app on http://localhost:3000
+```
 
-4. Start development:
-   ```bash
-   npm run dev
-   ```
+### Mobile apps (optional)
 
-   This starts both the API (port 4000) and web app (port 3000).
+```bash
+cd mobile-staff   # or mobile-parent
+npm install
+npx expo start
+```
 
 ### Default Admin Login
 
@@ -78,5 +83,14 @@ nepali-report-card/
 - Weightage-based final results (percentage-first method)
 - Bikram Sambat date system
 - A4/A5 paper size per exam type
-- Color + B&W print support
+- Color and B&W print support
 - Conditional practical columns
+
+## Testing
+
+Backend has Jest + Supertest suites. See `backend/TESTING.md` for setup details.
+
+```bash
+cd backend
+npm test
+```
