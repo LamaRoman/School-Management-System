@@ -4,7 +4,7 @@ import {
   Alert, ActivityIndicator,
 } from 'react-native';
 import { api, getErrorMessage } from '../../api/client';
-import { Card, Button, Badge, EmptyState, LoadingScreen, Row } from '../../components/ui';
+import { Button, EmptyState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS } from '../../utils/bsDate';
 

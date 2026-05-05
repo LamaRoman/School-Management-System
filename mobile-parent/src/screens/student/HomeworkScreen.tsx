@@ -37,12 +37,6 @@ export default function StudentHomeworkScreen() {
 
   if (loading) return <LoadingScreen />;
 
-  const today = new Date();
-  const isOverdue = (dueDate: string) => {
-    // Simple check — if BS date string looks past, mark overdue
-    return false; // Conservative — don't falsely mark overdue
-  };
-
   return (
     <View style={s.container}>
       <View style={s.header}>

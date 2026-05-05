@@ -5,7 +5,6 @@ import {
 import { api } from '../../api/client';
 import { Card, Badge, EmptyState, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
-import { useAuth } from '../../hooks/useAuth';
 
 interface ExamType { id: string; name: string }
 interface SubjectRow {
@@ -27,7 +26,6 @@ interface ReportData {
 }
 
 export default function StudentReportScreen() {
-  const { user } = useAuth();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [selectedExam, setSelectedExam] = useState<ExamType | null>(null);

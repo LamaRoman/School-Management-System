@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../api/client';
-import { Card, StatCard, Badge, EmptyState, LoadingScreen, Row, Divider } from '../../components/ui';
+import { Card, EmptyState, LoadingScreen, Row, Divider } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Child { id: string; name: string; rollNo?: number; className: string; section: string; }

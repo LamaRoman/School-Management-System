@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
-import { api, getErrorMessage } from '../../api/client';
+import { api } from '../../api/client';
 import { Card, StatCard, Badge, LoadingScreen, Row, Divider } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
