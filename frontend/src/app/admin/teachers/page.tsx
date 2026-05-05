@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, Edit2, Trash2, X, KeyRound, UserCheck, UserX } from "lucide-react";
+import { Plus, Edit2, X, KeyRound, UserCheck, UserX } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Assignment {

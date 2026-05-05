@@ -130,7 +130,6 @@ export default function BSDatePicker({
   // Build calendar grid
   const daysInMonth = getDaysInBSMonth(viewYear, viewMonth);
   const startWeekday = getStartWeekday(viewYear, viewMonth);
-  const todayStr = getTodayBS();
 
   const isSelected = (day: number) => {
     if (!parsed) return false;
@@ -143,7 +142,6 @@ export default function BSDatePicker({
 
   const isDayDisabled = (day: number) => {
     if (!disableFuture) return false;
-    const dateStr = formatBSDate(viewYear, viewMonth, day);
     // Compare with today
     if (viewYear > today.year) return true;
     if (viewYear === today.year && viewMonth > today.month) return true;

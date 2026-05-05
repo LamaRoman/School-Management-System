@@ -41,7 +41,6 @@ export default function AdminParentsPage() {
   const confirm = useConfirm();
   const [parents, setParents] = useState<Parent[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
-  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);

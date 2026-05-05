@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
@@ -33,7 +32,6 @@ interface AttendanceRecord {
 }
 
 export default function AttendancePage() {
-  const { user } = useAuth();
   const [mySections, setMySections] = useState<ClassTeacherSection[]>([]);
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [date, setDate] = useState(getTodayBS());

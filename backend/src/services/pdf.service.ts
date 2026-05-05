@@ -187,9 +187,7 @@ export function buildReportCardHtml(
 
   // Term headers for final report
   let termHeaders = "";
-  let termColCount = 0;
   if (!isTermReport && reportData.subjects?.[0]?.terms) {
-    termColCount = reportData.subjects[0].terms.length;
     termHeaders = reportData.subjects[0].terms
       .map(
         (term: any) =>

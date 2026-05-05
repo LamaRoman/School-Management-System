@@ -94,7 +94,7 @@ router.get("/:id", authenticate, async (req, res) => {
 // POST /api/notices — admin or teacher can create
 router.post("/", authenticate, async (req, res) => {
   const user = req.user!;
-  const schoolId = getSchoolId(req);
+  getSchoolId(req); // enforce school context
   if (user.role !== "ADMIN" && user.role !== "TEACHER" && user.role !== "ACCOUNTANT") {
     throw new AppError("Not authorized to create notices", 403);
   }

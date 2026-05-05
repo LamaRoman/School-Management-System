@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Users, GraduationCap, TrendingUp,
   Award, AlertTriangle, CalendarCheck,
-  UserCheck, UserX, X, ChevronRight,
+  UserCheck, X, ChevronRight,
   ChevronDown, ChevronUp,
   Receipt, Megaphone,
   LayoutGrid,

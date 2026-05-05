@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
-import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -29,7 +28,6 @@ interface Homework {
 
 export default function TeacherHomeworkPage() {
   const confirm = useConfirm();
-  const { user } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [homework, setHomework] = useState<Homework[]>([]);
   const [loading, setLoading] = useState(true);

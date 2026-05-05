@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { Printer } from "lucide-react";
 import { printGradeSheet } from "@/lib/printUtils";

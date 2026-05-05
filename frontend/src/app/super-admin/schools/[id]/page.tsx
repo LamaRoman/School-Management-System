@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { ArrowLeft, Plus, UserCheck, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Plus, UserCheck, Upload } from "lucide-react";
 import Link from "next/link";
 
 interface SchoolDetail {
@@ -30,7 +30,6 @@ interface Admin {
 
 export default function SchoolDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [school, setSchool] = useState<SchoolDetail | null>(null);
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);

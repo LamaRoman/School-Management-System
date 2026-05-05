@@ -25,7 +25,7 @@ interface ExamType { id: string; name: string }
 interface MarkEntry { studentId: string; theoryMarks: number | null; practicalMarks: number | null; isAbsent: boolean }
 
 export default function MarksEntryPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const [myAssignments, setMyAssignments] = useState<SubjectAssignment[]>([]);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);

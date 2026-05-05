@@ -28,7 +28,6 @@ const nepaliMonths = ["Baisakh","Jestha","Ashadh","Shrawan","Bhadra","Ashwin","K
 type Tab = "categories" | "structure" | "individual" | "collection" | "discounts";
 
 export default function FeeManagementPage() {
-  const showConfirm = useConfirm();
   const { user } = useAuth();
   const readOnly = user?.role === "ACCOUNTANT";
   const [tab, setTab] = useState<Tab>("categories");
@@ -266,7 +265,6 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
 
   // Student ledger view
   const [ledger, setLedger] = useState<LedgerData | null>(null);
-  const [loadingLedger, setLoadingLedger] = useState(false);
 
   // Payment
   const [payMonths, setPayMonths] = useState<string[]>([]);
@@ -299,9 +297,9 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
   };
 
   const handleOpenLedger = async (studentId: string) => {
-    setReceipt(null); setLoadingLedger(true);
+    setReceipt(null);
     try { const data = await api.get<LedgerData>(`/fees/student-ledger/${studentId}?academicYearId=${activeYear.id}`); setLedger(data); setPayMonths([]); setPayFixed([]); setPaymentDate(`${activeYear.yearBS}/${String(nepaliMonths.indexOf(currentMonth) + 1).padStart(2, "0")}/15`); }
-    catch { setLedger(null); } finally { setLoadingLedger(false); }
+    catch { setLedger(null); }
   };
 
   const handleCloseLedger = () => { setLedger(null); setReceipt(null); };

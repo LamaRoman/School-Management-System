@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
-import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
 import { printExamRoutine } from "@/lib/printUtils";
 
@@ -26,7 +25,6 @@ interface RoutineEntry {
 }
 
 export default function TeacherExamRoutinePage() {
-  const { user } = useAuth();
   const [sections, setSections] = useState<ClassTeacherSection[]>([]);
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);

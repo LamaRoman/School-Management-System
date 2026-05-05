@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
-import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
 import { Save, X, Hash } from "lucide-react";
 
@@ -29,7 +28,6 @@ interface Student {
 }
 
 export default function TeacherStudentsPage() {
-  const { user } = useAuth();
   const [sections, setSections] = useState<ClassTeacherSection[]>([]);
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [students, setStudents] = useState<Student[]>([]);

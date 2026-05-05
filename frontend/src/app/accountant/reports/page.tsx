@@ -2,8 +2,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { getTodayBS, formatBSDateLong, BS_MONTH_NAMES, getCurrentBSMonthName, getPreviousDayBS, getNextDayBS, isFutureBS, isTodayBS } from "@/lib/bsDate";
-import { printReceipt } from "@/lib/feePrintUtils";
-import toast from "react-hot-toast";
 import { ChevronLeft, ChevronRight, Printer, Search, AlertTriangle, BookOpen, FileBarChart, Users, Calendar, Receipt } from "lucide-react";
 
 type ReportView = "menu" | "daily-cashbook" | "payment-history" | "defaulters" | "discounts" | "monthly-summary" | "student-count";

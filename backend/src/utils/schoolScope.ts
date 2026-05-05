@@ -31,12 +31,6 @@ export async function verifyFeeCategory(id: string, schoolId: string) {
   return entity;
 }
 
-export async function verifyExamRoom(id: string, schoolId: string) {
-  const entity = await prisma.examRoom.findFirst({ where: { id, schoolId } });
-  if (!entity) throw new AppError("Exam room not found or access denied", 404);
-  return entity;
-}
-
 // ─── Child entity verification (through parent chain) ───────────────────────
 
 export async function verifyGrade(id: string, schoolId: string) {

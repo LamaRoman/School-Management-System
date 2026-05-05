@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifyAcademicYear, verifyExamType, verifyExamRoom, verifyGrade } from "../utils/schoolScope";
+import { verifyAcademicYear, verifyExamType, verifyGrade } from "../utils/schoolScope";
 
 const router = Router();
 

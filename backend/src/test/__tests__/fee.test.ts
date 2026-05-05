@@ -14,10 +14,6 @@ import {
   seedSchoolContext,
   createTestSchool,
   createTestUser,
-  createTestAcademicYear,
-  createTestGrade,
-  createTestSection,
-  createTestStudent,
   createTestFeeCategory,
   loginAs,
   authHeader,
@@ -342,7 +338,7 @@ describe("Multi-tenancy isolation", () => {
   beforeAll(async () => {
     // Create a completely separate school
     const otherSchool = await createTestSchool({ name: "Other School", code: "OTH" });
-    const otherAdmin = await createTestUser(otherSchool.id, "ADMIN", {
+    await createTestUser(otherSchool.id, "ADMIN", {
       email: "admin@otherschool.com",
       password: "Test@123",
     });

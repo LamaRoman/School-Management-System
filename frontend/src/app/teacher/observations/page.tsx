@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
-import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
 
@@ -20,7 +19,6 @@ interface StudentObs { id: string; name: string; rollNo: number; grades: Record<
 const gradeOptions = ["A+", "A", "B+", "B", "C+", "C", "D+", "D", "E"];
 
 export default function TeacherObservationsPage() {
-  const { user } = useAuth();
   const [sections, setSections] = useState<ClassTeacherSection[]>([]);
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [examTypes, setExamTypes] = useState<any[]>([]);

@@ -234,7 +234,7 @@ describe("DELETE /students/:id", () => {
   });
 
   it("should deactivate a student (admin only)", async () => {
-    const res = await request(app)
+    await request(app)
       .delete(`/students/${deleteStudentId}`)
       .set("Authorization", authHeader(adminToken))
       .expect(200);
@@ -248,7 +248,6 @@ describe("DELETE /students/:id", () => {
 // ─── MULTI-TENANCY ISOLATION ────────────────────────────────────────────────────
 
 describe("Multi-tenancy student isolation", () => {
-  let otherAdminToken: string;
   let otherStudentId: string;
 
   beforeAll(async () => {
@@ -263,7 +262,6 @@ describe("Multi-tenancy student isolation", () => {
       adminPassword: "Test@123",
     });
     otherStudentId = otherCtx.student.id;
-    otherAdminToken = (await loginAs("admin@isolated.com")).token;
   });
 
   it("should not list other school's students", async () => {
