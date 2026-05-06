@@ -22,11 +22,6 @@ export function getTodayBSParts(): { year: number; month: number; day: number } 
   return { year: d.getYear(), month: d.getMonth() + 1, day: d.getDate() }; // month is 1-indexed in return
 }
 
-/** Get current BS month index (1-indexed: Baisakh=1, Chaitra=12) */
-export function getCurrentBSMonth(): number {
-  return new NepaliDate().getMonth() + 1;
-}
-
 /** Get current BS month name */
 export function getCurrentBSMonthName(): string {
   return BS_MONTH_NAMES[new NepaliDate().getMonth()];

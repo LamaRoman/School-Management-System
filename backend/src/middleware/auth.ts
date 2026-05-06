@@ -135,16 +135,6 @@ export function authorize(...roles: UserRole[]) {
   };
 }
 
-export function requireSchool(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user) {
-    throw new AppError("Authentication required", 401);
-  }
-  if (!req.schoolId) {
-    throw new AppError("School context required. Super admins must use /super-admin routes.", 403);
-  }
-  next();
-}
-
 export function getSchoolId(req: Request): string {
   if (!req.schoolId) {
     throw new AppError("School context required", 403);
