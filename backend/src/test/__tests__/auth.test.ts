@@ -331,16 +331,8 @@ describe("POST /auth/logout", () => {
       .set("Authorization", authHeader(token))
       .expect(200);
 
-    const rawCookies = res.headers["set-cookie"];
-    if (rawCookies) {
-      // supertest v7 may return a single string or an array
-      const cookieList = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
-      const clearedCookie = cookieList.find(
-        (c: string) => c.includes("token=") && (c.includes("Max-Age=0") || c.includes("Expires=Thu, 01 Jan 1970"))
-      );
-      // Cookie clearing is implementation-dependent, just verify logout succeeded
-      expect(res.body.data.message).toMatch(/logged out/i);
-    }
+    // Cookie clearing is implementation-dependent, just verify logout succeeded
+    expect(res.body.data.message).toMatch(/logged out/i);
   });
 
   it("should delete all refresh tokens on logout", async () => {
@@ -388,7 +380,7 @@ describe("POST /auth/refresh", () => {
     const { refreshToken: oldRefresh } = await loginAs("admin@authtest.com");
 
     // Use it once — should work
-    const res = await request(app)
+    await request(app)
       .post("/auth/refresh")
       .send({ refreshToken: oldRefresh })
       .expect(200);

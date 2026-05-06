@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
 import { GraduationCap, Calendar, Receipt, Megaphone, Pin } from "lucide-react";
 
 interface Child {
@@ -28,7 +27,6 @@ interface AttendanceData {
 interface ExamType { id: string; name: string, isFinal: boolean }
 
 export default function ParentDashboard() {
-  const { user } = useAuth();
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [fees, setFees] = useState<FeeData | null>(null);

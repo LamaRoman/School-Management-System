@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, Alert, ActivityIndicator,
+  TouchableOpacity, Alert,
 } from 'react-native';
 import { api, getErrorMessage } from '../../api/client';
 import { Button, EmptyState, LoadingScreen } from '../../components/ui';

@@ -1,20 +1,11 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { Receipt, Users, AlertTriangle, TrendingUp, Search, FileText, ChevronRight } from "lucide-react";
+import { Receipt, Users, AlertTriangle, TrendingUp, Search, FileText } from "lucide-react";
 import { getTodayBS, formatBSDateLong, getCurrentBSMonthName } from "@/lib/bsDate";
 import { printReceipt } from "@/lib/feePrintUtils";
 import toast from "react-hot-toast";
-
-interface Defaulter {
-  studentId: string;
-  studentName: string;
-  className: string;
-  section: string;
-  balance: number;
-  monthsPending: number;
-}
 
 interface ReceiptGroup {
   receiptNumber: string;
@@ -72,8 +63,6 @@ export default function AccountantDashboardPage() {
   const [monthExpected, setMonthExpected] = useState(0);
   const [currentMonth, setCurrentMonth] = useState("");
   const [totalDefaulters, setTotalDefaulters] = useState(0);
-  const [totalDue, setTotalDue] = useState(0);
-  const [defaultersList, setDefaultersList] = useState<Defaulter[]>([]);
   const [recentReceipts, setRecentReceipts] = useState<ReceiptGroup[]>([]);
   const [receiptSearch, setReceiptSearch] = useState("");
   const [searchResults, setSearchResults] = useState<ReceiptGroup[]>([]);
@@ -104,10 +93,6 @@ export default function AccountantDashboardPage() {
         // Defaulters
         if (defData?.summary) {
           setTotalDefaulters(defData.summary.totalDefaulters ?? 0);
-          setTotalDue(defData.summary.totalDue ?? 0);
-        }
-        if (Array.isArray(defData?.defaulters)) {
-          setDefaultersList(defData.defaulters);
         }
 
         // Monthly progress

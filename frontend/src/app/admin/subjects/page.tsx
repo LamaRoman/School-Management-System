@@ -23,7 +23,6 @@ export default function SubjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const fetchGrades = async () => {
     const year = await api.get<any>("/academic-years/active");
@@ -32,7 +31,6 @@ export default function SubjectsPage() {
       setGrades(g);
       if (g.length > 0 && !selectedGrade) setSelectedGrade(g[0].id);
     }
-    setLoading(false);
   };
 
   const fetchSubjects = () => {

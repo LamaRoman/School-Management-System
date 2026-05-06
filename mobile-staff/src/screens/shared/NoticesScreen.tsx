@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { api } from '../../api/client';
-import { Card, Badge, EmptyState, LoadingScreen } from '../../components/ui';
+import { Badge, EmptyState, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Notice {

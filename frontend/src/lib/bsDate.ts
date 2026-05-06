@@ -1,16 +1,6 @@
 // ─── Nepali (BS) Date Utility ───────────────────────────
 // Single source of truth for all BS date operations.
 // Uses nepali-date-converter library.
-//
-// PAGES THAT NEED TO USE THIS (track for later migration):
-// ✅ teacher/attendance/page.tsx (done)
-// ⬜ admin/exam-routine/page.tsx
-// ⬜ admin/fees/page.tsx (collection tab - payment date, billing month)
-// ⬜ admin/notices/page.tsx (publish date, expiry date)
-// ⬜ admin/admissions/page.tsx (applied date)
-// ⬜ teacher/homework/page.tsx (assigned date, due date)
-// ⬜ admin/students/page.tsx (DOB)
-// ⬜ teacher/students/page.tsx (DOB)
 
 import NepaliDate from "nepali-date-converter";
 
@@ -30,16 +20,6 @@ export function getTodayBS(): string {
 export function getTodayBSParts(): { year: number; month: number; day: number } {
   const d = new NepaliDate();
   return { year: d.getYear(), month: d.getMonth() + 1, day: d.getDate() }; // month is 1-indexed in return
-}
-
-/** Get current BS year */
-export function getCurrentBSYear(): number {
-  return new NepaliDate().getYear();
-}
-
-/** Get current BS month index (1-indexed: Baisakh=1, Chaitra=12) */
-export function getCurrentBSMonth(): number {
-  return new NepaliDate().getMonth() + 1;
 }
 
 /** Get current BS month name */
@@ -67,21 +47,15 @@ export function formatBSDate(year: number, month: number, day: number): string {
 }
 
 /** Get month name from 1-indexed month number */
-export function getBSMonthName(month: number): string {
+function getBSMonthName(month: number): string {
   if (month < 1 || month > 12) return "";
   return BS_MONTH_NAMES[month - 1];
-}
-
-/** Get 1-indexed month number from month name */
-export function getBSMonthIndex(name: string): number {
-  const idx = BS_MONTH_NAMES.indexOf(name);
-  return idx >= 0 ? idx + 1 : 0;
 }
 
 // ─── Comparison ─────────────────────────────────────────
 
 /** Compare two BS date strings. Returns -1 (a<b), 0 (a==b), 1 (a>b) */
-export function compareBSDates(a: string, b: string): number {
+function compareBSDates(a: string, b: string): number {
   const pa = parseBSDate(a);
   const pb = parseBSDate(b);
   if (!pa || !pb) return 0;
@@ -100,11 +74,6 @@ export function isFutureBS(dateStr: string): boolean {
 /** Check if a BS date string is today */
 export function isTodayBS(dateStr: string): boolean {
   return compareBSDates(dateStr, getTodayBS()) === 0;
-}
-
-/** Check if a BS date string is today or in the past */
-export function isTodayOrPastBS(dateStr: string): boolean {
-  return compareBSDates(dateStr, getTodayBS()) <= 0;
 }
 
 // ─── Navigation (for date pickers) ─────────────────────
@@ -143,26 +112,6 @@ export function getNextDayBS(dateStr: string): string {
   }
 }
 
-// ─── Conversion ─────────────────────────────────────────
-
-/** Convert AD Date to BS string "YYYY/MM/DD" */
-export function adToBS(adDate: Date): string {
-  return new NepaliDate(adDate).format("YYYY/MM/DD");
-}
-
-/** Convert BS string "YYYY/MM/DD" to AD Date */
-export function bsToAD(bsDateStr: string): Date | null {
-  const parsed = parseBSDate(bsDateStr);
-  if (!parsed) return null;
-
-  try {
-    const nd = new NepaliDate(parsed.year, parsed.month - 1, parsed.day);
-    return nd.toJsDate();
-  } catch {
-    return null;
-  }
-}
-
 // ─── Grade / Section label ───────────────────────────────
 
 /**
@@ -172,16 +121,8 @@ export function bsToAD(bsDateStr: string): Date | null {
  * Examples:
  *   "VIII", "A" → "VIII - A"
  *   "Nursery", "A" → "Nursery - A"
- *
- * @param gradeName   e.g. "VIII"
- * @param sectionName e.g. "A"
- * @param allSections (unused, kept for backward compat)
  */
-export function formatGradeSection(
-  gradeName: string,
-  sectionName: string,
-  allSections?: { gradeName: string }[]
-): string {
+export function formatGradeSection(gradeName: string, sectionName: string): string {
   return sectionName ? `${gradeName} - ${sectionName}` : gradeName;
 }
 

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
@@ -311,7 +310,6 @@ function ReportCard({
 // ─── MAIN PAGE ──────────────────────────────────────────
 
 export default function TeacherMyClassPage() {
-  const { user } = useAuth();
   const [sections, setSections] = useState<ClassTeacherSection[]>([]);
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
@@ -488,7 +486,7 @@ export default function TeacherMyClassPage() {
         {sections.map((sec) => (
           <button key={sec.sectionId} onClick={() => handleSectionSelect(sec)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === sec.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
-            {formatGradeSection(sec.gradeName, sec.sectionName, sections)}
+            {formatGradeSection(sec.gradeName, sec.sectionName)}
           </button>
         ))}
       </div>

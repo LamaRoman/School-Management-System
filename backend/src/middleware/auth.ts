@@ -80,7 +80,8 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   // Cookie takes precedence when both are present.
   let token: string | undefined;
 
-const cookieToken = (req as any).cookies?.zs_access_token;  if (cookieToken) {
+  const cookieToken = (req as any).cookies?.zs_access_token;
+  if (cookieToken) {
     token = cookieToken;
   } else {
     const authHeader = req.headers.authorization;
@@ -132,16 +133,6 @@ export function authorize(...roles: UserRole[]) {
     }
     next();
   };
-}
-
-export function requireSchool(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user) {
-    throw new AppError("Authentication required", 401);
-  }
-  if (!req.schoolId) {
-    throw new AppError("School context required. Super admins must use /super-admin routes.", 403);
-  }
-  next();
 }
 
 export function getSchoolId(req: Request): string {

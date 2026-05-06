@@ -57,6 +57,21 @@ function clearCookieOptions(path: string): CookieOptions {
   };
 }
 
+// Clears the access cookie at "/" using both the configured options and a
+// minimal { path: "/" } fallback. The fallback covers users with stale
+// cookies set by an earlier deployment that used different cookie options.
+function clearAccessCookie(res: import("express").Response): void {
+  res.clearCookie("zs_access_token", { path: "/" });
+  res.clearCookie("zs_access_token", clearCookieOptions("/"));
+}
+
+// Clears the refresh cookie at "/auth" using both the configured options
+// and a minimal { path: "/auth" } fallback (same rationale as above).
+function clearRefreshCookie(res: import("express").Response): void {
+  res.clearCookie("refreshToken", { path: "/auth" });
+  res.clearCookie("refreshToken", clearCookieOptions("/auth"));
+}
+
 // ─── Refresh token helpers ───────────────────────────────
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
@@ -144,14 +159,10 @@ router.post("/login", async (req, res) => {
   const accessToken = signAccessToken(user);
   const refreshToken = await createRefreshToken(user.id);
 
-  // Clear any stale cookies from previous sessions (handles domain/path mismatches
-  // from earlier deployments where cookie options may have differed)
-  res.clearCookie("zs_access_token", { path: "/" });
-  res.clearCookie("refreshToken", { path: "/auth" });
-  res.clearCookie("refreshToken", { path: "/v1/auth" });
-  res.clearCookie("zs_access_token", clearCookieOptions("/"));
-  res.clearCookie("refreshToken", clearCookieOptions("/auth"));
-  res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
+  // Clear stale cookies from previous sessions (handles option mismatches
+  // from earlier deployments).
+  clearAccessCookie(res);
+  clearRefreshCookie(res);
 
   // Set fresh cookies
   res.cookie("zs_access_token", accessToken, accessCookieOptions());
@@ -182,8 +193,7 @@ router.post("/refresh", async (req, res) => {
   if (!raw || typeof raw !== "string") {
     // No refresh token — clear any stale access token cookie so the browser
     // doesn't keep sending an expired JWT on every request.
-    res.clearCookie("zs_access_token", { path: "/" });
-    res.clearCookie("zs_access_token", clearCookieOptions("/"));
+    clearAccessCookie(res);
     throw new AppError("Refresh token required", 401);
   }
 
@@ -195,12 +205,8 @@ router.post("/refresh", async (req, res) => {
       await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
     }
     // Clear all cookies so stale tokens don't persist
-    res.clearCookie("zs_access_token", { path: "/" });
-    res.clearCookie("zs_access_token", clearCookieOptions("/"));
-    res.clearCookie("refreshToken", { path: "/auth" });
-    res.clearCookie("refreshToken", { path: "/v1/auth" });
-    res.clearCookie("refreshToken", clearCookieOptions("/auth"));
-    res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
+    clearAccessCookie(res);
+    clearRefreshCookie(res);
     throw new AppError("Invalid or expired refresh token", 401);
   }
 
@@ -211,12 +217,8 @@ router.post("/refresh", async (req, res) => {
   });
   if (!user || !user.isActive) {
     await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
-    res.clearCookie("zs_access_token", { path: "/" });
-    res.clearCookie("zs_access_token", clearCookieOptions("/"));
-    res.clearCookie("refreshToken", { path: "/auth" });
-    res.clearCookie("refreshToken", { path: "/v1/auth" });
-    res.clearCookie("refreshToken", clearCookieOptions("/auth"));
-    res.clearCookie("refreshToken", clearCookieOptions("/v1/auth"));
+    clearAccessCookie(res);
+    clearRefreshCookie(res);
     throw new AppError("Account has been deactivated", 401);
   }
 
@@ -302,9 +304,9 @@ router.post("/logout", authenticate, async (req, res) => {
   // Delete all refresh tokens for this user
   await prisma.refreshToken.deleteMany({ where: { userId: req.user!.userId } });
 
-  // Clear cookies
-  res.clearCookie("zs_access_token", clearCookieOptions("/"));
-  res.clearCookie("refreshToken", clearCookieOptions("/auth"));
+  // Clear cookies (same dual-options pattern as login/refresh)
+  clearAccessCookie(res);
+  clearRefreshCookie(res);
 
   res.json({ data: { message: "Logged out" } });
 });

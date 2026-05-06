@@ -26,7 +26,6 @@ export default function StudentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -39,7 +38,6 @@ export default function StudentsPage() {
           if (g[0].sections?.length > 0) setSelectedSection(g[0].sections[0].id);
         }
       }
-      setLoading(false);
     })();
   }, []);
 

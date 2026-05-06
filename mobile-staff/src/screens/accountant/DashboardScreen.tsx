@@ -34,21 +34,6 @@ interface CashbookData {
   receipts: Receipt[];
 }
 
-interface DefaulterSummary {
-  totalDefaulters: number;
-  totalDue: number;
-}
-
-interface Defaulter {
-  studentId: string;
-  studentName: string;
-  className: string;
-  section: string;
-  rollNo: number | null;
-  balance: number;
-  monthsPending: number;
-}
-
 interface MonthProgress {
   month: string;
   collected: number;
@@ -172,82 +157,6 @@ const mp = StyleSheet.create({
   statLabel: { fontSize: 10, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
   statValue: { fontSize: FontSize.sm, fontWeight: FontWeight.bold as any, color: Colors.text },
   divider: { width: 1, height: 28, backgroundColor: Colors.borderLight },
-});
-
-// ─── Defaulters Summary Card ──────────────────────────────────────────────────
-
-function DefaultersSummaryCard({
-  defaultersList,
-  summary,
-}: {
-  defaultersList: Defaulter[];
-  summary: DefaulterSummary;
-}) {
-  const critical = defaultersList.filter(d => d.monthsPending >= 3);
-  const moderate = defaultersList.filter(d => d.monthsPending >= 1 && d.monthsPending < 3);
-
-  const criticalDue = critical.reduce((s, d) => s + d.balance, 0);
-  const moderateDue = moderate.reduce((s, d) => s + d.balance, 0);
-
-  return (
-    <Card style={df.card}>
-      <View style={df.headerRow}>
-        <Text style={df.title}>Fee Defaulters</Text>
-        <View style={df.totalBadge}>
-          <Text style={df.totalBadgeText}>{summary.totalDefaulters} students</Text>
-        </View>
-      </View>
-
-      <View style={df.totalDueRow}>
-        <Text style={df.totalDueLabel}>Total Outstanding</Text>
-        <Text style={df.totalDueValue}>Rs {summary.totalDue.toLocaleString()}</Text>
-      </View>
-
-      {critical.length > 0 && (
-        <View style={[df.severityRow, { backgroundColor: Colors.dangerBg }]}>
-          <View style={[df.severityDot, { backgroundColor: Colors.danger }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[df.severityLabel, { color: Colors.danger }]}>Critical (3+ months)</Text>
-            <Text style={df.severityDetail}>
-              {critical.length} students · Rs {criticalDue.toLocaleString()}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {moderate.length > 0 && (
-        <View style={[df.severityRow, { backgroundColor: Colors.warningBg }]}>
-          <View style={[df.severityDot, { backgroundColor: Colors.warning }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={[df.severityLabel, { color: Colors.warning }]}>Moderate (1-2 months)</Text>
-            <Text style={df.severityDetail}>
-              {moderate.length} students · Rs {moderateDue.toLocaleString()}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {summary.totalDefaulters === 0 && (
-        <Text style={df.allClear}>All fees up to date!</Text>
-      )}
-    </Card>
-  );
-}
-
-const df = StyleSheet.create({
-  card: { gap: Spacing.sm },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
-  totalBadge: { backgroundColor: Colors.dangerBg, borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
-  totalBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold as any, color: Colors.danger },
-  totalDueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.xs },
-  totalDueLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
-  totalDueValue: { fontSize: FontSize.lg, fontWeight: FontWeight.bold as any, color: Colors.danger },
-  severityRow: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, gap: Spacing.sm },
-  severityDot: { width: 10, height: 10, borderRadius: 5 },
-  severityLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold as any },
-  severityDetail: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  allClear: { fontSize: FontSize.sm, color: Colors.success, fontWeight: FontWeight.medium as any, textAlign: 'center', paddingVertical: Spacing.sm },
 });
 
 // ─── Receipt Detail Modal ─────────────────────────────────────────────────────
@@ -562,8 +471,6 @@ export default function AccountantDashboard({ navigation }: any) {
   const { user } = useAuth();
   const [activeYear, setActiveYear] = useState<AcademicYear | null>(null);
   const [cashbook, setCashbook] = useState<CashbookData | null>(null);
-  const [defaulters, setDefaulters] = useState<DefaulterSummary | null>(null);
-  const [defaultersList, setDefaultersList] = useState<Defaulter[]>([]);
   const [monthProgress, setMonthProgress] = useState<MonthProgress | null>(null);
   const [recentReceipts, setRecentReceipts] = useState<Receipt[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -588,9 +495,8 @@ export default function AccountantDashboard({ navigation }: any) {
       const today = getTodayBS();
       const currentMonth = getCurrentBSMonth();
 
-      const [cbData, defData, summaryData, recentData, noticeData] = await Promise.all([
+      const [cbData, summaryData, recentData, noticeData] = await Promise.all([
         api.get<any>(`/accountant-reports/daily-cashbook?date=${today}&academicYearId=${active.id}`).catch(() => null),
-        api.get<any>(`/accountant-reports/defaulters?academicYearId=${active.id}&currentMonth=${currentMonth}`).catch(() => null),
         api.get<any>(`/accountant-reports/monthly-summary?academicYearId=${active.id}&month=${currentMonth}`).catch(() => null),
         api.get<any>('/accountant-reports/payment-history', {
           academicYearId: active.id,
@@ -605,18 +511,6 @@ export default function AccountantDashboard({ navigation }: any) {
           totalReceipts: cbData.totalReceipts ?? 0,
           receipts: Array.isArray(cbData.receipts) ? cbData.receipts : [],
         });
-      }
-
-      if (defData?.summary) {
-        setDefaulters({
-          totalDefaulters: defData.summary.totalDefaulters ?? 0,
-          totalDue: defData.summary.totalDue ?? 0,
-        });
-      }
-      if (defData?.defaulters && Array.isArray(defData.defaulters)) {
-        setDefaultersList(defData.defaulters);
-      } else {
-        setDefaultersList([]);
       }
 
       if (summaryData?.months) {
