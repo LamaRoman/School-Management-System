@@ -203,7 +203,7 @@ export async function printGradeSheet(data: {
   const isFinal = data.isFinal;
 
   const subjectHeaders = data.subjects.map(s =>
-    `<th class="text-center" style="min-width:50px"><div>${s.name}</div><div style="font-size:9px;font-weight:normal;opacity:0.7">(${s.fullMarks})</div></th>`
+    `<th class="text-center" style="min-width:50px;background:#1a3a5c;color:white;border-color:#1a3a5c"><div>${s.name}</div><div style="font-size:9px;font-weight:normal;opacity:0.7">(${s.fullMarks})</div></th>`
   ).join("");
 
   const bodyRows = data.rows.map((row, i) => {
@@ -238,9 +238,9 @@ ${schoolHeaderHtml(school)}
 <div class="subtitle">${data.gradeName} — Section ${data.sectionName} · ${data.totalStudents} Students</div>
 <table>
   <thead><tr style="background:#1a3a5c;color:white">
-    ${data.showRank ? '<th class="text-center" style="width:40px;border-color:#1a3a5c">Rank</th>' : ""}
-    <th class="text-center" style="width:40px;border-color:#1a3a5c">Roll</th>
-    <th style="min-width:120px;border-color:#1a3a5c">Student Name</th>
+    ${data.showRank ? '<th class="text-center" style="width:40px;background:#1a3a5c;color:white;border-color:#1a3a5c">Rank</th>' : ""}
+    <th class="text-center" style="width:40px;background:#1a3a5c;color:white;border-color:#1a3a5c">Roll</th>
+    <th style="min-width:120px;background:#1a3a5c;color:white;border-color:#1a3a5c">Student Name</th>
     ${subjectHeaders}
     <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:40px">%</th>
     <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:40px">GPA</th>

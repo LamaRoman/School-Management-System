@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "tsx prisma/seed-all.ts",
     "studio": "prisma studio",
     "generate": "prisma generate",
     "postinstall": "prisma generate",

@@ -42,9 +42,16 @@ class ApiClient {
     });
 
     // On 401, try a silent refresh once, then retry the original request.
-    // Skip if this IS the retry (prevents infinite loops) or if this is
-    // the refresh endpoint itself.
-    if (res.status === 401 && !isRetry && !path.startsWith("/auth/refresh")) {
+    // Skip if this IS the retry (prevents infinite loops), or if this is the
+    // refresh endpoint itself, or if this is a login attempt — a failed login
+    // isn't an expired session, and refreshing here would mask the real
+    // "invalid email or password" error behind a misleading "Session expired".
+    if (
+      res.status === 401 &&
+      !isRetry &&
+      !path.startsWith("/auth/refresh") &&
+      !path.startsWith("/auth/login")
+    ) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
         return this.request<T>(path, options, true);
