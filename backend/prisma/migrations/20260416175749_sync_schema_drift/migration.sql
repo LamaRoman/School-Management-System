@@ -53,6 +53,11 @@ CREATE TABLE "receipt_counters" (
 CREATE UNIQUE INDEX "student_fee_assignments_student_id_fee_category_id_academic_key" ON "student_fee_assignments"("student_id", "fee_category_id", "academic_year_id");
 
 -- CreateIndex
+-- An earlier migration (20260412110000_add_school_code) already created a
+-- partial "schools_code_key" index (WHERE code IS NOT NULL). Recreating it
+-- unguarded fails on a fresh database. Drop whatever exists, then create the
+-- canonical full unique index this migration intends.
+DROP INDEX IF EXISTS "schools_code_key";
 CREATE UNIQUE INDEX "schools_code_key" ON "schools"("code");
 
 -- AddForeignKey
