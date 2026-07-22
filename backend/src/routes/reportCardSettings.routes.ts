@@ -55,7 +55,7 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
     showRemarks: z.boolean().optional(),
     showPromotion: z.boolean().optional(),
     showNepaliName: z.boolean().optional(),
-    logoPosition: z.enum(["left", "center", "right"]).optional(),
+    logoPosition: z.enum(["left", "center", "center-inline", "right"]).optional(),
     logoSize: z.enum(["small", "medium", "large"]).optional(),
   });
 

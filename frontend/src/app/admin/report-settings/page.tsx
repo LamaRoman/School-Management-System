@@ -259,6 +259,7 @@ export default function ReportCardSettingsPage() {
                     >
                       <option value="left">Left</option>
                       <option value="center">Center (above name)</option>
+                      <option value="center-inline">Center (beside name)</option>
                       <option value="right">Right</option>
                     </select>
                   </div>

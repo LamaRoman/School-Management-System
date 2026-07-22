@@ -20,6 +20,10 @@ export function openPrintWindow(html: string) {
 // ─── Shared base styles ─────────────────────────────────────────────────────
 
 const baseStyles = `
+  /* Force browsers to reproduce our exact background/text colors when printing
+     instead of the default "economy" mode, which strips colored backgrounds
+     (e.g. the navy table header) and dulls white text to grey. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #222; line-height: 1.4; max-width: 800px; margin: 0 auto; padding: 20px; }
   table { width: 100%; border-collapse: collapse; }
@@ -43,30 +47,83 @@ const baseStyles = `
   @page { size: A4; margin: 15mm; }
 `;
 
-// ─── School info fetcher (cached) ───────────────────────────────────────────
+// ─── School info + header settings fetchers (cached) ────────────────────────
 
 let cachedSchool: any = null;
+let cachedHeaderSettings: HeaderSettings | null = null;
 
-export async function getSchoolInfo(): Promise<{ name: string; nameNp: string; address: string; phone: string }> {
+interface HeaderSettings {
+  logoPosition: "left" | "center" | "center-inline" | "right";
+  logoSize: "small" | "medium" | "large";
+  showNepaliName: boolean;
+}
+
+const DEFAULT_HEADER_SETTINGS: HeaderSettings = {
+  logoPosition: "center",
+  logoSize: "medium",
+  showNepaliName: false,
+};
+
+export async function getSchoolInfo(): Promise<{ name: string; nameNp: string; address: string; phone: string; logo?: string | null }> {
   if (cachedSchool) return cachedSchool;
   try {
     cachedSchool = await api.get<any>("/school");
   } catch {
-    cachedSchool = { name: "School", nameNp: "", address: "", phone: "" };
+    cachedSchool = { name: "School", nameNp: "", address: "", phone: "", logo: null };
   }
   return cachedSchool;
 }
 
-function schoolHeaderHtml(school: any): string {
+// Header logo/name presentation is configured per-school in Report Card Settings.
+// Printed documents mirror the same header so their branding matches the report card.
+export async function getHeaderSettings(): Promise<HeaderSettings> {
+  if (cachedHeaderSettings) return cachedHeaderSettings;
+  try {
+    const s = await api.get<Partial<HeaderSettings>>("/report-card-settings");
+    cachedHeaderSettings = { ...DEFAULT_HEADER_SETTINGS, ...s };
+  } catch {
+    cachedHeaderSettings = DEFAULT_HEADER_SETTINGS;
+  }
+  return cachedHeaderSettings;
+}
+
+const LOGO_SIZE_PX: Record<string, number> = { small: 36, medium: 56, large: 75 };
+
+function schoolHeaderHtml(school: any, settings: HeaderSettings = DEFAULT_HEADER_SETTINGS): string {
   const phoneLine = school.phone ? ` • ${school.phone}` : "";
-  const nepaliLine = school.nameNp ? `<h2>${school.nameNp}</h2>` : "";
-  return `
-    <div class="header">
-      <h1>${school.name || "School"}</h1>
-      ${nepaliLine}
-      <p>${school.address || ""}${phoneLine}</p>
-    </div>
-  `;
+  const nepaliLine = settings.showNepaliName && school.nameNp ? `<h2>${school.nameNp}</h2>` : "";
+  const nameBlock = `<h1>${school.name || "School"}</h1>${nepaliLine}<p>${school.address || ""}${phoneLine}</p>`;
+
+  if (!school.logo) {
+    return `<div class="header">${nameBlock}</div>`;
+  }
+
+  const sizePx = LOGO_SIZE_PX[settings.logoSize] || LOGO_SIZE_PX.medium;
+  const logoImg = `<img src="${school.logo}" alt="" style="height:${sizePx}px;object-fit:contain" />`;
+
+  if (settings.logoPosition === "left") {
+    return `<div class="header" style="display:flex;align-items:center;gap:12px;text-align:left">
+      ${logoImg}
+      <div>${nameBlock}</div>
+    </div>`;
+  }
+  if (settings.logoPosition === "center-inline") {
+    return `<div class="header" style="display:flex;align-items:center;justify-content:center;gap:12px;text-align:left">
+      ${logoImg}
+      <div>${nameBlock}</div>
+    </div>`;
+  }
+  if (settings.logoPosition === "right") {
+    return `<div class="header" style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;text-align:right">${nameBlock}</div>
+      ${logoImg}
+    </div>`;
+  }
+  // center (default): logo stacked above the name block
+  return `<div class="header">
+    <div style="margin-bottom:4px">${logoImg}</div>
+    ${nameBlock}
+  </div>`;
 }
 
 // ─── Exam Seating Print ─────────────────────────────────────────────────────
@@ -90,7 +147,7 @@ export async function printSeatingArrangement(
   allocations: SeatingAllocation[],
   examName: string,
 ) {
-  const school = await getSchoolInfo();
+  const [school, headerSettings] = await Promise.all([getSchoolInfo(), getHeaderSettings()]);
   const totalStudents = allocations.reduce((s, a) => s + a.filled, 0);
 
   const roomsHtml = allocations.map((alloc, idx) => {
@@ -122,7 +179,7 @@ export async function printSeatingArrangement(
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Seating — ${examName}</title>
 <style>${baseStyles}</style></head><body>
-${schoolHeaderHtml(school)}
+${schoolHeaderHtml(school, headerSettings)}
 <div class="title">${examName} — Exam Seating Arrangement</div>
 <div class="subtitle">Total Students: ${totalStudents} · ${allocations.length} Rooms</div>
 ${roomsHtml}
@@ -152,7 +209,7 @@ export async function printExamRoutine(
   examName: string,
   gradeName: string,
 ) {
-  const school = await getSchoolInfo();
+  const [school, headerSettings] = await Promise.all([getSchoolInfo(), getHeaderSettings()]);
 
   const rows = entries.map((e, i) =>
     `<tr>
@@ -168,7 +225,7 @@ export async function printExamRoutine(
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Exam Routine — ${examName} — ${gradeName}</title>
 <style>${baseStyles}</style></head><body>
-${schoolHeaderHtml(school)}
+${schoolHeaderHtml(school, headerSettings)}
 <div class="title">${examName} — Exam Routine</div>
 <div class="subtitle">Class: ${gradeName}</div>
 <table>
@@ -199,7 +256,7 @@ export async function printGradeSheet(data: {
   gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
   subjects: GradeSheetSubject[]; rows: GradeSheetRow[]; totalStudents: number;
 }) {
-  const school = await getSchoolInfo();
+  const [school, headerSettings] = await Promise.all([getSchoolInfo(), getHeaderSettings()]);
   const isFinal = data.isFinal;
 
   const subjectHeaders = data.subjects.map(s =>
@@ -233,7 +290,7 @@ export async function printGradeSheet(data: {
   table { font-size: 10px; }
   th, td { padding: 4px 6px; }
 </style></head><body>
-${schoolHeaderHtml(school)}
+${schoolHeaderHtml(school, headerSettings)}
 <div class="title">${data.examType} — Grade Sheet</div>
 <div class="subtitle">${data.gradeName} — Section ${data.sectionName} · ${data.totalStudents} Students</div>
 <table>
