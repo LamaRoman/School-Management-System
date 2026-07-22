@@ -132,3 +132,30 @@ export function formatBSDateLong(dateStr: string): string {
   if (!parsed) return dateStr;
   return `${parsed.day} ${getBSMonthName(parsed.month)} ${parsed.year}`;
 }
+
+// ─── Month grid (for calendar / date-picker UIs) ────────
+// nepali-date-converter supports 2000–2090 BS; we probe the library to
+// find exact days per month rather than hardcoding a lookup table.
+
+/** Number of days in a given BS month (1-indexed month, 1=Baisakh, 12=Chaitra) */
+export function getDaysInBSMonth(year: number, month: number): number {
+  for (let day = 32; day >= 28; day--) {
+    try {
+      new NepaliDate(year, month - 1, day);
+      return day;
+    } catch {
+      continue;
+    }
+  }
+  return 30; // fallback
+}
+
+/** Weekday (0=Sunday .. 6=Saturday) that the 1st of a given BS month falls on */
+export function getStartWeekday(year: number, month: number): number {
+  try {
+    const nd = new NepaliDate(year, month - 1, 1);
+    return nd.toJsDate().getDay();
+  } catch {
+    return 0;
+  }
+}

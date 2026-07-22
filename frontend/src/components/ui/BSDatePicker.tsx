@@ -7,36 +7,9 @@ import {
   formatBSDate,
   getTodayBS,
   getTodayBSParts,
+  getDaysInBSMonth,
+  getStartWeekday,
 } from "@/lib/bsDate";
-import NepaliDate from "nepali-date-converter";
-
-// ─── Days-in-month lookup ──────────────────────────────
-// nepali-date-converter supports 2000–2090 BS
-// We probe the library to find exact days per month
-
-function getDaysInBSMonth(year: number, month: number): number {
-  // month is 1-indexed (1=Baisakh, 12=Chaitra)
-  // Try day 32 down to 28 to find the last valid day
-  for (let day = 32; day >= 28; day--) {
-    try {
-      new NepaliDate(year, month - 1, day);
-      return day;
-    } catch {
-      continue;
-    }
-  }
-  return 30; // fallback
-}
-
-function getStartWeekday(year: number, month: number): number {
-  // Returns 0=Sunday, 1=Monday, ... 6=Saturday
-  try {
-    const nd = new NepaliDate(year, month - 1, 1);
-    return nd.toJsDate().getDay();
-  } catch {
-    return 0;
-  }
-}
 
 // ─── Props ─────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import {
   CalendarDays,
+  Calendar,
   Layers,
   LayoutGrid,
   BookOpen,
@@ -35,6 +36,7 @@ const navGroups: NavGroup[] = [
     label: "Overview",
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutGrid },
+      { href: "/admin/calendar", label: "Calendar", icon: Calendar },
     ],
   },
   {

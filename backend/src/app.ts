@@ -1,8 +1,13 @@
+// Must run before any other local import — route modules transitively
+// import utils/prisma.ts, which reads process.env.DATABASE_URL at import
+// time (not lazily), so .env has to be loaded before that happens.
+import dotenv from "dotenv";
+dotenv.config();
+
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
 import { errorHandler } from "./middleware/errorHandler";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -38,9 +43,7 @@ import feeRoutes from "./routes/fee.routes";
 import homeworkRoutes from "./routes/homework.routes";
 import staffRoutes from "./routes/staff.routes";
 import superAdminRoutes from "./routes/superAdmin.routes";
-
-
-dotenv.config();
+import calendarRoutes from "./routes/calendar.routes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -121,6 +124,7 @@ app.use("/admissions", admissionRoutes);
 app.use("/parents", parentRoutes);
 app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
+app.use("/calendar-events", calendarRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 

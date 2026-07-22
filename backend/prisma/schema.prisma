@@ -54,6 +54,7 @@ model School {
   teachers           Teacher[]
   feeCategories      FeeCategory[]
   examRooms          ExamRoom[]
+  calendarEvents     CalendarEvent[]
 
   @@map("schools")
 }
@@ -300,6 +301,7 @@ model User {
   teacher Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   parentLinks    ParentStudent[] @relation("ParentLinks")
   notices        Notice[]
+  calendarEvents CalendarEvent[]
   homeworks      Homework[]
   admissions     Admission[]
   auditLogs      AuditLog[]
@@ -617,6 +619,27 @@ model Notice {
 
   @@map("notices")
 }
+
+// ─── CALENDAR ────────────────────────────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  schoolId    String   @map("school_id")
+  title       String
+  description String?
+  date        String                                  // BS date "YYYY/MM/DD"
+  type        String   @default("EVENT")               // EVENT, HOLIDAY, MEETING, EXAM, OTHER
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, date])
+  @@map("calendar_events")
+}
+
 // ─── HOMEWORK / ASSIGNMENTS ─────────────────────────────
 
 model Homework {
