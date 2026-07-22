@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node --import tsx --watch src/server.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "migrate": "prisma migrate dev",

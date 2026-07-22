@@ -24,10 +24,25 @@ setInterval(() => {
   );
 }, 60 * 60 * 1000);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 API server running on http://localhost:${PORT}`);
   console.log(`📋 Health check: http://localhost:${PORT}/health`);
 });
 
-process.on("SIGTERM", closeBrowser);
-process.on("SIGINT", closeBrowser);
+// ─── Graceful shutdown ────────────────────────────────────
+// Runs on Ctrl+C, on Railway's deploy signal, and on each `node --watch`
+// restart. Close the browser and HTTP server, then exit — otherwise the
+// listener and hourly interval keep the process alive and the runtime has
+// to force-kill it (slow dev restarts, ungraceful prod shutdowns).
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  await closeBrowser().catch(() => {});
+  server.close(() => process.exit(0));
+  // Safety net: exit even if lingering keep-alive connections stall close().
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
