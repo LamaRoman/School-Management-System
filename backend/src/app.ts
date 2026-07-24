@@ -44,6 +44,7 @@ import homeworkRoutes from "./routes/homework.routes";
 import staffRoutes from "./routes/staff.routes";
 import superAdminRoutes from "./routes/superAdmin.routes";
 import calendarRoutes from "./routes/calendar.routes";
+import masterCalendarRoutes from "./routes/masterCalendar.routes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -125,6 +126,7 @@ app.use("/parents", parentRoutes);
 app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
 app.use("/calendar-events", calendarRoutes);
+app.use("/master-calendar", masterCalendarRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 

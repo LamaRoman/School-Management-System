@@ -9,11 +9,13 @@ import {
   School,
   LogOut,
   KeyRound,
+  CalendarDays,
 } from "lucide-react";
 
 const navItems = [
   { href: "/super-admin", label: "Dashboard", icon: LayoutGrid },
   { href: "/super-admin/schools", label: "Schools", icon: School },
+  { href: "/super-admin/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {

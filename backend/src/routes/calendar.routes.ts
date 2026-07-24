@@ -13,21 +13,50 @@ const router = Router();
 const EVENT_TYPES = ["EVENT", "HOLIDAY", "MEETING", "EXAM", "OTHER"] as const;
 
 // ─── GET /api/calendar-events — list, optional ?year=YYYY (BS) filter ──
+// Returns the school's own events (editable) merged with the super-admin's
+// master calendar (national holidays etc.), which are read-only here and
+// flagged isMaster so the UI can lock them.
 
 router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { year } = req.query;
 
-  const where: any = { schoolId };
-  if (year) where.date = { startsWith: `${year}/` };
+  const dateFilter = year ? { startsWith: `${year}/` } : undefined;
 
-  const events = await prisma.calendarEvent.findMany({
-    where,
-    include: { createdBy: { select: { id: true, email: true } } },
-    orderBy: { date: "asc" },
-  });
+  const [schoolEvents, masterEvents] = await Promise.all([
+    prisma.calendarEvent.findMany({
+      where: { schoolId, ...(dateFilter ? { date: dateFilter } : {}) },
+      include: { createdBy: { select: { id: true, email: true } } },
+      orderBy: { date: "asc" },
+    }),
+    prisma.masterCalendarEvent.findMany({
+      where: dateFilter ? { date: dateFilter } : {},
+      orderBy: { date: "asc" },
+    }),
+  ]);
 
-  res.json({ data: events });
+  const merged = [
+    ...masterEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      date: e.date,
+      type: e.type,
+      isMaster: true as const,
+      source: e.source,
+    })),
+    ...schoolEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      date: e.date,
+      type: e.type,
+      isMaster: false as const,
+      createdBy: e.createdBy,
+    })),
+  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  res.json({ data: merged });
 });
 
 // ─── POST /api/calendar-events ──────────────────────────

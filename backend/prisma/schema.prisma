@@ -302,6 +302,7 @@ model User {
   parentLinks    ParentStudent[] @relation("ParentLinks")
   notices        Notice[]
   calendarEvents CalendarEvent[]
+  masterCalendarEvents MasterCalendarEvent[]
   homeworks      Homework[]
   admissions     Admission[]
   auditLogs      AuditLog[]
@@ -638,6 +639,30 @@ model CalendarEvent {
 
   @@index([schoolId, date])
   @@map("calendar_events")
+}
+
+// ─── MASTER CALENDAR (super-admin owned, inherited by every school) ──
+// National holidays (imported from Calendarific) + any national events the
+// super admin adds. Every school sees these read-only, layered under their
+// own CalendarEvent activities. No schoolId — these are global.
+
+model MasterCalendarEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  date        String                                  // BS date "YYYY/MM/DD"
+  type        String   @default("HOLIDAY")             // EVENT, HOLIDAY, MEETING, EXAM, OTHER
+  source      String   @default("MANUAL")              // MANUAL, CALENDARIFIC
+  externalId  String?  @map("external_id")             // Calendarific dedup key, for idempotent re-import
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([externalId])
+  @@index([date])
+  @@map("master_calendar_events")
 }
 
 // ─── HOMEWORK / ASSIGNMENTS ─────────────────────────────
