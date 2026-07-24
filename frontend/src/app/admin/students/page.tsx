@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save, Search, Camera } from "lucide-react";
@@ -18,6 +19,7 @@ const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefine
 
 export default function StudentsPage() {
   const confirm = useConfirm();
+  const router = useRouter();
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedSection, setSelectedSection] = useState("");
@@ -203,7 +205,11 @@ export default function StudentsPage() {
             {filtered.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-8 text-gray-400">{selectedSection ? "No students in this section" : "Select a grade and section"}</td></tr>
             ) : filtered.map((s) => (
-              <tr key={s.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
+              <tr
+                key={s.id}
+                onClick={() => router.push(`/admin/students/${s.id}`)}
+                className="border-t border-gray-100 hover:bg-surface transition-colors cursor-pointer"
+              >
                 <td className="px-5 py-3 text-gray-400 font-medium">{s.rollNo || "—"}</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
@@ -225,8 +231,8 @@ export default function StudentsPage() {
                 <td className="px-5 py-3 text-gray-500 text-xs">{s.guardianPhone || "—"}</td>
                 <td className="px-5 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => startEdit(s)} className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"><Edit2 size={14} /></button>
-                    <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-all"><Trash2 size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); startEdit(s); }} className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"><Edit2 size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-all"><Trash2 size={14} /></button>
                   </div>
                 </td>
               </tr>

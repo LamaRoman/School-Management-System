@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifySection, verifyAcademicYear } from "../utils/schoolScope";
+import { verifySection, verifyAcademicYear, verifyStudent } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -175,6 +175,47 @@ router.get("/summary", authenticate, async (req, res) => {
   });
 
   res.json({ data: summary });
+});
+
+// GET /api/daily-attendance/student/:studentId?academicYearId=xxx
+// Per-student attendance broken down by BS month, for the student profile.
+router.get("/student/:studentId", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const { studentId } = req.params;
+  const { academicYearId } = req.query;
+  if (!academicYearId) throw new AppError("academicYearId is required");
+  await verifyStudent(studentId, schoolId);
+  await verifyAcademicYear(String(academicYearId), schoolId);
+
+  const records = await prisma.dailyAttendance.findMany({
+    where: { studentId, academicYearId: String(academicYearId) },
+    select: { date: true, status: true },
+  });
+
+  // Group by BS month (date is "YYYY/MM/DD"). Index 1..12 = Baisakh..Chaitra.
+  // Track the specific absent dates so the profile can list them on demand
+  // (present dates are just the complement, so we don't need to send those).
+  const byMonth = new Map<number, { present: number; absent: number; absentDates: string[] }>();
+  for (const r of records) {
+    const month = parseInt(r.date.split("/")[1], 10);
+    if (!month || month < 1 || month > 12) continue;
+    const bucket = byMonth.get(month) || { present: 0, absent: 0, absentDates: [] };
+    if (r.status === "PRESENT") bucket.present++;
+    else if (r.status === "ABSENT") { bucket.absent++; bucket.absentDates.push(r.date); }
+    byMonth.set(month, bucket);
+  }
+
+  const months = [...byMonth.entries()]
+    .map(([month, c]) => ({
+      month,
+      present: c.present,
+      absent: c.absent,
+      total: c.present + c.absent,
+      absentDates: c.absentDates.sort(),
+    }))
+    .sort((a, b) => a.month - b.month);
+
+  res.json({ data: months });
 });
 
 export default router;
