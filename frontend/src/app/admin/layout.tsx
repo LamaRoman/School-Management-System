@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Wrench,
   Eye,
+  Award,
 } from "lucide-react";
 
 interface NavItem { href: string; label: string; icon: any }
@@ -63,6 +64,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
       { href: "/admin/observations", label: "Observations", icon: Eye },
       { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
+      { href: "/admin/certificates", label: "Certificates", icon: Award },
     ],
   },
   {
