@@ -69,7 +69,10 @@ describe("POST /auth/login", () => {
 
     // supertest v7 may return a single string or an array
     const cookieList = Array.isArray(rawCookies) ? rawCookies : [rawCookies];
-    const tokenCookie = cookieList.find((c: string) => c.startsWith("token="));
+    // Login first clears any stale cookies (emitting expiring zs_access_token
+    // headers with no value), then sets the real HttpOnly access cookie last.
+    const tokenCookies = cookieList.filter((c: string) => c.startsWith("zs_access_token="));
+    const tokenCookie = tokenCookies[tokenCookies.length - 1];
     expect(tokenCookie).toBeDefined();
     expect(tokenCookie).toContain("HttpOnly");
   });

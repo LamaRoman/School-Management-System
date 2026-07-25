@@ -174,6 +174,16 @@ const sectionBTeachers = [
 // ─── Main ───────────────────────────────────────────────
 
 async function main() {
+  // This is a demo-data seed with weak, well-known passwords (admin123, etc.).
+  // It must never run against a production database.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PROD_SEED !== "true") {
+    console.error(
+      "❌ Refusing to run the demo seed in production — it creates accounts with weak default passwords.\n" +
+        "   Set ALLOW_PROD_SEED=true only if you truly intend this."
+    );
+    process.exit(1);
+  }
+
   console.log("🌱 UNIFIED SEED — Creating everything from scratch...\n");
   const todayBS = getTodayBS();
   const pw = async (p: string) => bcrypt.hash(p, 10);

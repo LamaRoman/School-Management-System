@@ -108,6 +108,14 @@ router.post("/:parentId/link", authenticate, authorize("ADMIN"), async (req, res
   const schoolId = getSchoolId(req);
   await verifyStudent(studentId, schoolId);
 
+  // Verify the parent belongs to this admin's school (prevents linking a
+  // student to a parent — or any user — in another school).
+  const parent = await prisma.user.findFirst({
+    where: { id: req.params.parentId, role: "PARENT", schoolId },
+    select: { id: true },
+  });
+  if (!parent) throw new AppError("Parent not found", 404);
+
   const link = await prisma.parentStudent.create({
     data: {
       parentId: req.params.parentId,
@@ -121,6 +129,14 @@ router.post("/:parentId/link", authenticate, authorize("ADMIN"), async (req, res
 
 // DELETE /api/parents/:parentId/unlink/:studentId — remove a link
 router.delete("/:parentId/unlink/:studentId", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  // Scope to the admin's school so one school can't sever another's links.
+  const parent = await prisma.user.findFirst({
+    where: { id: req.params.parentId, role: "PARENT", schoolId },
+    select: { id: true },
+  });
+  if (!parent) throw new AppError("Parent not found", 404);
+
   await prisma.parentStudent.deleteMany({
     where: {
       parentId: req.params.parentId,
@@ -165,21 +181,25 @@ router.get("/my-children", authenticate, async (req, res) => {
 router.get("/child/:studentId/fees", authenticate, async (req, res) => {
   const user = req.user!;
   const { studentId } = req.params;
+  const schoolId = getSchoolId(req);
 
-  // Verify parent is linked to this student
+  // Verify authorization: parents must be linked; otherwise only school staff.
   if (user.role === "PARENT") {
     const link = await prisma.parentStudent.findFirst({
       where: { parentId: user.userId, studentId },
     });
     if (!link) throw new AppError("Not authorized to view this student's data", 403);
+  } else if (user.role !== "ADMIN" && user.role !== "ACCOUNTANT") {
+    throw new AppError("Not authorized to view this student's data", 403);
   }
+
+  // Ensure the student belongs to the caller's school (blocks cross-tenant id probing).
+  await verifyStudent(studentId, schoolId);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: { section: { include: { grade: true } } },
   });
-
-  const schoolId = getSchoolId(req);
   const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true, schoolId } });
   if (!activeYear) return res.json({ data: { payments: [], totalPaid: 0, summary: { totalPaid: 0, totalDue: 0, balance: 0 } } });
 
@@ -247,14 +267,19 @@ router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
   const user = req.user!;
   const { studentId } = req.params;
 
+  const schoolId2 = getSchoolId(req);
   if (user.role === "PARENT") {
     const link = await prisma.parentStudent.findFirst({
       where: { parentId: user.userId, studentId },
     });
     if (!link) throw new AppError("Not authorized", 403);
+  } else if (user.role !== "ADMIN" && user.role !== "ACCOUNTANT") {
+    throw new AppError("Not authorized", 403);
   }
 
-  const schoolId2 = getSchoolId(req);
+  // Ensure the student belongs to the caller's school.
+  await verifyStudent(studentId, schoolId2);
+
   const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true, schoolId: schoolId2 } });
   if (!activeYear) return res.json({ data: null });
 
@@ -267,10 +292,14 @@ router.get("/child/:studentId/attendance", authenticate, async (req, res) => {
 
 // PUT /api/parents/:parentId/toggle — admin toggles parent active status
 router.put("/:parentId/toggle", authenticate, authorize("ADMIN"), async (req, res) => {
-  const parent = await prisma.user.findUniqueOrThrow({
-    where: { id: req.params.parentId, role: "PARENT" },
+  const schoolId = getSchoolId(req);
+  // Scope to the admin's school — an admin must not be able to toggle a
+  // PARENT account belonging to another school by guessing its id.
+  const parent = await prisma.user.findFirst({
+    where: { id: req.params.parentId, role: "PARENT", schoolId },
     select: { id: true, isActive: true },
   });
+  if (!parent) throw new AppError("Parent not found", 404);
 
   const updated = await prisma.user.update({
     where: { id: parent.id },

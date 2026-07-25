@@ -70,6 +70,20 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   // Validate marks don't exceed full marks
   const subject = await prisma.subject.findUniqueOrThrow({ where: { id: subjectId } });
 
+  // Verify every studentId actually belongs to this subject's grade in this
+  // school. Without this, a teacher/admin could upsert marks for arbitrary
+  // student ids — including students in another section or another school.
+  const uniqueStudentIds = [...new Set(marks.map((m) => m.studentId))];
+  const validStudentCount = await prisma.student.count({
+    where: {
+      id: { in: uniqueStudentIds },
+      section: { grade: { id: subject.gradeId, academicYear: { schoolId } } },
+    },
+  });
+  if (validStudentCount !== uniqueStudentIds.length) {
+    throw new AppError("One or more students do not belong to this subject's class", 400);
+  }
+
   for (const m of marks) {
     if (m.theoryMarks != null && m.theoryMarks > subject.fullTheoryMarks) {
       throw new AppError(`Theory marks (${m.theoryMarks}) exceed full marks (${subject.fullTheoryMarks}) for student ${m.studentId}`);

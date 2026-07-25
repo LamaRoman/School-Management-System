@@ -11,6 +11,27 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
+// Reject known-placeholder or too-short JWT secrets. A copy-pasted
+// .env.example ("your-super-secret-jwt-key-change-in-production") or any short
+// secret is trivially brute-forceable/forgeable, which would let anyone mint
+// valid tokens for any user/role. Hard-fail in production; warn in dev.
+const WEAK_JWT_SECRETS = new Set([
+  "your-super-secret-jwt-key-change-in-production",
+  "changeme",
+  "secret",
+  "jwt-secret",
+]);
+const jwtSecret = process.env.JWT_SECRET!;
+if (WEAK_JWT_SECRETS.has(jwtSecret) || jwtSecret.length < 32) {
+  const msg =
+    "JWT_SECRET is a known placeholder or shorter than 32 characters — tokens would be trivially forgeable.";
+  if (process.env.NODE_ENV === "production") {
+    console.error(`❌ ${msg} Refusing to start.`);
+    process.exit(1);
+  }
+  console.warn(`⚠️  ${msg} Set a strong, random secret before deploying.`);
+}
+
 const PORT = process.env.PORT || 4000;
 
 // ─── Periodic cleanup ─────────────────────────────────────

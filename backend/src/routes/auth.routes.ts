@@ -11,6 +11,10 @@ const router = Router();
 
 const MAX_PASSWORD = 72;
 
+// A real bcrypt hash used only to burn ~equal CPU on the "user not found" path
+// so login response timing doesn't reveal whether an email exists (enumeration).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("timing-attack-mitigation-dummy", 10);
+
 // ─── Token lifetimes ─────────────────────────────────────
 // Access token is intentionally short — refresh token handles session continuity.
 const ACCESS_TOKEN_EXPIRY = "15m";
@@ -100,7 +104,7 @@ function signAccessToken(user: { id: string; email: string; role: string; school
       schoolId: user.schoolId || null,
     },
     process.env.JWT_SECRET!,
-    { expiresIn: ACCESS_TOKEN_EXPIRY as SignOptions["expiresIn"] }
+    { expiresIn: ACCESS_TOKEN_EXPIRY as SignOptions["expiresIn"], algorithm: "HS256" }
   );
 }
 
@@ -142,6 +146,8 @@ router.post("/login", async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !user.isActive) {
+    // Dummy compare so this path takes ~the same time as a real password check.
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     await recordFailedAttempt(email);
     throw new AppError("Invalid email or password", 401);
   }
