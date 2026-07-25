@@ -71,7 +71,7 @@ router.post("/", authenticate, authorize("ADMIN"), upload.array("photos", MAX_FI
     uploaded.push(updated);
   }
 
-  revalidateWebsite("gallery");
+  revalidateWebsite(schoolId, "gallery");
 
   res.status(201).json({ data: uploaded });
 });
@@ -88,7 +88,7 @@ router.patch("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const photo = await prisma.galleryPhoto.update({ where: { id: existing.id }, data });
 
-  revalidateWebsite("gallery");
+  revalidateWebsite(schoolId, "gallery");
 
   res.json({ data: photo });
 });
@@ -104,7 +104,7 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   await deleteGalleryPhoto(existing.url);
   await prisma.galleryPhoto.delete({ where: { id: existing.id } });
 
-  revalidateWebsite("gallery");
+  revalidateWebsite(schoolId, "gallery");
 
   res.json({ data: { message: "Photo deleted" } });
 });

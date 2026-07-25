@@ -43,6 +43,10 @@ model School {
   logo      String?
   estdYear  String?  @map("estd_year")
   motto     String?
+  // Public website this school owns — used to scope /public/* CORS to this
+  // origin and to notify the site's revalidation webhook after content changes.
+  websiteUrl              String? @map("website_url")
+  websiteRevalidateSecret String? @map("website_revalidate_secret")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

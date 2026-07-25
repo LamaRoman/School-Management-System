@@ -16,6 +16,8 @@ interface SchoolDetail {
   estdYear?: string;
   motto?: string;
   logo?: string;
+  websiteUrl?: string;
+  websiteRevalidateSecret?: string;
   isActive: boolean;
   _count: { users: number; teachers: number; academicYears: number };
 }
@@ -38,7 +40,7 @@ export default function SchoolDetailPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", code: "", address: "", phone: "", email: "" });
+  const [editForm, setEditForm] = useState({ name: "", code: "", address: "", phone: "", email: "", websiteUrl: "", websiteRevalidateSecret: "" });
   const [uploading, setUploading] = useState(false);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,7 +74,15 @@ export default function SchoolDetailPage() {
       ]);
       setSchool(s);
       setAdmins(a);
-      setEditForm({ name: s.name, code: s.code || "", address: s.address || "", phone: s.phone || "", email: s.email || "" });
+      setEditForm({
+        name: s.name,
+        code: s.code || "",
+        address: s.address || "",
+        phone: s.phone || "",
+        email: s.email || "",
+        websiteUrl: s.websiteUrl || "",
+        websiteRevalidateSecret: s.websiteRevalidateSecret || "",
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -181,6 +191,40 @@ export default function SchoolDetailPage() {
               <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" className="border rounded-lg px-3 py-2 text-sm" />
               <input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="Email" className="border rounded-lg px-3 py-2 text-sm" />
             </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Public Website (optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={editForm.websiteUrl}
+                  onChange={(e) => setEditForm({ ...editForm, websiteUrl: e.target.value })}
+                  placeholder="https://theschool.com"
+                  type="url"
+                  className="border rounded-lg px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  <input
+                    value={editForm.websiteRevalidateSecret}
+                    onChange={(e) => setEditForm({ ...editForm, websiteRevalidateSecret: e.target.value })}
+                    placeholder="Revalidate secret"
+                    type="text"
+                    className="border rounded-lg px-3 py-2 text-sm flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, websiteRevalidateSecret: crypto.randomUUID() })}
+                    className="px-3 py-2 border rounded-lg text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Setting these lets this school's website read its gallery from <code>/public/gallery/{id}</code> and get
+                notified when content changes. The secret must match the <code>REVALIDATE_SECRET</code> configured on that website.
+              </p>
+            </div>
+
             <button onClick={handleSaveEdit} disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50">
               {saving ? "Saving..." : "Save Changes"}
             </button>

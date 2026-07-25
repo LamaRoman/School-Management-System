@@ -6,6 +6,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { uploadLogo, deleteLogo } from "../services/upload.service";
+import { invalidatePublicOriginsCache } from "../services/publicOrigins.service";
 
 const router = Router();
 const upload = multer({
@@ -89,6 +90,8 @@ const createSchoolSchema = z.object({
   email: z.string().email().optional(),
   estdYear: z.string().optional(),
   motto: z.string().optional(),
+  websiteUrl: z.string().url().optional(),
+  websiteRevalidateSecret: z.string().optional(),
   // Admin account to create with the school
   adminEmail: z.string().email("Valid admin email required"),
   adminPassword: z.string().min(6, "Admin password must be at least 6 characters"),
@@ -117,6 +120,8 @@ router.post("/schools", async (req, res) => {
         email: data.email,
         estdYear: data.estdYear,
         motto: data.motto,
+        websiteUrl: data.websiteUrl ?? null,
+        websiteRevalidateSecret: data.websiteRevalidateSecret ?? null,
       },
     });
 
@@ -136,6 +141,8 @@ router.post("/schools", async (req, res) => {
 
     return { school, adminUser };
   });
+
+  if (data.websiteUrl) invalidatePublicOriginsCache();
 
   res.status(201).json({
     data: {
@@ -161,14 +168,23 @@ const updateSchoolSchema = z.object({
   motto: z.string().optional(),
   code: z.string().min(2).max(6).toUpperCase().optional(),
   isActive: z.boolean().optional(),
+  websiteUrl: z.string().url().or(z.literal("")).optional(),
+  websiteRevalidateSecret: z.string().or(z.literal("")).optional(),
 });
 
 router.put("/schools/:id", async (req, res) => {
   const data = updateSchoolSchema.parse(req.body);
   const school = await prisma.school.update({
     where: { id: req.params.id },
-    data,
+    data: {
+      ...data,
+      websiteUrl: data.websiteUrl === "" ? null : data.websiteUrl,
+      websiteRevalidateSecret: data.websiteRevalidateSecret === "" ? null : data.websiteRevalidateSecret,
+    },
   });
+
+  if ("websiteUrl" in data || "isActive" in data) invalidatePublicOriginsCache();
+
   res.json({ data: school });
 });
 
@@ -213,6 +229,8 @@ router.delete("/schools/:id", async (req, res) => {
     where: { schoolId: req.params.id },
     data: { isActive: false },
   });
+
+  invalidatePublicOriginsCache();
 
   res.json({ data: { message: "School deactivated" } });
 });
