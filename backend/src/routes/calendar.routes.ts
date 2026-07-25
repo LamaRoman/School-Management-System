@@ -19,9 +19,9 @@ const EVENT_TYPES = ["EVENT", "HOLIDAY", "MEETING", "EXAM", "OTHER"] as const;
 
 router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
-  const { year } = req.query;
+  const { year, from, limit } = req.query;
 
-  const dateFilter = year ? { startsWith: `${year}/` } : undefined;
+  const dateFilter = year ? { startsWith: `${year}/` } : from ? { gte: String(from) } : undefined;
 
   const [schoolEvents, masterEvents] = await Promise.all([
     prisma.calendarEvent.findMany({
@@ -35,7 +35,7 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
     }),
   ]);
 
-  const merged = [
+  let merged = [
     ...masterEvents.map((e) => ({
       id: e.id,
       title: e.title,
@@ -55,6 +55,8 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
       createdBy: e.createdBy,
     })),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  if (limit) merged = merged.slice(0, Number(limit));
 
   res.json({ data: merged });
 });

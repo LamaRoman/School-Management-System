@@ -38,7 +38,6 @@ const navGroups: NavGroup[] = [
     label: "Overview",
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutGrid },
-      { href: "/admin/calendar", label: "Calendar", icon: Calendar },
     ],
   },
   {
@@ -85,6 +84,7 @@ const navGroups: NavGroup[] = [
     label: "Setup",
     collapsible: true,
     items: [
+      { href: "/admin/calendar", label: "Calendar", icon: Calendar },
       { href: "/admin/academic-years", label: "Academic Years", icon: CalendarDays },
       { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: UserCheck },
       { href: "/admin/exam-types", label: "Exam Types", icon: ClipboardList },

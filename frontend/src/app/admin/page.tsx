@@ -9,7 +9,7 @@ import {
   UserCheck, X, ChevronRight,
   ChevronDown, ChevronUp,
   Receipt, Megaphone,
-  LayoutGrid,
+  LayoutGrid, CalendarDays,
 } from "lucide-react";
 
 interface Analytics {
@@ -26,6 +26,22 @@ interface Analytics {
   attendanceOverview: { overallRate: number; gradeWise: { gradeName: string; rate: number }[] };
   termComparison: { examName: string; avgPercentage: number; studentCount: number }[];
 }
+
+interface UpcomingEvent {
+  id: string;
+  title: string;
+  date: string;
+  type: string;
+  isMaster: boolean;
+}
+
+const eventTypeDot: Record<string, string> = {
+  EVENT: "bg-emerald-500",
+  HOLIDAY: "bg-amber-500",
+  MEETING: "bg-blue-500",
+  EXAM: "bg-purple-500",
+  OTHER: "bg-gray-400",
+};
 
 interface AbsentGroup {
   gradeId: string;
@@ -86,6 +102,7 @@ function MiniBar({ label, value, max = 100, color }: { label: string; value: num
 export default function AdminDashboard() {
   const [school, setSchool] = useState<any>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"attendance" | "academics">("attendance");
 
@@ -101,12 +118,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [schoolData, analyticsData] = await Promise.all([
+        const [schoolData, analyticsData, eventsData] = await Promise.all([
           api.get<any>("/school"),
           api.get<Analytics>(`/analytics/dashboard?todayBS=${encodeURIComponent(todayBS)}`),
+          api.get<UpcomingEvent[]>(`/calendar-events?from=${encodeURIComponent(todayBS)}&limit=5`).catch(() => []),
         ]);
         setSchool(schoolData);
         setAnalytics(analyticsData);
+        setUpcomingEvents(eventsData ?? []);
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     })();
@@ -282,6 +301,31 @@ export default function AdminDashboard() {
             <ChevronRight size={14} className="text-gray-300 ml-auto shrink-0" />
           </Link>
         ))}
+      </div>
+
+      {/* ── Upcoming Events ── */}
+      <div className="card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display font-bold text-primary text-sm flex items-center gap-2">
+            <CalendarDays size={15} /> Upcoming Events
+          </h3>
+          <Link href="/admin/calendar" className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark font-medium">
+            View Calendar <ChevronRight size={12} />
+          </Link>
+        </div>
+        {upcomingEvents.length === 0 ? (
+          <p className="text-sm text-gray-400">No upcoming events.</p>
+        ) : (
+          <div className="space-y-2">
+            {upcomingEvents.map((ev) => (
+              <div key={ev.id} className="flex items-center gap-3 text-sm">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${eventTypeDot[ev.type] || eventTypeDot.OTHER}`} />
+                <span className="text-gray-700 flex-1 min-w-0 truncate">{ev.title}</span>
+                <span className="text-xs text-gray-400 shrink-0">{formatBSDateLong(ev.date)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Tabbed Analytics ── */}
