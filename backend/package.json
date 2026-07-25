@@ -2,6 +2,9 @@
   "name": "api",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "node --import tsx --watch src/server.ts",
     "build": "prisma generate && tsc",
