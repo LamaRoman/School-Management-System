@@ -6,6 +6,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
 import { verifySection, verifyStudent } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
+import { getStudentDefaultPassword } from "../utils/studentPassword";
 import { Prisma } from "@prisma/client";
 
 const router = Router();
@@ -113,10 +114,7 @@ async function autoCreateStudentUser(studentId: string, studentName: string, sch
   // Use the studentId suffix to guarantee uniqueness without any DB lookup loop
   const email = `${baseName}.${studentId.slice(-6)}@school.edu.np`;
 
-  if (!process.env.DEFAULT_STUDENT_PASSWORD) {
-    console.warn("[SECURITY] DEFAULT_STUDENT_PASSWORD env var is not set. Student accounts will use the weak fallback password. Set this in production.");
-  }
-  const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
+  const defaultPassword = getStudentDefaultPassword();
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   await prisma.user.create({

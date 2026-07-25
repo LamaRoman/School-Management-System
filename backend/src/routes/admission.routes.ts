@@ -5,6 +5,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { verifyAcademicYear, verifyGrade, verifySection } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
+import { getStudentDefaultPassword } from "../utils/studentPassword";
 
 const router = Router();
 
@@ -254,10 +255,7 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
     const baseName = admission.studentName.toLowerCase().trim().replace(/\s+/g, ".");
     // Use studentId suffix to guarantee uniqueness — no DB loop needed
     const email = `${baseName}.${student.id.slice(-6)}@school.edu.np`;
-    const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD || "student123";
-    if (!process.env.DEFAULT_STUDENT_PASSWORD) {
-      console.warn("[SECURITY] DEFAULT_STUDENT_PASSWORD env var is not set. Set this in production.");
-    }
+    const defaultPassword = getStudentDefaultPassword();
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     await prisma.user.create({
       data: {

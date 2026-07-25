@@ -95,7 +95,11 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as AuthPayload;
+    // Pin the algorithm — without this, jsonwebtoken accepts any algorithm the
+    // library supports, widening the attack surface (algorithm-confusion).
+    const payload = jwt.verify(token, process.env.JWT_SECRET!, {
+      algorithms: ["HS256"],
+    }) as AuthPayload;
 
     // Check if this token has been revoked (user logged out)
     if (payload.jti) {

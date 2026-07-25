@@ -167,19 +167,33 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   res.status(201).json({ data: assignment });
 });
 
+// Resolve an assignment only if it belongs to the caller's school (via the
+// section → grade → academicYear chain). Prevents one school's admin from
+// deleting/revoking another school's assignments by id.
+async function findAssignmentInSchool(id: string, schoolId: string) {
+  return prisma.teacherAssignment.findFirst({
+    where: { id, section: { grade: { academicYear: { schoolId } } } },
+  });
+}
+
 // DELETE /api/teacher-assignments/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
-  await prisma.teacherAssignment.delete({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const assignment = await findAssignmentInSchool(req.params.id, schoolId);
+  if (!assignment) throw new AppError("Assignment not found", 404);
+
+  await prisma.teacherAssignment.delete({ where: { id: assignment.id } });
   res.json({ data: { message: "Assignment removed" } });
 });
 
 // POST /api/teacher-assignments/:id/revoke — revoke temporary access immediately
 router.post("/:id/revoke", authenticate, authorize("ADMIN"), async (req, res) => {
-  const assignment = await prisma.teacherAssignment.findUnique({ where: { id: req.params.id } });
+  const schoolId = getSchoolId(req);
+  const assignment = await findAssignmentInSchool(req.params.id, schoolId);
   if (!assignment) throw new AppError("Assignment not found", 404);
   if (!assignment.isTemporary) throw new AppError("Can only revoke temporary assignments");
 
-  await prisma.teacherAssignment.delete({ where: { id: req.params.id } });
+  await prisma.teacherAssignment.delete({ where: { id: assignment.id } });
   res.json({ data: { message: "Temporary access revoked" } });
 });
 
