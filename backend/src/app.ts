@@ -45,6 +45,8 @@ import staffRoutes from "./routes/staff.routes";
 import superAdminRoutes from "./routes/superAdmin.routes";
 import calendarRoutes from "./routes/calendar.routes";
 import masterCalendarRoutes from "./routes/masterCalendar.routes";
+import galleryRoutes from "./routes/gallery.routes";
+import publicGalleryRoutes from "./routes/publicGallery.routes";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -54,6 +56,15 @@ app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000", credentials: true }));
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
+
+// Public, read-only routes (e.g. the school website's gallery) are called
+// from an origin outside the SMS frontend, so they get their own narrower
+// CORS allowlist instead of loosening the app-wide origin above.
+const publicCorsOrigins = (process.env.PUBLIC_CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+app.use("/public", cors({ origin: publicCorsOrigins, credentials: false }));
 
 // ─── Rate limiting (disabled in test environment) ────────
 if (process.env.NODE_ENV !== "test") {
@@ -127,6 +138,8 @@ app.use("/staff", staffRoutes);
 app.use("/super-admin", superAdminRoutes);
 app.use("/calendar-events", calendarRoutes);
 app.use("/master-calendar", masterCalendarRoutes);
+app.use("/gallery", galleryRoutes);
+app.use("/public/gallery", publicGalleryRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 

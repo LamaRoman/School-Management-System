@@ -27,6 +27,7 @@ import {
   Wrench,
   Eye,
   Award,
+  Image,
 } from "lucide-react";
 
 interface NavItem { href: string; label: string; icon: any }
@@ -72,6 +73,12 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin/fees", label: "Fee Management", icon: Receipt },
       { href: "/admin/notices", label: "Notice Board", icon: Megaphone },
+    ],
+  },
+  {
+    label: "Website",
+    items: [
+      { href: "/admin/gallery", label: "Gallery", icon: Image },
     ],
   },
   {

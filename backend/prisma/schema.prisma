@@ -55,8 +55,29 @@ model School {
   feeCategories      FeeCategory[]
   examRooms          ExamRoom[]
   calendarEvents     CalendarEvent[]
+  galleryPhotos      GalleryPhoto[]
 
   @@map("schools")
+}
+
+// ─── GALLERY ────────────────────────────────────────────
+
+model GalleryPhoto {
+  id           String   @id @default(cuid())
+  schoolId     String   @map("school_id")
+  url          String
+  storageType  String   @map("storage_type") // "s3" | "base64"
+  caption      String?
+  description  String?
+  displayOrder Int      @default(0) @map("display_order")
+  createdById  String   @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@map("gallery_photos")
 }
 
 // ─── ACADEMIC YEAR ──────────────────────────────────────
@@ -307,6 +328,7 @@ model User {
   admissions     Admission[]
   auditLogs      AuditLog[]
   refreshTokens  RefreshToken[]
+  galleryPhotos  GalleryPhoto[]
   @@map("users")
 }
 

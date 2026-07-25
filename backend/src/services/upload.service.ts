@@ -93,3 +93,58 @@ export async function deleteLogo(logoUrl: string): Promise<void> {
     console.warn("Failed to delete old logo from S3:", err);
   }
 }
+
+/**
+ * Upload a gallery photo.
+ * @param fileBuffer - The raw file buffer (from multer)
+ * @param mimetype   - e.g. "image/jpeg"
+ * @param schoolId   - Used to namespace the S3 key
+ * @param photoId    - Used to make the S3 key unique per photo
+ */
+export async function uploadGalleryPhoto(
+  fileBuffer: Buffer,
+  mimetype: string,
+  schoolId: string,
+  photoId: string
+): Promise<UploadResult> {
+  const s3Config = getS3();
+
+  if (s3Config) {
+    const ext = mimetype.split("/")[1].replace(/\+.*/, "") || "jpg";
+    const key = `gallery/${schoolId}/${photoId}.${ext}`;
+
+    await s3Config.client.send(
+      new PutObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: mimetype,
+        CacheControl: "public, max-age=31536000",
+      })
+    );
+
+    const url = `https://${s3Config.bucket}.s3.${s3Config.region}.amazonaws.com/${key}`;
+    return { url, storageType: "s3" };
+  }
+
+  // Dev fallback: base64
+  const base64 = `data:${mimetype};base64,${fileBuffer.toString("base64")}`;
+  return { url: base64, storageType: "base64" };
+}
+
+/**
+ * Delete a gallery photo from S3 (no-op for base64).
+ */
+export async function deleteGalleryPhoto(photoUrl: string): Promise<void> {
+  const s3Config = getS3();
+  if (!s3Config || !photoUrl.includes(".amazonaws.com/")) return;
+
+  try {
+    const key = photoUrl.split(".amazonaws.com/")[1];
+    if (key) {
+      await s3Config.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
+    }
+  } catch (err) {
+    console.warn("Failed to delete gallery photo from S3:", err);
+  }
+}
