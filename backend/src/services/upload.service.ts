@@ -9,6 +9,7 @@
  */
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import sharp from "sharp";
 
 let s3: S3Client | null = null;
 let s3Checked = false;
@@ -94,6 +95,38 @@ export async function deleteLogo(logoUrl: string): Promise<void> {
   }
 }
 
+const GALLERY_MAX_DIMENSION = 1920;
+const GALLERY_WEBP_QUALITY = 80;
+
+/**
+ * Resize and re-encode a gallery photo before it's stored.
+ * Uploaded photos are only ever displayed at web sizes, so re-encoding
+ * at a capped resolution routinely cuts file size by 80-95% with no
+ * visible quality loss, and stripping EXIF drops embedded GPS data.
+ * Falls back to the original buffer if the input can't be decoded
+ * (e.g. an unsupported format) so an upload never hard-fails on this step.
+ */
+async function compressGalleryImage(
+  fileBuffer: Buffer
+): Promise<{ buffer: Buffer; mimetype: string }> {
+  try {
+    const buffer = await sharp(fileBuffer)
+      .rotate() // apply EXIF orientation before it's stripped
+      .resize({
+        width: GALLERY_MAX_DIMENSION,
+        height: GALLERY_MAX_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: GALLERY_WEBP_QUALITY })
+      .toBuffer();
+    return { buffer, mimetype: "image/webp" };
+  } catch (err) {
+    console.warn("Gallery photo compression failed, storing original:", err);
+    return { buffer: fileBuffer, mimetype: "image/jpeg" };
+  }
+}
+
 /**
  * Upload a gallery photo.
  * @param fileBuffer - The raw file buffer (from multer)
@@ -107,18 +140,19 @@ export async function uploadGalleryPhoto(
   schoolId: string,
   photoId: string
 ): Promise<UploadResult> {
+  const compressed = await compressGalleryImage(fileBuffer);
   const s3Config = getS3();
 
   if (s3Config) {
-    const ext = mimetype.split("/")[1].replace(/\+.*/, "") || "jpg";
+    const ext = compressed.mimetype.split("/")[1];
     const key = `gallery/${schoolId}/${photoId}.${ext}`;
 
     await s3Config.client.send(
       new PutObjectCommand({
         Bucket: s3Config.bucket,
         Key: key,
-        Body: fileBuffer,
-        ContentType: mimetype,
+        Body: compressed.buffer,
+        ContentType: compressed.mimetype,
         CacheControl: "public, max-age=31536000",
       })
     );
@@ -128,7 +162,7 @@ export async function uploadGalleryPhoto(
   }
 
   // Dev fallback: base64
-  const base64 = `data:${mimetype};base64,${fileBuffer.toString("base64")}`;
+  const base64 = `data:${compressed.mimetype};base64,${compressed.buffer.toString("base64")}`;
   return { url: base64, storageType: "base64" };
 }
 
