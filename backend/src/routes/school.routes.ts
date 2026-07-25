@@ -4,6 +4,7 @@ import multer from "multer";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { uploadLogo, deleteLogo } from "../services/upload.service";
+import { sanitizeSchool } from "../utils/sanitizeSchool";
 
 const router = Router();
 const upload = multer({
@@ -60,7 +61,7 @@ const schoolSchema = z.object({
 router.get("/", authenticate, async (req, res) => {
   const schoolId = getSchoolId(req);
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
-  res.json({ data: school });
+  res.json({ data: school ? sanitizeSchool(school) : null });
 });
 
 // PUT /api/school — update the current user's school
@@ -68,7 +69,7 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const data = schoolSchema.parse(req.body);
   const school = await prisma.school.update({ where: { id: schoolId }, data });
-  res.json({ data: school });
+  res.json({ data: sanitizeSchool(school) });
 });
 
 // POST /api/school/logo — upload school logo
