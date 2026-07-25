@@ -1,4 +1,5 @@
 import puppeteer, { Browser } from "puppeteer";
+import { GRADING_SCALE } from "./grading.service";
 
 let browserInstance: Browser | null = null;
 
@@ -106,12 +107,12 @@ function getTheme(mode: "color" | "bw") {
   };
 }
 
-function getDivision(pct: number): { division: string; result: string } {
-  if (pct >= 80) return { division: "Distinction", result: "Pass" };
-  if (pct >= 60) return { division: "1st Division", result: "Pass" };
-  if (pct >= 40) return { division: "2nd Division", result: "Pass" };
-  if (pct >= 20) return { division: "3rd Division", result: "Pass" };
-  return { division: "—", result: "Fail" };
+function getResultSummary(overallGrade: string): { description: string; result: string } {
+  const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
+  return {
+    description: entry?.description || "—",
+    result: overallGrade === "NG" ? "Fail" : "Pass",
+  };
 }
 
 export interface ReportCardColumnSettings {
@@ -273,8 +274,8 @@ export function buildReportCardHtml(
     passHeader = `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:#fff;font-size:${fs.th};font-weight:600;">Pass</th>`;
   }
 
-  // Division & Result
-  const divResult = getDivision(reportData.overallPercentage);
+  // Result summary (description + pass/fail)
+  const divResult = getResultSummary(reportData.overallGrade);
 
   // Rank + Attendance
   let bottomInfoHtml = "";
@@ -304,26 +305,19 @@ export function buildReportCardHtml(
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
         <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallPercentage)}%</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Division</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.division)}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.description)}</td></tr>
         ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
         ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
         <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? "#15803d" : t.accent};">${esc(divResult.result)}</td></tr>
       </table>
     </div>`;
 
-  // Grading Scale
-  const gradingRows = [
-    ["A/A+", "Distinction", "80%–100%"],
-    ["B/B+", "1st Division", "60%–79%"],
-    ["C/C+", "2nd Division", "40%–59%"],
-    ["D", "3rd Division", "20%–39%"],
-    ["E", "Fail", "0%–19%"],
-  ];
+  // Grading Scale (official Nepal CDC scale — single source of truth in grading.service.ts)
   const gradingScaleHtml = `
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
-        ${gradingRows.map(([grade, div, range]) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">${grade}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;">${div}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${range}</td></tr>`).join("")}
+        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
       </table>
     </div>`;
 

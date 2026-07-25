@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
+import { GRADING_SCALE } from "@/lib/gradingScale";
 
 interface ColumnSettings {
   showPassMarks: boolean;
@@ -34,21 +35,13 @@ const defaultSettings: ColumnSettings = {
   logoSize: "medium",
 };
 
-function getDivision(pct: number): { division: string; result: string } {
-  if (pct >= 80) return { division: "Distinction", result: "Pass" };
-  if (pct >= 60) return { division: "1st Division", result: "Pass" };
-  if (pct >= 40) return { division: "2nd Division", result: "Pass" };
-  if (pct >= 20) return { division: "3rd Division", result: "Pass" };
-  return { division: "—", result: "Fail" };
+function getResult(overallGrade: string): { description: string; result: string } {
+  const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
+  return {
+    description: entry?.description || "—",
+    result: overallGrade === "NG" ? "Fail" : "Pass",
+  };
 }
-
-const gradingScale = [
-  { grades: "A/A+", division: "Distinction", range: "80%–100%" },
-  { grades: "B/B+", division: "1st Division", range: "60%–79%" },
-  { grades: "C/C+", division: "2nd Division", range: "40%–59%" },
-  { grades: "D", division: "3rd Division", range: "20%–39%" },
-  { grades: "E", division: "Fail", range: "0%–19%" },
-];
 
 export default function StudentReportPage() {
   const { user } = useAuth();
@@ -169,7 +162,7 @@ export default function StudentReportPage() {
   };
 
   const hasPractical = reportData?.hasPractical && cols.showTheoryPrac;
-  const divResult = reportData ? getDivision(reportData.overallPercentage) : null;
+  const divResult = reportData ? getResult(reportData.overallGrade) : null;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-primary">Loading...</div></div>;
 
@@ -360,8 +353,8 @@ export default function StudentReportPage() {
                         <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{reportData.overallPercentage}%</td>
                       </tr>
                       <tr>
-                        <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Division</td>
-                        <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{divResult?.division}</td>
+                        <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Description</td>
+                        <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{divResult?.description}</td>
                       </tr>
                       {cols.showGrade && (
                         <tr>
@@ -388,11 +381,11 @@ export default function StudentReportPage() {
                   <p className="text-xs font-bold mb-1" style={{ color: t.primary }}>Grading and Marking System</p>
                   <table className="text-xs" style={{ borderCollapse: "collapse" }}>
                     <tbody>
-                      {gradingScale.map((row, i) => (
+                      {GRADING_SCALE.map((row, i) => (
                         <tr key={i}>
-                          <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>{row.grades}</td>
-                          <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.division}</td>
+                          <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>{row.grade}</td>
                           <td className="border px-2 py-1" style={{ borderColor: t.border }}>{row.range}</td>
+                          <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.gpa}</td>
                         </tr>
                       ))}
                     </tbody>

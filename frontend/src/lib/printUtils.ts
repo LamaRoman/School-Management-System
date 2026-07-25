@@ -245,11 +245,11 @@ ${schoolHeaderHtml(school, headerSettings)}
 // ─── Grade Sheet Print ──────────────────────────────────────────────────────
 
 interface GradeSheetSubject { id: string; name: string; fullMarks: number }
-interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number; passed: boolean }
+interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean }
 interface GradeSheetRow {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: GradeSheetSubjectResult[];
-  percentage: number; gpa: number; grade: string; rank: number;
+  percentage: number; gpa: number | null; grade: string; rank: number;
 }
 
 export async function printGradeSheet(data: {
@@ -276,7 +276,7 @@ export async function printGradeSheet(data: {
       <td class="bold">${row.studentName}</td>
       ${subjectCells}
       <td class="text-center bold" style="color:#c8102e">${row.percentage}</td>
-      <td class="text-center bold">${row.gpa}</td>
+      <td class="text-center bold">${row.gpa ?? "—"}</td>
       <td class="text-center bold" style="color:#1a3a5c">${row.grade}</td>
     </tr>`;
   }).join("");
@@ -372,11 +372,11 @@ const CERT_COMMON_CSS = `
   .c-sig-line { width: 46mm; border-top: 1px solid #444; margin: 0 auto 4px; }
 
   /* Decorative elements — hidden unless a theme opts in */
-  .c-corner { position:absolute; z-index:0; width:16mm; height:16mm; border-top:3px solid transparent; border-left:3px solid transparent; display:none; }
-  .c-corner-tl { top:6mm; left:6mm; }
-  .c-corner-tr { top:6mm; right:6mm; transform:rotate(90deg); transform-origin: top right; }
-  .c-corner-bl { bottom:6mm; left:6mm; transform:rotate(-90deg); transform-origin: bottom left; }
-  .c-corner-br { bottom:6mm; right:6mm; transform:rotate(180deg); }
+  .c-corner { position:absolute; z-index:0; width:16mm; height:16mm; display:none; }
+  .c-corner-tl { top:6mm; left:6mm; border-top:3px solid transparent; border-left:3px solid transparent; }
+  .c-corner-tr { top:6mm; right:6mm; border-top:3px solid transparent; border-right:3px solid transparent; }
+  .c-corner-bl { bottom:6mm; left:6mm; border-bottom:3px solid transparent; border-left:3px solid transparent; }
+  .c-corner-br { bottom:6mm; right:6mm; border-bottom:3px solid transparent; border-right:3px solid transparent; }
   .c-band { position:absolute; z-index:0; left:0; right:0; display:none; }
   .c-band-top { top:0; height:6mm; }
   .c-band-bottom { bottom:0; height:6mm; }
@@ -423,7 +423,7 @@ const CERT_THEMES: Record<string, string> = {
     .c-rule { background:#b8860b; }
     .c-recipient { color:#9a5b23; border-bottom:1px solid #e4d7b0; }
     .c-award { color:#8a6d1e; }
-    .c-seal { display:flex; background:#fff8e7; border:2px solid #b8860b; color:#b8860b; }
+    .c-seal { display:flex; background:#fff8e7; border:2px solid #b8860b; color:#b8860b; margin-bottom:9mm; }
     .c-seal::before, .c-seal::after { background:#b8860b; }
     .c-sig-line { border-top-color:#8a7a52; }
   `,

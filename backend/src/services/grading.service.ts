@@ -1,29 +1,37 @@
 /**
- * Nepal CDC Grading System
+ * Nepal CDC Grading System (official SEE-style scale)
  * This is the SINGLE SOURCE OF TRUTH for all grade/GPA calculations.
  * Never duplicate this logic elsewhere.
  */
 
 export interface GradeResult {
   grade: string;
-  gpa: number;
+  gpa: number | null;
   description: string;
 }
 
-const GRADING_SCALE: { min: number; grade: string; gpa: number; description: string }[] = [
-  { min: 90, grade: "A+", gpa: 4.0, description: "Outstanding" },
-  { min: 80, grade: "A", gpa: 3.6, description: "Excellent" },
-  { min: 70, grade: "B+", gpa: 3.2, description: "Very Good" },
-  { min: 60, grade: "B", gpa: 2.8, description: "Good" },
-  { min: 50, grade: "C+", gpa: 2.4, description: "Satisfactory" },
-  { min: 40, grade: "C", gpa: 2.0, description: "Acceptable" },
-  { min: 30, grade: "D+", gpa: 1.6, description: "Partially Acceptable" },
-  { min: 20, grade: "D", gpa: 1.2, description: "Insufficient" },
-  { min: 0, grade: "E", gpa: 0.8, description: "Very Insufficient" },
+export interface GradingScaleEntry {
+  min: number;
+  grade: string;
+  gpa: number | null;
+  description: string;
+  range: string;
+}
+
+export const GRADING_SCALE: GradingScaleEntry[] = [
+  { min: 90, grade: "A+", gpa: 4.0, description: "Outstanding", range: "90-100%" },
+  { min: 80, grade: "A", gpa: 3.6, description: "Excellent", range: "80-89%" },
+  { min: 70, grade: "B+", gpa: 3.2, description: "Very Good", range: "70-79%" },
+  { min: 60, grade: "B", gpa: 2.8, description: "Good", range: "60-69%" },
+  { min: 50, grade: "C+", gpa: 2.4, description: "Satisfactory", range: "50-59%" },
+  { min: 40, grade: "C", gpa: 2.0, description: "Acceptable", range: "40-49%" },
+  { min: 35, grade: "D", gpa: 1.6, description: "Basic", range: "35-39%" },
+  { min: 0, grade: "NG", gpa: null, description: "Non-Graded (Unclassified)", range: "Below 35%" },
 ];
 
 /**
- * Get grade and GPA from a percentage value
+ * Get grade and GPA from a percentage value.
+ * NG (below 35%) has no grade point, per the official scale.
  */
 export function getGradeFromPercentage(percentage: number): GradeResult {
   const clamped = Math.max(0, Math.min(100, percentage));
@@ -32,7 +40,7 @@ export function getGradeFromPercentage(percentage: number): GradeResult {
       return { grade: entry.grade, gpa: entry.gpa, description: entry.description };
     }
   }
-  return { grade: "E", gpa: 0.8, description: "Very Insufficient" };
+  return { grade: "NG", gpa: null, description: "Non-Graded (Unclassified)" };
 }
 
 /**
@@ -59,12 +67,15 @@ export function calculateWeightedPercentage(
 }
 
 /**
- * Calculate overall GPA from an array of subject GPAs
+ * Calculate overall GPA from an array of subject GPAs.
+ * Subjects graded NG (gpa === null) carry no grade point and are excluded
+ * from the average. If every subject is NG, there is no overall GPA.
  */
-export function calculateOverallGpa(subjectGpas: number[]): number {
-  if (subjectGpas.length === 0) return 0;
-  const sum = subjectGpas.reduce((acc, gpa) => acc + gpa, 0);
-  return parseFloat((sum / subjectGpas.length).toFixed(2));
+export function calculateOverallGpa(subjectGpas: (number | null)[]): number | null {
+  const graded = subjectGpas.filter((gpa): gpa is number => gpa !== null);
+  if (graded.length === 0) return null;
+  const sum = graded.reduce((acc, gpa) => acc + gpa, 0);
+  return parseFloat((sum / graded.length).toFixed(2));
 }
 
 /**

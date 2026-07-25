@@ -11,12 +11,12 @@ interface GradeSheetProps {
 }
 
 interface SubjectHeader { id: string; name: string; fullMarks: number; passMarks: number }
-interface SubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number; passed: boolean }
+interface SubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean }
 interface Row {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: SubjectResult[];
   totalObtained?: number; totalFullMarks?: number;
-  percentage: number; gpa: number; grade: string; rank: number;
+  percentage: number; gpa: number | null; grade: string; rank: number;
 }
 interface SheetData {
   gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
@@ -136,7 +136,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                       );
                     })}
                     <td className="p-2 border border-gray-200 text-center font-bold text-accent">{row.percentage}</td>
-                    <td className="p-2 border border-gray-200 text-center font-semibold">{row.gpa}</td>
+                    <td className="p-2 border border-gray-200 text-center font-semibold">{row.gpa ?? "—"}</td>
                     <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.grade}</td>
                   </tr>
                 ))}

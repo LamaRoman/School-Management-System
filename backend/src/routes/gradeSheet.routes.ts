@@ -7,6 +7,7 @@ import {
   getGradeFromPercentage,
   calculatePercentage,
   calculateWeightedPercentage,
+  calculateOverallGpa,
 } from "../services/grading.service";
 
 const router = Router();
@@ -75,9 +76,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     const avgPct = subjectResults.length > 0
       ? parseFloat((subjectResults.reduce((a, s) => a + s.percentage, 0) / subjectResults.length).toFixed(1))
       : 0;
-    const avgGpa = subjectResults.length > 0
-      ? parseFloat((subjectResults.reduce((a, s) => a + s.gpa, 0) / subjectResults.length).toFixed(2))
-      : 0;
+    const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
     const overallGrade = getGradeFromPercentage(avgPct);
 
     return {
@@ -201,9 +200,7 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     const avgPct = subjectResults.length > 0
       ? parseFloat((subjectResults.reduce((a, s) => a + s.weightedPercentage, 0) / subjectResults.length).toFixed(1))
       : 0;
-    const avgGpa = subjectResults.length > 0
-      ? parseFloat((subjectResults.reduce((a, s) => a + s.gpa, 0) / subjectResults.length).toFixed(2))
-      : 0;
+    const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
     const overallGrade = getGradeFromPercentage(avgPct);
 
     return {

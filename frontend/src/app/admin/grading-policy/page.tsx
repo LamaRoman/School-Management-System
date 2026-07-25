@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { GRADING_SCALE } from "@/lib/gradingScale";
 
 interface ExamType { id: string; name: string; displayOrder: number }
 interface Grade { id: string; name: string; displayOrder: number }
@@ -162,6 +163,41 @@ export default function GradingPolicyPage() {
           </div>
         </div>
       )}
+
+      {/* Official grading scale reference */}
+      <div className="card p-6 mt-6">
+        <h2 className="text-lg font-display font-bold text-primary">Grading Scale (Nepal CDC)</h2>
+        <p className="text-sm text-gray-500 mt-1 mb-4">
+          Every subject percentage is converted to a letter grade and grade point using this fixed scale.
+          Grade sheets and report cards use it automatically — it isn&apos;t configurable per grade.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr className="bg-accent/10 text-left">
+                <th className="p-2 border border-gray-200 font-semibold">Percentage Range</th>
+                <th className="p-2 border border-gray-200 font-semibold">Letter Grade</th>
+                <th className="p-2 border border-gray-200 font-semibold">Description</th>
+                <th className="p-2 border border-gray-200 font-semibold">Grade Point (GP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {GRADING_SCALE.map((row) => (
+                <tr key={row.grade}>
+                  <td className="p-2 border border-gray-200">{row.range}</td>
+                  <td className="p-2 border border-gray-200 font-bold text-primary">{row.grade}</td>
+                  <td className="p-2 border border-gray-200 text-gray-600">{row.description}</td>
+                  <td className="p-2 border border-gray-200">{row.gpa}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">
+          Overall GPA is the average of grade points across subjects. Subjects graded NG (below 35%) have no grade point
+          and are excluded from that average.
+        </p>
+      </div>
     </div>
   );
 }

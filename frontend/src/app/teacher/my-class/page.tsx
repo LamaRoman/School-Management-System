@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Printer, Download, ChevronLeft, Users } from "lucide-react";
+import { GRADING_SCALE } from "@/lib/gradingScale";
 
 interface ClassTeacherSection {
   assignmentId: string;
@@ -47,21 +48,13 @@ const defaultSettings: ColumnSettings = {
   logoSize: "medium",
 };
 
-function getDivision(pct: number): { division: string; result: string } {
-  if (pct >= 80) return { division: "Distinction", result: "Pass" };
-  if (pct >= 60) return { division: "1st Division", result: "Pass" };
-  if (pct >= 40) return { division: "2nd Division", result: "Pass" };
-  if (pct >= 20) return { division: "3rd Division", result: "Pass" };
-  return { division: "—", result: "Fail" };
+function getResult(overallGrade: string): { description: string; result: string } {
+  const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
+  return {
+    description: entry?.description || "—",
+    result: overallGrade === "NG" ? "Fail" : "Pass",
+  };
 }
-
-const gradingScale = [
-  { grades: "A/A+", division: "Distinction", range: "80%–100%" },
-  { grades: "B/B+", division: "1st Division", range: "60%–79%" },
-  { grades: "C/C+", division: "2nd Division", range: "40%–59%" },
-  { grades: "D", division: "3rd Division", range: "20%–39%" },
-  { grades: "E", division: "Fail", range: "0%–19%" },
-];
 
 // ─── REPORT CARD COMPONENT ─────────────────────────────
 
@@ -89,7 +82,7 @@ function ReportCard({
   };
 
   const hasPractical = reportData.hasPractical && cols.showTheoryPrac;
-  const divResult = getDivision(reportData.overallPercentage);
+  const divResult = getResult(reportData.overallGrade);
 
   return (
     <div className="bg-white border-2 rounded" style={{ borderColor: t.primary }}>
@@ -239,8 +232,8 @@ function ReportCard({
                   <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{reportData.overallPercentage}%</td>
                 </tr>
                 <tr>
-                  <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Division</td>
-                  <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{divResult.division}</td>
+                  <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Description</td>
+                  <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: t.primary }}>{divResult.description}</td>
                 </tr>
                 {cols.showGrade && (
                   <tr>
@@ -267,11 +260,11 @@ function ReportCard({
             <p className="text-xs font-bold mb-1" style={{ color: t.primary }}>Grading and Marking System</p>
             <table className="text-xs" style={{ borderCollapse: "collapse" }}>
               <tbody>
-                {gradingScale.map((row, i) => (
+                {GRADING_SCALE.map((row, i) => (
                   <tr key={i}>
-                    <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>{row.grades}</td>
-                    <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.division}</td>
+                    <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>{row.grade}</td>
                     <td className="border px-2 py-1" style={{ borderColor: t.border }}>{row.range}</td>
+                    <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.gpa}</td>
                   </tr>
                 ))}
               </tbody>
