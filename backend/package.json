@@ -12,6 +12,7 @@
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy",
     "seed": "tsx prisma/seed-all.ts",
+    "seed-dev": "tsx prisma/seed-dev.ts",
     "create-super-admin": "tsx prisma/create-super-admin.ts",
     "studio": "prisma studio",
     "generate": "prisma generate",

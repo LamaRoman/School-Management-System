@@ -39,7 +39,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen flex bg-surface">
-      <aside className="w-64 bg-gray-900 text-white flex flex-col shadow-xl shrink-0">
+      <aside className="w-64 bg-primary text-white flex flex-col shadow-xl shrink-0">
         <div className="p-5 border-b border-white/10">
           <div>
             <h1 className="font-display font-bold text-sm leading-tight">Zentara <span style={{color: '#e8384f'}}>शिक्षा</span></h1>

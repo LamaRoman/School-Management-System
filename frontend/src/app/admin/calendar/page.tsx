@@ -224,27 +224,34 @@ export default function CalendarPage() {
               const isToday = today.year === viewYear && today.month === viewMonth && today.day === day;
               const dayOfWeek = (startWeekday + i) % 7;
               const isSat = dayOfWeek === 6;
+              const hasHoliday = dayEvents.some((e) => e.type === "HOLIDAY");
+              const hasEvents = dayEvents.length > 0;
+              const cellBg = hasHoliday
+                ? "bg-red-50 border-red-200"
+                : hasEvents
+                ? "bg-blue-50 border-blue-100"
+                : "border-gray-100";
 
               return (
                 <button
                   key={day}
                   onClick={() => openNewEventOnDay(day)}
-                  className={`h-20 rounded-lg border p-1.5 text-left align-top transition-all hover:border-primary ${
-                    isToday ? "border-primary bg-primary/5" : "border-gray-100"
+                  className={`min-h-20 rounded-lg border p-2 text-left align-top transition-all hover:border-primary ${cellBg} ${
+                    isToday ? "ring-2 ring-primary ring-inset" : ""
                   }`}
                 >
-                  <div className={`text-xs font-semibold mb-1 ${isToday ? "text-primary" : isSat ? "text-red-500" : "text-gray-600"}`}>
+                  <div className={`text-base font-semibold mb-1.5 ${isToday ? "text-primary" : hasHoliday || isSat ? "text-red-500" : "text-gray-700"}`}>
                     {day}
                   </div>
-                  <div className="space-y-0.5">
+                  <div className="space-y-1">
                     {dayEvents.slice(0, 2).map((ev) => (
-                      <div key={ev.id} className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${typeDot[ev.type] || typeDot.OTHER}`} />
-                        <span className="text-[10px] text-gray-600 truncate">{ev.title}</span>
+                      <div key={ev.id} className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${typeDot[ev.type] || typeDot.OTHER}`} />
+                        <span className="text-xs text-gray-700 truncate">{ev.title}</span>
                       </div>
                     ))}
                     {dayEvents.length > 2 && (
-                      <div className="text-[10px] text-gray-400">+{dayEvents.length - 2} more</div>
+                      <div className="text-xs text-gray-400">+{dayEvents.length - 2} more</div>
                     )}
                   </div>
                 </button>
