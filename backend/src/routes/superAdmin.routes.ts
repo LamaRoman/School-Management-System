@@ -186,6 +186,17 @@ router.put("/schools/:id", async (req, res) => {
 
   if ("websiteUrl" in data || "isActive" in data) invalidatePublicOriginsCache();
 
+  // Reactivating a school must also unlock its users — Deactivate (the
+  // DELETE route) locks every user out, but this was the only path back to
+  // Active and it never restored them, leaving everyone permanently locked
+  // out even after the school showed as Active again.
+  if (data.isActive !== undefined) {
+    await prisma.user.updateMany({
+      where: { schoolId: req.params.id },
+      data: { isActive: data.isActive },
+    });
+  }
+
   res.json({ data: school });
 });
 

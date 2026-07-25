@@ -69,18 +69,26 @@ async function main() {
   await prisma.calendarEvent.deleteMany({ where: { schoolId: school.id } });
   await prisma.masterCalendarEvent.deleteMany({});
 
-  // ── Master (national) events — several in the current month + neighbours ──
+  // ── Master (national) events — real Calendarific-sourced dates for BS 2083,
+  // converted to BS via the same nepali-date-converter the real import uses.
+  // Deliberately NOT anchored to the current month: Calendarific's actual data
+  // has a real gap over Shrawan (no holidays), so a faithful demo should show
+  // that gap too rather than inventing fake Shrawan holidays.
   const masterEvents: { title: string; date: string; type: string }[] = [
-    { title: "Constitution Day", date: bs(year, m, 3), type: "HOLIDAY" },
-    { title: "Teej Festival", date: bs(year, m, 9), type: "HOLIDAY" },
-    { title: "Rishi Panchami", date: bs(year, m, 11), type: "HOLIDAY" },
-    { title: "Indra Jatra", date: bs(year, m, 25), type: "HOLIDAY" },
-    { title: "Ghatasthapana (Dashain begins)", date: bs(year, monthIn(m, 1), 8), type: "HOLIDAY" },
-    { title: "Phulpati", date: bs(year, monthIn(m, 1), 14), type: "HOLIDAY" },
-    { title: "Vijaya Dashami", date: bs(year, monthIn(m, 1), 18), type: "HOLIDAY" },
-    { title: "Laxmi Puja (Tihar)", date: bs(year, monthIn(m, 2), 5), type: "HOLIDAY" },
-    { title: "Bhai Tika", date: bs(year, monthIn(m, 2), 8), type: "HOLIDAY" },
-    { title: "Labour Day", date: bs(year, monthIn(m, -1), 18), type: "HOLIDAY" },
+    { title: "Majdoor Divas / Buddha Jayanti", date: bs(year, 1, 18), type: "HOLIDAY" }, // Baisakh
+    { title: "Ganatantra Diwas", date: bs(year, 2, 15), type: "HOLIDAY" }, // Jestha
+    { title: "June Solstice", date: bs(year, 3, 7), type: "HOLIDAY" }, // Ashadh
+    { title: "Janai Purnima", date: bs(year, 5, 12), type: "HOLIDAY" }, // Bhadra
+    { title: "Gai Jatra", date: bs(year, 5, 13), type: "HOLIDAY" },
+    { title: "Krishna Janmashtami", date: bs(year, 5, 19), type: "HOLIDAY" },
+    { title: "Hartalika Teej", date: bs(year, 5, 29), type: "HOLIDAY" },
+    { title: "Constitution Day", date: bs(year, 6, 3), type: "HOLIDAY" }, // Ashwin
+    { title: "Jitiya Parwa", date: bs(year, 6, 18), type: "HOLIDAY" },
+    { title: "Ghatasthapana (Dashain begins)", date: bs(year, 6, 25), type: "HOLIDAY" },
+    { title: "Phulpati", date: bs(year, 6, 31), type: "HOLIDAY" },
+    { title: "Vijaya Dashami", date: bs(year, 7, 4), type: "HOLIDAY" }, // Kartik
+    { title: "Laxmi Puja (Tihar)", date: bs(year, 7, 22), type: "HOLIDAY" },
+    { title: "Bhai Tika", date: bs(year, 7, 24), type: "HOLIDAY" },
   ];
   await prisma.masterCalendarEvent.createMany({
     data: masterEvents.map((e) => ({ ...e, source: "MANUAL", createdById: superAdmin.id })),
