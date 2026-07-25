@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { ArrowLeft, Plus, UserCheck, Upload } from "lucide-react";
+import { ArrowLeft, Plus, UserCheck, Upload, Copy, Check } from "lucide-react";
 import Link from "next/link";
 
 interface SchoolDetail {
@@ -42,6 +42,14 @@ export default function SchoolDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", code: "", address: "", phone: "", email: "", websiteUrl: "", websiteRevalidateSecret: "" });
   const [uploading, setUploading] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  const handleCopyId = () => {
+    if (!school) return;
+    navigator.clipboard.writeText(school.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 1500);
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -159,6 +167,15 @@ export default function SchoolDetailPage() {
             <div>
               <h1 className="text-2xl font-display font-bold text-gray-800">{school.name}</h1>
               {school.nameNp && <p className="text-gray-500">{school.nameNp}</p>}
+              <button
+                type="button"
+                onClick={handleCopyId}
+                title="Copy School ID (needed for SMS_SCHOOL_ID on the school's website)"
+                className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 font-mono"
+              >
+                {copiedId ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                {copiedId ? "Copied!" : school.id}
+              </button>
               <div className="flex gap-4 mt-2 text-sm text-gray-500">
                 {school.address && <span>{school.address}</span>}
                 {school.phone && <span>{school.phone}</span>}
