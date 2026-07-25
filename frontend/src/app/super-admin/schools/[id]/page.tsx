@@ -17,7 +17,7 @@ interface SchoolDetail {
   motto?: string;
   logo?: string;
   websiteUrl?: string;
-  websiteRevalidateSecret?: string;
+  hasWebsiteRevalidateSecret?: boolean;
   isActive: boolean;
   _count: { users: number; teachers: number; academicYears: number };
 }
@@ -89,7 +89,9 @@ export default function SchoolDetailPage() {
         phone: s.phone || "",
         email: s.email || "",
         websiteUrl: s.websiteUrl || "",
-        websiteRevalidateSecret: s.websiteRevalidateSecret || "",
+        // The secret is never sent back by the API. Leave the field blank —
+        // an empty value on save keeps the existing secret unchanged.
+        websiteRevalidateSecret: "",
       });
     } catch (err) {
       console.error(err);
@@ -223,7 +225,7 @@ export default function SchoolDetailPage() {
                   <input
                     value={editForm.websiteRevalidateSecret}
                     onChange={(e) => setEditForm({ ...editForm, websiteRevalidateSecret: e.target.value })}
-                    placeholder="Revalidate secret"
+                    placeholder={school.hasWebsiteRevalidateSecret ? "Secret set — leave blank to keep" : "Revalidate secret"}
                     type="text"
                     className="border rounded-lg px-3 py-2 text-sm flex-1"
                   />

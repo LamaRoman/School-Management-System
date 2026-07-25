@@ -7,6 +7,7 @@ import { authenticate, authorize } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { uploadLogo, deleteLogo } from "../services/upload.service";
 import { invalidatePublicOriginsCache } from "../services/publicOrigins.service";
+import { sanitizeSchool } from "../utils/sanitizeSchool";
 
 const router = Router();
 const upload = multer({
@@ -50,10 +51,10 @@ router.get("/schools", async (_req, res) => {
           isActive: true,
         },
       });
-      return {
+      return sanitizeSchool({
         ...school,
         studentCount,
-      };
+      });
     })
   );
 
@@ -76,7 +77,7 @@ router.get("/schools/:id", async (req, res) => {
     },
   });
   if (!school) throw new AppError("School not found", 404);
-  res.json({ data: school });
+  res.json({ data: sanitizeSchool(school) });
 });
 
 // ─── CREATE SCHOOL ──────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ router.post("/schools", async (req, res) => {
 
   res.status(201).json({
     data: {
-      school: result.school,
+      school: sanitizeSchool(result.school),
       admin: {
         id: result.adminUser.id,
         email: result.adminUser.email,
@@ -174,13 +175,17 @@ const updateSchoolSchema = z.object({
 
 router.put("/schools/:id", async (req, res) => {
   const data = updateSchoolSchema.parse(req.body);
+  // The API no longer returns the secret, so the editor can't round-trip it.
+  // Only overwrite it when a non-empty value is supplied; an empty/omitted
+  // value means "keep the existing secret" rather than clearing it.
+  const { websiteRevalidateSecret, ...rest } = data;
   const school = await prisma.school.update({
     where: { id: req.params.id },
     data: {
-      ...data,
+      ...rest,
       email: data.email === "" ? null : data.email,
       websiteUrl: data.websiteUrl === "" ? null : data.websiteUrl,
-      websiteRevalidateSecret: data.websiteRevalidateSecret === "" ? null : data.websiteRevalidateSecret,
+      ...(websiteRevalidateSecret ? { websiteRevalidateSecret } : {}),
     },
   });
 
@@ -197,7 +202,7 @@ router.put("/schools/:id", async (req, res) => {
     });
   }
 
-  res.json({ data: school });
+  res.json({ data: sanitizeSchool(school) });
 });
 
 // ─── UPLOAD SCHOOL LOGO ────────────────────────────────────────────────────
