@@ -142,8 +142,9 @@ export default function CalendarPage() {
 
   const eventsByDate = (date: string) => events.filter((e) => e.date === date);
 
-  const upcoming = [...events]
-    .filter((e) => e.date >= formatBSDate(today.year, today.month, today.day))
+  const monthPrefix = `${viewYear}/${String(viewMonth).padStart(2, "0")}/`;
+  const monthEvents = [...events]
+    .filter((e) => e.date.startsWith(monthPrefix))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
@@ -252,11 +253,11 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Sidebar — planned activities */}
+        {/* Sidebar — this month's activities */}
         <div className="card p-5">
-          <h2 className="font-semibold text-primary mb-4">Planned Activities</h2>
+          <h2 className="font-semibold text-primary mb-4">{BS_MONTH_NAMES[viewMonth - 1]} {viewYear} Activities <span className="text-xs font-normal text-gray-400">({monthEvents.length})</span></h2>
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {upcoming.map((ev) => (
+            {monthEvents.map((ev) => (
               <div key={ev.id} className={`border rounded-lg p-3 ${typeColors[ev.type] || typeColors.OTHER}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -277,8 +278,8 @@ export default function CalendarPage() {
                 </div>
               </div>
             ))}
-            {upcoming.length === 0 && (
-              <div className="text-center text-gray-400 text-sm py-8">No upcoming activities planned.</div>
+            {monthEvents.length === 0 && (
+              <div className="text-center text-gray-400 text-sm py-8">No activities in {BS_MONTH_NAMES[viewMonth - 1]} {viewYear}.</div>
             )}
           </div>
         </div>

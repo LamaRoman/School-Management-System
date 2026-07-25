@@ -156,7 +156,10 @@ export default function MasterCalendarPage() {
   const daysInMonth = getDaysInBSMonth(viewYear, viewMonth);
   const startWeekday = getStartWeekday(viewYear, viewMonth);
   const eventsByDate = (date: string) => events.filter((e) => e.date === date);
-  const sorted = [...events].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const monthPrefix = `${viewYear}/${String(viewMonth).padStart(2, "0")}/`;
+  const sorted = [...events]
+    .filter((e) => e.date.startsWith(monthPrefix))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
@@ -259,9 +262,9 @@ export default function MasterCalendarPage() {
           </div>
         </div>
 
-        {/* Sidebar — all events for the year */}
+        {/* Sidebar — events for the viewed month */}
         <div className="card p-5">
-          <h2 className="font-semibold text-primary mb-4">{viewYear} Events <span className="text-xs font-normal text-gray-400">({sorted.length})</span></h2>
+          <h2 className="font-semibold text-primary mb-4">{BS_MONTH_NAMES[viewMonth - 1]} {viewYear} Events <span className="text-xs font-normal text-gray-400">({sorted.length})</span></h2>
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {sorted.map((ev) => (
               <div key={ev.id} className={`border rounded-lg p-3 ${typeColors[ev.type] || typeColors.OTHER}`}>
@@ -279,7 +282,7 @@ export default function MasterCalendarPage() {
               </div>
             ))}
             {sorted.length === 0 && (
-              <div className="text-center text-gray-400 text-sm py-8">No events for {viewYear}. Add one or import national holidays.</div>
+              <div className="text-center text-gray-400 text-sm py-8">No events in {BS_MONTH_NAMES[viewMonth - 1]} {viewYear}.</div>
             )}
           </div>
         </div>
