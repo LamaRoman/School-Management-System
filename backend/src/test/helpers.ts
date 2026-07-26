@@ -18,7 +18,32 @@ import prisma from "../utils/prisma";
 // This runs between test suites (beforeAll), NOT between individual tests,
 // to keep the test suite fast.
 
+// Guards cleanDatabase() against ever running outside a dedicated test
+// database. Without .env.test, `dotenv -e .env.test` silently falls through
+// to whatever DATABASE_URL app.ts's own dotenv.config() loads (backend/.env
+// — the real dev database), and the deleteMany transaction below then wipes
+// every table in it. That happened once. This check makes it fail loudly
+// instead of silently, the moment cleanDatabase() is called.
+function assertSafeToWipe(): void {
+  const url = process.env.DATABASE_URL || "";
+  const dbName = url.split("?")[0].split("/").pop() || "";
+  const looksLikeTestDb = /test/i.test(dbName);
+
+  if (process.env.NODE_ENV !== "test" || !looksLikeTestDb) {
+    throw new Error(
+      `Refusing to run cleanDatabase(): this looks like it would truncate a ` +
+        `non-test database.\n` +
+        `  NODE_ENV = "${process.env.NODE_ENV}" (must be "test")\n` +
+        `  database  = "${dbName}" (name must contain "test")\n` +
+        `Fix: create backend/.env.test with NODE_ENV=test and a DATABASE_URL ` +
+        `pointing at a database whose name contains "test" (see TESTING.md).`
+    );
+  }
+}
+
 export async function cleanDatabase(): Promise<void> {
+  assertSafeToWipe();
+
   // Order matters: children before parents to avoid FK violations.
   // $transaction ensures atomicity.
   await prisma.$transaction([
