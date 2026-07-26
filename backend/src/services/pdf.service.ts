@@ -373,7 +373,7 @@ export function buildReportCardHtml(
       <div style="text-align:left;">${schoolNameBlock}</div>
     </div>`;
   } else if (pos === "center-inline") {
-    headerInnerHtml = `<div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:4px;">
+    headerInnerHtml = `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:4px;">
       ${logoHtml}
       <div style="text-align:left;">${schoolNameBlock}</div>
     </div>`;
