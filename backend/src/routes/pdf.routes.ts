@@ -21,11 +21,9 @@ import type { ReportCardColumnSettings } from "../services/pdf.service";
 const router = Router();
 
 // Helper: fetch column settings from DB
-async function getColumnSettings(): Promise<ReportCardColumnSettings> {
-  const school = await prisma.school.findFirst();
-  if (!school) return defaultColumnSettings;
+async function getColumnSettings(schoolId: string): Promise<ReportCardColumnSettings> {
   const settings = await prisma.reportCardSettings.findUnique({
-    where: { schoolId: school.id },
+    where: { schoolId },
   });
   if (!settings) return defaultColumnSettings;
   return {
@@ -39,7 +37,7 @@ async function getColumnSettings(): Promise<ReportCardColumnSettings> {
     showRemarks: settings.showRemarks,
     showPromotion: settings.showPromotion,
     showNepaliName: settings.showNepaliName,
-    logoPosition: (settings.logoPosition as "left" | "center" | "right") || "center",
+    logoPosition: (settings.logoPosition as "left" | "center" | "center-inline" | "right") || "center",
     logoSize: (settings.logoSize as "small" | "medium" | "large") || "medium",
   };
 }
@@ -66,7 +64,7 @@ async function getObservations(studentId: string, examTypeId: string, gradeId: s
 
 // ─── REPORT DATA BUILDERS ───────────────────────────────
 
-async function buildTermReportData(studentId: string, examTypeId: string) {
+async function buildTermReportData(studentId: string, examTypeId: string, schoolId: string) {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: { section: { include: { grade: true } } },
@@ -88,7 +86,7 @@ async function buildTermReportData(studentId: string, examTypeId: string) {
 
   if (marks.length === 0) return null;
 
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
   const hasPracticalSubjects = marks.some((m) => m.subject.fullPracticalMarks > 0);
 
   const subjects = marks.map((m) => {
@@ -189,7 +187,7 @@ async function buildTermReportData(studentId: string, examTypeId: string) {
   };
 }
 
-async function buildFinalReportData(studentId: string, academicYearId: string) {
+async function buildFinalReportData(studentId: string, academicYearId: string, schoolId: string) {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: { section: { include: { grade: true } } },
@@ -219,7 +217,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string) {
     include: { subject: true, examType: true },
   });
 
-  const school = await prisma.school.findFirst();
+  const school = await prisma.school.findUnique({ where: { id: schoolId } });
 
   const finalSubjects = subjects.map((subject) => {
     const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
@@ -366,10 +364,10 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
 
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
-  const reportData = await buildTermReportData(studentId, examTypeId);
+  const reportData = await buildTermReportData(studentId, examTypeId, schoolId);
   if (!reportData) throw new AppError("No marks found for this student and exam", 404);
 
-  const cols = await getColumnSettings();
+  const cols = await getColumnSettings(schoolId);
   const obs = await getObservations(reportData._studentId, examTypeId, reportData._gradeId);
   const html = buildReportCardHtml(reportData, mode, cols, obs);
   const pdfBuffer = await generatePdf({
@@ -398,10 +396,10 @@ router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN",
 
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
-  const reportData = await buildFinalReportData(studentId, academicYearId);
+  const reportData = await buildFinalReportData(studentId, academicYearId, schoolId);
   if (!reportData) throw new AppError("No report data found for this student", 404);
 
-  const cols = await getColumnSettings();
+  const cols = await getColumnSettings(schoolId);
   const obs = await getObservations(reportData._studentId, reportData._examTypeId, reportData._gradeId);
   const html = buildReportCardHtml(reportData, mode, cols, obs);
   const pdfBuffer = await generatePdf({
@@ -437,7 +435,7 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN"
 
   const reportDataArray: any[] = [];
   for (const stu of students) {
-    const data = await buildTermReportData(stu.id, examTypeId);
+    const data = await buildTermReportData(stu.id, examTypeId, schoolId);
     if (data) {
       data._observations = await getObservations(stu.id, examTypeId, section.gradeId);
       reportDataArray.push(data);
@@ -446,7 +444,7 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN"
 
   if (reportDataArray.length === 0) throw new AppError("No marks found for any student", 404);
 
-  const cols = await getColumnSettings();
+  const cols = await getColumnSettings(schoolId);
   const html = buildBatchReportCardHtml(reportDataArray, mode, examType.paperSize as "A4" | "A5", cols);
   const pdfBuffer = await generatePdf({ html, paperSize: examType.paperSize as "A4" | "A5" });
 
@@ -483,7 +481,7 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
 
   const reportDataArray: any[] = [];
   for (const stu of students) {
-    const data = await buildFinalReportData(stu.id, academicYearId);
+    const data = await buildFinalReportData(stu.id, academicYearId, schoolId);
     if (data) {
       data._observations = await getObservations(stu.id, finalExamType?.id || "", section.gradeId);
       reportDataArray.push(data);
@@ -493,7 +491,7 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
   if (reportDataArray.length === 0) throw new AppError("No report data found", 404);
 
   const paperSize = (finalExamType?.paperSize as "A4" | "A5") || "A4";
-  const cols = await getColumnSettings();
+  const cols = await getColumnSettings(schoolId);
   const html = buildBatchReportCardHtml(reportDataArray, mode, paperSize, cols);
   const pdfBuffer = await generatePdf({ html, paperSize });
 
