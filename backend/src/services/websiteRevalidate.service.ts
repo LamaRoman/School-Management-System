@@ -25,8 +25,21 @@ export async function revalidateWebsite(schoolId: string, tag: string): Promise<
     return;
   }
 
+  // Use only the origin (protocol + host), not whatever path a super-admin
+  // typed into websiteUrl (e.g. a trailing "/en" locale segment). The
+  // revalidate route always lives at "<origin>/api/revalidate" — appending
+  // to a URL that already has a path silently 404s the webhook instead of
+  // reaching the route, since Next.js doesn't do prefix-matching here.
+  let origin: string;
   try {
-    const res = await fetch(`${school.websiteUrl}/api/revalidate`, {
+    origin = new URL(school.websiteUrl).origin;
+  } catch {
+    console.warn(`Website revalidation for school ${schoolId} skipped — malformed websiteUrl: ${school.websiteUrl}`);
+    return;
+  }
+
+  try {
+    const res = await fetch(`${origin}/api/revalidate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
