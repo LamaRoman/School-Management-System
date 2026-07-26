@@ -126,7 +126,7 @@ export interface ReportCardColumnSettings {
   showRemarks: boolean;
   showPromotion: boolean;
   showNepaliName: boolean;
-  logoPosition: "left" | "center" | "right";
+  logoPosition: "left" | "center" | "center-inline" | "right";
   logoSize: "small" | "medium" | "large";
 }
 
@@ -369,6 +369,11 @@ export function buildReportCardHtml(
     headerInnerHtml = `<div style="margin-bottom:4px;">${logoHtml}</div>${schoolNameBlock}`;
   } else if (pos === "left") {
     headerInnerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+      ${logoHtml}
+      <div style="text-align:left;">${schoolNameBlock}</div>
+    </div>`;
+  } else if (pos === "center-inline") {
+    headerInnerHtml = `<div style="display:inline-flex;align-items:center;gap:12px;margin-bottom:4px;">
       ${logoHtml}
       <div style="text-align:left;">${schoolNameBlock}</div>
     </div>`;

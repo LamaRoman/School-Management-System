@@ -29,7 +29,7 @@ interface ColumnSettings {
   showRemarks: boolean;
   showPromotion: boolean;
   showNepaliName: boolean;
-  logoPosition: "left" | "center" | "right";
+  logoPosition: "left" | "center" | "center-inline" | "right";
   logoSize: "small" | "medium" | "large";
 }
 
@@ -107,6 +107,7 @@ function ReportCard({
           if (!logo) return nameBlock();
           if (pos === "center") return <>{<div className="mb-1">{logoImg}</div>}{nameBlock()}</>;
           if (pos === "left") return <div className="flex items-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>;
+          if (pos === "center-inline") return <div className="inline-flex items-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>;
           return <div className="flex items-center gap-3 mb-1"><div className="flex-1" style={{ textAlign: "right" }}>{nameBlock("right")}</div>{logoImg}</div>;
         })()}
         <div className="inline-block mt-2 px-4 py-1 text-white text-xs font-bold uppercase tracking-wider rounded" style={{ background: t.accent }}>
