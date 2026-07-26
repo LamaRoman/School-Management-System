@@ -29,6 +29,36 @@ class ApiClient {
     return this.refreshPromise;
   }
 
+  // For endpoints that return a non-JSON body (e.g. PDF blobs). Same 401
+  // silent-refresh-and-retry behavior as `request`, but hands back the raw
+  // Response instead of parsing JSON.
+  async fetchRaw(path: string, options: RequestInit = {}, isRetry = false): Promise<Response> {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      credentials: "include",
+    });
+
+    if (
+      res.status === 401 &&
+      !isRetry &&
+      !path.startsWith("/auth/refresh") &&
+      !path.startsWith("/auth/login")
+    ) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        return this.fetchRaw(path, options, true);
+      }
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/login")
+      ) {
+        window.location.href = "/login";
+      }
+    }
+
+    return res;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",

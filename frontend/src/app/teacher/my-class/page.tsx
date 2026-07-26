@@ -390,17 +390,14 @@ export default function TeacherMyClassPage() {
     if (!selectedStudent || !selectedExam || !selectedSection) return;
     setDownloading(true);
     try {
-      let url: string;
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      let path: string;
       if (selectedExam.isFinal) {
-        url = `${API_BASE}/pdf/final/${selectedStudent.id}/${selectedSection.academicYearId}?mode=${pdfMode}`;
+        path = `/pdf/final/${selectedStudent.id}/${selectedSection.academicYearId}?mode=${pdfMode}`;
       } else {
-        url = `${API_BASE}/pdf/term/${selectedStudent.id}/${selectedExam.id}?mode=${pdfMode}`;
+        path = `/pdf/term/${selectedStudent.id}/${selectedExam.id}?mode=${pdfMode}`;
       }
 
-      const res = await fetch(url, {
-        credentials: "include",
-      });
+      const res = await api.fetchRaw(path);
       if (!res.ok) throw new Error("PDF generation failed");
 
       const blob = await res.blob();
@@ -440,17 +437,14 @@ export default function TeacherMyClassPage() {
     if (!selectedSection || !selectedExam) return;
     setDownloading(true);
     try {
-      let url: string;
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+      let path: string;
       if (selectedExam.isFinal) {
-        url = `${API_BASE}/pdf/class/final/${selectedSection.sectionId}/${selectedSection.academicYearId}?mode=${pdfMode}`;
+        path = `/pdf/class/final/${selectedSection.sectionId}/${selectedSection.academicYearId}?mode=${pdfMode}`;
       } else {
-        url = `${API_BASE}/pdf/class/term/${selectedSection.sectionId}/${selectedExam.id}?mode=${pdfMode}`;
+        path = `/pdf/class/term/${selectedSection.sectionId}/${selectedExam.id}?mode=${pdfMode}`;
       }
 
-      const res = await fetch(url, {
-        credentials: "include",
-      });
+      const res = await api.fetchRaw(path);
       if (!res.ok) throw new Error("Batch PDF generation failed");
 
       const blob = await res.blob();
