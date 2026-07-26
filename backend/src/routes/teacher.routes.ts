@@ -184,7 +184,12 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   await prisma.teacher.update({ where: { id: req.params.id }, data: { isActive: false } });
 
   if (teacher.user) {
-    await prisma.user.update({ where: { id: teacher.user.id }, data: { isActive: false } });
+    // Free up the email so it can be reused by a new/reactivated account —
+    // email stays unique in the DB, so a live account otherwise blocks it forever.
+    await prisma.user.update({
+      where: { id: teacher.user.id },
+      data: { isActive: false, email: `deleted_${teacher.user.id}_${teacher.user.email}` },
+    });
     invalidateUserCache(teacher.user.id);
   }
 

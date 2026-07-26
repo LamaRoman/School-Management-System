@@ -401,10 +401,15 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     data: { isActive: false },
   });
 
-  // Also deactivate the linked user account and bust the auth cache
+  // Also deactivate the linked user account, bust the auth cache, and free up
+  // the email — it stays unique in the DB, so a live account otherwise blocks
+  // it forever from being reused by a new/reactivated account.
   const linkedUser = await prisma.user.findFirst({ where: { studentId: req.params.id } });
   if (linkedUser) {
-    await prisma.user.update({ where: { id: linkedUser.id }, data: { isActive: false } });
+    await prisma.user.update({
+      where: { id: linkedUser.id },
+      data: { isActive: false, email: `deleted_${linkedUser.id}_${linkedUser.email}` },
+    });
     invalidateUserCache(linkedUser.id);
   }
 
