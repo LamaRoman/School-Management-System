@@ -7,7 +7,10 @@ function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL || "";
   if (url.includes("connection_limit")) return url;
   const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}connection_limit=20&pool_timeout=30`;
+  // Small single-school deployment on a memory-billed host (Railway) — each
+  // open Postgres connection costs RAM on the DB side around the clock, and
+  // a handful of concurrent teachers/admins never needs 20 of them.
+  return `${url}${separator}connection_limit=5&pool_timeout=30`;
 }
 
 export const prisma =

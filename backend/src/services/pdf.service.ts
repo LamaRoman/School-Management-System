@@ -3,6 +3,22 @@ import { GRADING_SCALE } from "./grading.service";
 
 let browserInstance: Browser | null = null;
 
+// Close the idle browser a few minutes after the last PDF request. Chrome
+// sits at 150MB+ resident even when doing nothing, and report cards are
+// generated a few times a term — there's no reason to pay for that memory
+// around the clock. `unref()` so this timer alone can't keep the process
+// alive on shutdown.
+const IDLE_SHUTDOWN_MS = 5 * 60 * 1000;
+let idleTimer: NodeJS.Timeout | null = null;
+
+function resetIdleShutdown(): void {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    closeBrowser().catch((err) => console.error("Idle browser shutdown failed:", err));
+  }, IDLE_SHUTDOWN_MS);
+  idleTimer.unref();
+}
+
 /**
  * Escape user-controlled strings before interpolating into the HTML template
  * that Puppeteer renders. Puppeteer executes the rendered HTML as a real
@@ -57,6 +73,10 @@ async function getBrowser(): Promise<Browser> {
 }
 
 export async function closeBrowser(): Promise<void> {
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
   if (browserInstance) {
     await browserInstance.close();
     browserInstance = null;
@@ -71,6 +91,13 @@ interface PdfOptions {
 export async function generatePdf({ html, paperSize }: PdfOptions): Promise<Buffer> {
   const browser = await getBrowser();
   const page = await browser.newPage();
+  // Cancel any pending idle-shutdown for the duration of this render — a
+  // large batch can take longer than the idle window, and closing the
+  // browser mid-render would kill the in-flight page.
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
 
   try {
     // networkidle0 (not domcontentloaded) — the logo is fetched from S3 over
@@ -93,6 +120,7 @@ export async function generatePdf({ html, paperSize }: PdfOptions): Promise<Buff
     return Buffer.from(pdfBuffer);
   } finally {
     await page.close();
+    resetIdleShutdown();
   }
 }
 
