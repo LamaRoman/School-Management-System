@@ -167,7 +167,7 @@ export function buildReportCardHtml(
   };
   const computedLogoSize = logoSizeMap[cols.logoSize] || logoSizeMap["medium"];
   const fs = {
-    schoolName: isA5 ? "14px" : "18px",
+    schoolName: isA5 ? "17px" : "22px",
     schoolNp: isA5 ? "11px" : "13px",
     schoolEn: isA5 ? "10px" : "12px",
     address: isA5 ? "8px" : "10px",
@@ -363,8 +363,13 @@ export function buildReportCardHtml(
     ${nepaliNameHtml}
     <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${esc(reportData.school?.address || "")}</p>`;
 
+  const examBadgeHtml = `<div style="display:inline-block;padding:3px 14px;background:${t.accent};color:#fff;font-size:${fs.badge};font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:4px;">
+    ${esc(reportData.examType)} — ${esc(reportData.academicYear)} B.S.
+  </div>`;
+
   const pos = cols.logoPosition || "center";
   let headerInnerHtml = "";
+  let badgeInline = false;
   if (!logoHtml) {
     // No logo — just centered text
     headerInnerHtml = `${schoolNameBlock}`;
@@ -376,9 +381,15 @@ export function buildReportCardHtml(
       <div style="text-align:left;">${schoolNameBlock}</div>
     </div>`;
   } else if (pos === "center-inline") {
+    // Nest the exam badge inside the name column (rather than centering it on
+    // the full logo+name width) so it lines up under the school name itself.
+    badgeInline = true;
     headerInnerHtml = `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:4px;">
       ${logoHtml}
-      <div style="text-align:left;">${schoolNameBlock}</div>
+      <div style="text-align:center;">
+        ${schoolNameBlock}
+        ${examBadgeHtml}
+      </div>
     </div>`;
   } else {
     // right
@@ -404,9 +415,7 @@ export function buildReportCardHtml(
   <div style="border:2px solid ${t.primary};border-radius:4px;overflow:hidden;margin:${isA5 ? "2mm" : "3mm"};">
     <div style="padding:${pad.header};border-bottom:2px solid ${t.primary};text-align:center;">
       ${headerInnerHtml}
-      <div style="display:inline-block;padding:3px 14px;background:${t.accent};color:#fff;font-size:${fs.badge};font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:4px;">
-        ${esc(reportData.examType)} — ${esc(reportData.academicYear)} B.S.
-      </div>
+      ${badgeInline ? "" : examBadgeHtml}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;padding:${pad.info};background:${t.infoBg};border-bottom:1px solid ${t.border};">
       ${infoRows}

@@ -213,26 +213,31 @@ export default function StudentReportPage() {
                 const sizeMap = { small: "w-9 h-9", medium: "w-14 h-14", large: "w-[75px] h-[75px]" };
                 const sizeClass = sizeMap[cols.logoSize as keyof typeof sizeMap] || sizeMap.medium;
                 const pos = cols.logoPosition || "center";
-                const nameBlock = (align?: string) => (
+                const examBadge = (
+                  <div className="inline-block mt-2 px-4 py-1 text-white text-xs font-bold uppercase tracking-wider rounded" style={{ background: t.accent }}>
+                    {reportData.examType} — {reportData.academicYear} B.S.
+                  </div>
+                );
+                const nameBlock = (align?: string, withBadge?: boolean) => (
                   <div style={align ? { textAlign: align as any } : undefined}>
-                    <h2 className="text-lg font-bold" style={{ color: t.primary }}>{reportData.school?.name}</h2>
+                    <h2 className="text-xl font-bold" style={{ color: t.primary }}>{reportData.school?.name}</h2>
                     {cols.showNepaliName && reportData.school?.nameNp && (
                       <p className="text-sm" style={{ color: t.primary }}>{reportData.school.nameNp}</p>
                     )}
                     <p className="text-xs text-gray-500">{reportData.school?.address}</p>
+                    {withBadge && examBadge}
                   </div>
                 );
                 const logoImg = <img src={logo} alt="" className={`${sizeClass} object-contain rounded`} />;
 
-                if (!logo) return nameBlock();
-                if (pos === "center") return <>{<div className="mb-1">{logoImg}</div>}{nameBlock()}</>;
-                if (pos === "center-inline") return <div className="flex items-center justify-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>;
-                if (pos === "left") return <div className="flex items-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>;
-                return <div className="flex items-center gap-3 mb-1"><div className="flex-1" style={{ textAlign: "right" }}>{nameBlock("right")}</div>{logoImg}</div>;
+                // center-inline nests the badge inside the name column so it
+                // lines up under the school name itself, not the full logo+name width.
+                if (!logo) return <>{nameBlock()}{examBadge}</>;
+                if (pos === "center") return <>{<div className="mb-1">{logoImg}</div>}{nameBlock()}{examBadge}</>;
+                if (pos === "center-inline") return <div className="flex items-center justify-center gap-3 mb-1">{logoImg}{nameBlock(undefined, true)}</div>;
+                if (pos === "left") return <><div className="flex items-center gap-3 mb-1">{logoImg}{nameBlock("left")}</div>{examBadge}</>;
+                return <><div className="flex items-center gap-3 mb-1"><div className="flex-1" style={{ textAlign: "right" }}>{nameBlock("right")}</div>{logoImg}</div>{examBadge}</>;
               })()}
-              <div className="inline-block mt-2 px-4 py-1 text-white text-xs font-bold uppercase tracking-wider rounded" style={{ background: t.accent }}>
-                {reportData.examType} — {reportData.academicYear} B.S.
-              </div>
             </div>
 
             {/* Student Info */}
