@@ -122,9 +122,11 @@ export default function BSDatePicker({
     return false;
   };
 
-  // Year options: current year ± 10
+  // Year options: current year - 80 to current year + 5. Wide range on the
+  // past side since this component is reused for date-of-birth fields
+  // (students, staff, parents/guardians), not just near-term scheduling.
   const yearOptions: number[] = [];
-  for (let y = today.year - 10; y <= today.year + 5; y++) {
+  for (let y = today.year - 80; y <= today.year + 5; y++) {
     yearOptions.push(y);
   }
 
