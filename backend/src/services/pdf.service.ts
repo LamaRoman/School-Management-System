@@ -73,7 +73,10 @@ export async function generatePdf({ html, paperSize }: PdfOptions): Promise<Buff
   const page = await browser.newPage();
 
   try {
-await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 15000 });
+    // networkidle0 (not domcontentloaded) — the logo is fetched from S3 over
+    // the network, and domcontentloaded fires before that request resolves,
+    // producing a PDF with a blank logo slot.
+    await page.setContent(html, { waitUntil: "networkidle0", timeout: 15000 });
     const width = paperSize === "A5" ? "148mm" : "210mm";
     const height = paperSize === "A5" ? "210mm" : "297mm";
 
