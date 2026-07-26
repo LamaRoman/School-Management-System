@@ -18,7 +18,7 @@ export default function Home() {
     } else if (user.role === "ACCOUNTANT") {
       router.replace("/accountant");
     } else if (user.role === "TEACHER") {
-      router.replace("/teacher/marks");
+      router.replace("/teacher/dashboard");
     } else if (user.role === "PARENT") {
       router.replace("/parent");
     } else {

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { LogOut, GraduationCap, ClipboardList, FileText, CalendarCheck, Table, Users, CalendarDays, BookOpen, Megaphone, KeyRound } from "lucide-react";
+import { LogOut, GraduationCap, ClipboardList, CalendarCheck, Users, CalendarDays, BookOpen, Megaphone, KeyRound, LayoutDashboard } from "lucide-react";
 
 const allowedRoles = ["TEACHER", "ADMIN"];
 
@@ -41,18 +41,21 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
 
   const tabs = [
     // ── All teachers ──
+    { href: "/teacher/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/teacher/marks", label: "Marks Entry", icon: ClipboardList },
     { href: "/teacher/homework", label: "Homework", icon: BookOpen },
     { href: "/teacher/exam-routine", label: "Exam Routine", icon: CalendarDays },
     { href: "/teacher/notices", label: "Notices", icon: Megaphone },
     // ── Class teachers only ──
+    // Report Card, Grade Sheet, and Observations are termly/occasional
+    // actions now reachable from the Dashboard's class card, so they don't
+    // need a permanent tab. Attendance stays — it's a daily action, and
+    // detouring through Dashboard every time would add friction to the
+    // most frequent thing a class teacher does.
     ...(isClassTeacher
       ? [
-          { href: "/teacher/my-class", label: "My Class", icon: FileText },
           { href: "/teacher/students", label: "My Students", icon: Users },
-          { href: "/teacher/grade-sheet", label: "Grade Sheet", icon: Table },
           { href: "/teacher/attendance", label: "Attendance", icon: CalendarCheck },
-          { href: "/teacher/observations", label: "Observations", icon: ClipboardList },
         ]
       : []),
   ];
