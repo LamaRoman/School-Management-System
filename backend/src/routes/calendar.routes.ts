@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
+import { revalidateWebsite } from "../services/websiteRevalidate.service";
 
 const router = Router();
 
@@ -88,6 +89,8 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     include: { createdBy: { select: { id: true, email: true } } },
   });
 
+  revalidateWebsite(schoolId, "calendar");
+
   res.status(201).json({ data: event });
 });
 
@@ -112,6 +115,8 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     include: { createdBy: { select: { id: true, email: true } } },
   });
 
+  revalidateWebsite(schoolId, "calendar");
+
   res.json({ data: updated });
 });
 
@@ -122,6 +127,9 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   await prisma.calendarEvent.findFirstOrThrow({ where: { id: req.params.id, schoolId } });
 
   await prisma.calendarEvent.delete({ where: { id: req.params.id } });
+
+  revalidateWebsite(schoolId, "calendar");
+
   res.json({ data: { message: "Event deleted" } });
 });
 

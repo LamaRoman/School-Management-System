@@ -47,6 +47,7 @@ import calendarRoutes from "./routes/calendar.routes";
 import masterCalendarRoutes from "./routes/masterCalendar.routes";
 import galleryRoutes from "./routes/gallery.routes";
 import publicGalleryRoutes from "./routes/publicGallery.routes";
+import publicCalendarRoutes from "./routes/publicCalendar.routes";
 import { isAllowedPublicOrigin } from "./services/publicOrigins.service";
 
 const app = express();
@@ -150,6 +151,7 @@ app.use("/calendar-events", calendarRoutes);
 app.use("/master-calendar", masterCalendarRoutes);
 app.use("/gallery", galleryRoutes);
 app.use("/public/gallery", publicGalleryRoutes);
+app.use("/public/calendar", publicCalendarRoutes);
 // Error handler (must be last)
 app.use(errorHandler);
 
