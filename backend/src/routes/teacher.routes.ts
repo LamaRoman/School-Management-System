@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
@@ -136,7 +137,25 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   }
 
   if (data.isActive !== undefined && teacher.user) {
-    await prisma.user.update({ where: { id: teacher.user.id }, data: { isActive: data.isActive } });
+    const userUpdate: Prisma.UserUpdateInput = { isActive: data.isActive };
+
+    // Reactivating without an explicit new email: restore the original email
+    // that deactivation mangled away, if it's not now taken by another account.
+    if (data.isActive && !data.email) {
+      const mangledPrefix = `deleted_${teacher.user.id}_`;
+      if (teacher.user.email.startsWith(mangledPrefix)) {
+        const originalEmail = teacher.user.email.slice(mangledPrefix.length);
+        const existingUser = await prisma.user.findUnique({ where: { email: originalEmail } });
+        if (existingUser && existingUser.id !== teacher.user.id) {
+          throw new AppError(
+            "Cannot restore original email — it is now used by another account. Please set a new email to reactivate."
+          );
+        }
+        userUpdate.email = originalEmail;
+      }
+    }
+
+    await prisma.user.update({ where: { id: teacher.user.id }, data: userUpdate });
     if (!data.isActive) invalidateUserCache(teacher.user.id);
   }
 
