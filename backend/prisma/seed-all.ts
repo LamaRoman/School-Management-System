@@ -327,9 +327,12 @@ async function main() {
       update: {},
       create: { id, name: data.name, nameNp: data.nameNp, email: data.email, phone: "98XXXXXXXX", schoolId: school.id },
     });
+    // Keyed on teacherId, not email. Keying on email meant that if the address
+    // was already held by anyone else, `update: {}` quietly did nothing and the
+    // teacher was left with no login account at all.
     await prisma.user.upsert({
-      where: { email: data.email },
-      update: {},
+      where: { teacherId: teacher.id },
+      update: { email: data.email, role: "TEACHER", schoolId: school.id, isActive: true },
       create: { email: data.email, password: hashedTeacherPw, role: "TEACHER", teacherId: teacher.id, schoolId: school.id, isActive: true },
     });
     return teacher;
@@ -420,11 +423,18 @@ async function main() {
           create: { id: sid, name: nd.name, nameNp: nd.nameNp, rollNo: i + 1, gender, dateOfBirth: randomBSDate(dobFrom, dobFrom + 1), fatherName: nd.fatherName, motherName: nd.motherName, guardianPhone: `98${String(Math.floor(10000000 + Math.random() * 90000000))}`, address: "Kathmandu, Nepal", sectionId: section.id, isActive: true, status: "ACTIVE" },
         });
 
-        // Student user
-        const userEmail = `${nd.name.toLowerCase().replace(/\s+/g, ".")}.${sid.slice(-6)}@school.edu.np`;
+        // Student user.
+        //
+        // The address uses the whole student id, not its last 6 characters.
+        // Names repeat across grades and the 6-char tail collided (III, VII and
+        // VIII all end "II-A-0"), so many students generated an address another
+        // student already held. Combined with an email-keyed upsert that meant
+        // `update: {}` silently no-opped and left ~80 students with no login.
+        const slug = sid.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const userEmail = `${nd.name.toLowerCase().replace(/\s+/g, ".")}.${slug}@school.edu.np`;
         await prisma.user.upsert({
-          where: { email: userEmail },
-          update: {},
+          where: { studentId: student.id },
+          update: { email: userEmail, role: "STUDENT", schoolId: school.id, isActive: true },
           create: { email: userEmail, password: hashedStudentPw, role: "STUDENT", studentId: student.id, schoolId: school.id, isActive: true },
         });
 
