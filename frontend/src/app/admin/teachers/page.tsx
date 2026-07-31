@@ -23,6 +23,21 @@ interface Teacher {
   user?: { id: string; email: string; isActive: boolean };
 }
 
+/**
+ * The address a teacher actually signs in with, or null if they have no account.
+ *
+ * Deactivation prefixes the stored email with `deleted_<userId>_` to free the
+ * address for reuse, which is an implementation detail that should never reach
+ * the admin table — it used to render raw for every deactivated teacher.
+ */
+function loginEmailOf(user?: { id: string; email: string }): string | null {
+  if (!user) return null;
+  const marker = `deleted_${user.id}_`;
+  let email = user.email;
+  while (email.startsWith(marker)) email = email.slice(marker.length);
+  return email;
+}
+
 function buildAssignmentSummary(assignments: Assignment[]): { label: string; isClassTeacher: boolean; subjects: string[] }[] {
   if (!assignments || assignments.length === 0) return [];
 
@@ -59,6 +74,8 @@ export default function AdminTeachersPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [resetPasswordId, setResetPasswordId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  // Only used when the teacher has no login account yet and one is being created.
+  const [resetEmail, setResetEmail] = useState("");
 
   const [form, setForm] = useState({
     name: "", nameNp: "", phone: "", email: "", password: "",
@@ -105,7 +122,10 @@ export default function AdminTeachersPage() {
       name: t.name,
       nameNp: t.nameNp || "",
       phone: t.phone || "",
-      email: t.email || t.user?.email || "",
+      // loginEmailOf, not user.email — a deactivated teacher with no email on
+      // the record would otherwise prefill the raw `deleted_<id>_` address and
+      // save it straight back.
+      email: t.email || loginEmailOf(t.user) || "",
       password: "",
     });
     setShowForm(true);
@@ -143,13 +163,37 @@ export default function AdminTeachersPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
+  const resetTarget = teachers.find((t) => t.id === resetPasswordId);
+  // Teachers created before login accounts were linked have no user row — the
+  // same action provisions one instead of just changing a password.
+  const needsAccount = !!resetTarget && !resetTarget.user;
+
+  const openResetPassword = (t: Teacher) => {
+    setResetPasswordId(t.id);
+    setNewPassword("");
+    setResetEmail(t.email || "");
+  };
+
+  const closeResetPassword = () => {
+    setResetPasswordId(null);
+    setNewPassword("");
+    setResetEmail("");
+  };
+
   const handleResetPassword = async () => {
     if (!resetPasswordId || !newPassword.trim()) return;
+    if (needsAccount && !resetEmail.trim()) {
+      toast.error("An email is required to create the login account");
+      return;
+    }
     try {
-      await api.post(`/teachers/${resetPasswordId}/reset-password`, { newPassword: newPassword.trim() });
-      toast.success("Password reset");
-      setResetPasswordId(null);
-      setNewPassword("");
+      const res = await api.post<{ message: string }>(`/teachers/${resetPasswordId}/reset-password`, {
+        newPassword: newPassword.trim(),
+        ...(needsAccount ? { email: resetEmail.trim() } : {}),
+      });
+      toast.success(res.message);
+      closeResetPassword();
+      fetchTeachers();
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -213,17 +257,34 @@ export default function AdminTeachersPage() {
       {/* Reset Password Modal */}
       {resetPasswordId && (
         <div className="card p-5 mb-6 border-2 border-amber-300 bg-amber-50">
-          <h3 className="font-semibold text-amber-800 mb-3">Reset Password</h3>
+          <h3 className="font-semibold text-amber-800 mb-3">
+            {needsAccount ? "Create Login Account" : "Reset Password"}
+          </h3>
           <p className="text-sm text-amber-700 mb-3">
-            Resetting password for: <b>{teachers.find((t) => t.id === resetPasswordId)?.name}</b>
+            {needsAccount ? (
+              <>
+                <b>{resetTarget?.name}</b> has no login account, so they cannot sign in. Set an
+                email and password to create one.
+              </>
+            ) : (
+              <>Resetting password for: <b>{resetTarget?.name}</b></>
+            )}
           </p>
           <div className="flex gap-3 items-end">
+            {needsAccount && (
+              <div className="flex-1">
+                <label className="label">Login Email</label>
+                <input className="input" type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="teacher@school.edu.np" />
+              </div>
+            )}
             <div className="flex-1">
-              <label className="label">New Password (min 6 chars)</label>
-              <input className="input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" />
+              <label className="label">{needsAccount ? "Password (min 6 chars)" : "New Password (min 6 chars)"}</label>
+              <input className="input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={needsAccount ? "Login password" : "New password"} />
             </div>
-            <button onClick={handleResetPassword} className="btn-primary text-sm">Reset</button>
-            <button onClick={() => { setResetPasswordId(null); setNewPassword(""); }} className="btn-ghost text-sm"><X size={14} /></button>
+            <button onClick={handleResetPassword} className="btn-primary text-sm">
+              {needsAccount ? "Create Account" : "Reset"}
+            </button>
+            <button onClick={closeResetPassword} className="btn-ghost text-sm"><X size={14} /></button>
           </div>
         </div>
       )}
@@ -254,7 +315,18 @@ export default function AdminTeachersPage() {
                       {t.nameNp && <span className="text-xs text-gray-400 ml-2">{t.nameNp}</span>}
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-gray-600">{t.user?.email || t.email || "—"}</td>
+                  <td className="px-5 py-3 text-gray-600">
+                    {loginEmailOf(t.user) ?? (
+                      // No account at all. Showing the teacher's contact address
+                      // bare used to make these records look perfectly normal.
+                      <div>
+                        <span className="text-gray-400 italic">{t.email || "—"}</span>
+                        <span className="block text-[10px] mt-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium w-fit">
+                          No login account
+                        </span>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-gray-600">{t.phone || "—"}</td>
                   <td className="px-5 py-3">
                     {summary.length === 0 ? (
@@ -283,13 +355,21 @@ export default function AdminTeachersPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
                       {t.isActive ? "Active" : "Inactive"}
                     </span>
+                    {/* The teacher record and the login account are separate rows
+                        and can drift apart — an active teacher whose account is
+                        disabled reads "Active" but cannot sign in. */}
+                    {t.isActive && t.user && !t.user.isActive && (
+                      <span className="block text-[10px] mt-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium w-fit mx-auto">
+                        Sign-in disabled
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => handleStartEdit(t)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary" title="Edit">
                         <Edit2 size={14} />
                       </button>
-                      <button onClick={() => { setResetPasswordId(t.id); setNewPassword(""); }} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" title="Reset Password">
+                      <button onClick={() => openResetPassword(t)} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" title={t.user ? "Reset Password" : "No login account — click to create one"}>
                         <KeyRound size={14} />
                       </button>
                       {t.isActive ? (

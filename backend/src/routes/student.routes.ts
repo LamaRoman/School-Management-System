@@ -7,6 +7,7 @@ import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../mi
 import { verifySection, verifyStudent } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
 import { getStudentDefaultPassword } from "../utils/studentPassword";
+import { mangleEmail, unmangleEmail } from "../utils/deactivatedEmail";
 import { Prisma } from "@prisma/client";
 
 const router = Router();
@@ -105,28 +106,71 @@ async function authorizeStudentRead(userId: string, role: string, studentId: str
 }
 
 /**
- * Auto-create a User account for a newly added student.
- * Email: firstname.lastname@school.edu.np (uuid suffix guarantees uniqueness in one query)
- * Default password: set via DEFAULT_STUDENT_PASSWORD env var (required in production)
+ * Login address for an auto-created student account.
+ * Email: firstname.lastname@school.edu.np (id suffix guarantees uniqueness in one query)
  */
-async function autoCreateStudentUser(studentId: string, studentName: string, schoolId: string): Promise<void> {
+function studentLoginEmail(studentId: string, studentName: string): string {
   const baseName = studentName.toLowerCase().trim().replace(/\s+/g, ".");
   // Use the studentId suffix to guarantee uniqueness without any DB lookup loop
-  const email = `${baseName}.${studentId.slice(-6)}@school.edu.np`;
+  return `${baseName}.${studentId.slice(-6)}@school.edu.np`;
+}
 
-  const defaultPassword = getStudentDefaultPassword();
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+/**
+ * Hash the default student password once per request, ahead of any transaction —
+ * bcrypt is slow enough that hashing inside one would risk the interactive
+ * transaction timeout on a bulk import.
+ *
+ * Returns null when account provisioning is deliberately switched off: in
+ * production with DEFAULT_STUDENT_PASSWORD unset, getStudentDefaultPassword()
+ * refuses the publicly-known fallback rather than handing every student the same
+ * guessable login. That case is intentional and creates the student without a
+ * login account. Every *other* failure is a real bug and must not be swallowed —
+ * that is what silently produced students who could never log in.
+ */
+function resolveStudentPassword(): string | null {
+  try {
+    return getStudentDefaultPassword();
+  } catch (err) {
+    // The only throw is the deliberate production refusal above.
+    console.warn("Skipping student login account:", (err as Error).message);
+    return null;
+  }
+}
 
-  await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-      role: "STUDENT",
-      studentId,
-      schoolId,
-      isActive: true,
-    },
-  });
+async function hashStudentPassword(): Promise<string | null> {
+  const defaultPassword = resolveStudentPassword();
+  return defaultPassword === null ? null : bcrypt.hash(defaultPassword, 10);
+}
+
+/** Data for the student's login row. Created in the same transaction as the student. */
+function studentUserData(
+  student: { id: string; name: string },
+  hashedPassword: string,
+  schoolId: string
+): Prisma.UserUncheckedCreateInput {
+  return {
+    email: studentLoginEmail(student.id, student.name),
+    password: hashedPassword,
+    role: "STUDENT",
+    studentId: student.id,
+    schoolId,
+    isActive: true,
+  };
+}
+
+/**
+ * A duplicate login email means the student would exist with no way to sign in,
+ * which is the failure this whole path is written to avoid. Surface it as a
+ * clear 409 instead of the generic "a record with this data already exists".
+ */
+function asLoginEmailConflict(err: unknown, studentName: string): unknown {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    return new AppError(
+      `Could not create a login account for "${studentName}" — the generated email is already in use. The student was not saved. Rename slightly or check for an existing record.`,
+      409
+    );
+  }
+  return err;
 }
 
 // ─── ROUTES ─────────────────────────────────────────────
@@ -243,13 +287,21 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     isActive: data.isActive,
     section: { connect: { id: data.sectionId } },
   };
-  const student = await prisma.student.create({ data: createData });
+  // Student and login account are created together — a student saved without a
+  // usable login just surfaces later as "invalid email or password".
+  const hashedPassword = await hashStudentPassword();
 
-  // Auto-create login account
+  let student: Awaited<ReturnType<typeof prisma.student.create>>;
   try {
-    await autoCreateStudentUser(student.id, student.name, schoolId);
+    student = await prisma.$transaction(async (tx) => {
+      const newStudent = await tx.student.create({ data: createData });
+      if (hashedPassword) {
+        await tx.user.create({ data: studentUserData(newStudent, hashedPassword, schoolId) });
+      }
+      return newStudent;
+    });
   } catch (err) {
-    console.error("Failed to auto-create student user:", err);
+    throw asLoginEmailConflict(err, data.name);
   }
 
   // Auto-create admission record so there is always a paper trail
@@ -295,32 +347,53 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
 
   await authorizeForSection(user, sectionId);
 
-  const created = await prisma.$transaction(
-  students.map((s) => prisma.student.create({ data: {
-      name: s.name,
-      nameNp: s.nameNp,
-      dateOfBirth: s.dateOfBirth,
-      rollNo: s.rollNo,
-      symbolNumber: s.symbolNumber,
-      gender: s.gender,
-      fatherName: s.fatherName,
-      motherName: s.motherName,
-      guardianName: s.guardianName,
-      guardianPhone: s.guardianPhone,
-      address: s.address,
-      photo: s.photo,
-      isActive: s.isActive ?? true,
-      section: { connect: { id: sectionId } },
-    } as Prisma.StudentCreateInput }))
+  // Hash every password up front — bcrypt is far too slow to run inside the
+  // transaction, where it would hold a pooled connection and risk the timeout.
+  // Resolved once so a disabled-provisioning warning isn't logged per student.
+  const defaultPassword = resolveStudentPassword();
+  const hashedPasswords = await Promise.all(
+    students.map(() => (defaultPassword === null ? null : bcrypt.hash(defaultPassword, 10)))
   );
 
-  for (const student of created) {
-    try {
-      await autoCreateStudentUser(student.id, student.name, schoolId);
-    } catch (err) {
-      console.error(`Failed to auto-create user for ${student.name}:`, err);
-    }
-  }
+  // Students and their login accounts go in together. This import was already
+  // all-or-nothing for the student rows; extending it to the user rows is what
+  // stops a partial import leaving students who can never sign in.
+  const created = await prisma.$transaction(
+    async (tx) => {
+      const rows = [];
+      for (const [i, s] of students.entries()) {
+        const newStudent = await tx.student.create({ data: {
+          name: s.name,
+          nameNp: s.nameNp,
+          dateOfBirth: s.dateOfBirth,
+          rollNo: s.rollNo,
+          symbolNumber: s.symbolNumber,
+          gender: s.gender,
+          fatherName: s.fatherName,
+          motherName: s.motherName,
+          guardianName: s.guardianName,
+          guardianPhone: s.guardianPhone,
+          address: s.address,
+          photo: s.photo,
+          isActive: s.isActive ?? true,
+          section: { connect: { id: sectionId } },
+        } as Prisma.StudentCreateInput });
+
+        const hashedPassword = hashedPasswords[i];
+        if (hashedPassword) {
+          try {
+            await tx.user.create({ data: studentUserData(newStudent, hashedPassword, schoolId) });
+          } catch (err) {
+            throw asLoginEmailConflict(err, s.name);
+          }
+        }
+        rows.push(newStudent);
+      }
+      return rows;
+    },
+    // A large import is many round trips; the 5s default is not enough.
+    { timeout: 30_000, maxWait: 10_000 }
+  );
 
   res.status(201).json({ data: created });
 });
@@ -342,10 +415,49 @@ router.put("/:id", authenticate, async (req, res) => {
     delete data.sectionId;
   }
 
-  const updated = await prisma.student.update({
-    where: { id: req.params.id },
-    data,
+  // Keep the login account in step with the student record. Without this a
+  // student deactivated via DELETE (which frees their email by mangling it)
+  // stayed locked out forever after being reactivated here — the student row
+  // read "Active" while the login still held a `deleted_<id>_` address.
+  //
+  // Validation reads happen first; the two writes then go in one transaction so
+  // they cannot drift apart the way the delete path used to.
+  let linkedUser: { id: string; email: string } | null = null;
+  let userUpdate: Prisma.UserUpdateInput | null = null;
+
+  if (data.isActive !== undefined) {
+    linkedUser = await prisma.user.findFirst({ where: { studentId: req.params.id } });
+    if (linkedUser) {
+      userUpdate = { isActive: data.isActive };
+
+      if (data.isActive) {
+        const originalEmail = unmangleEmail(linkedUser.id, linkedUser.email);
+        if (originalEmail !== linkedUser.email) {
+          const existing = await prisma.user.findUnique({ where: { email: originalEmail } });
+          if (existing && existing.id !== linkedUser.id) {
+            throw new AppError(
+              "Cannot restore this student's original login email — it is now used by another account.",
+              409
+            );
+          }
+          userUpdate.email = originalEmail;
+        }
+      }
+    }
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (linkedUser && userUpdate) {
+      await tx.user.update({ where: { id: linkedUser.id }, data: userUpdate });
+    }
+    return tx.student.update({ where: { id: req.params.id }, data });
   });
+
+  // After commit — this clears an in-memory cache, not database state. Busted in
+  // both directions: the cached active/inactive verdict lives for 60s, so
+  // skipping it on reactivation would 401 a student who has just been let back in.
+  if (linkedUser && data.isActive !== undefined) invalidateUserCache(linkedUser.id);
+
   res.json({ data: updated });
 });
 
@@ -396,22 +508,28 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   await verifyStudent(req.params.id, schoolId);
-  await prisma.student.update({
-    where: { id: req.params.id },
-    data: { isActive: false },
+  // Also deactivate the linked user account and free up the email — it stays
+  // unique in the DB, so a live account otherwise blocks it forever from being
+  // reused by a new/reactivated account. Both rows move together, so a failure
+  // cannot leave a deactivated student who can still log in.
+  const linkedUser = await prisma.user.findFirst({ where: { studentId: req.params.id } });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.student.update({
+      where: { id: req.params.id },
+      data: { isActive: false },
+    });
+
+    if (linkedUser) {
+      await tx.user.update({
+        where: { id: linkedUser.id },
+        data: { isActive: false, email: mangleEmail(linkedUser.id, linkedUser.email) },
+      });
+    }
   });
 
-  // Also deactivate the linked user account, bust the auth cache, and free up
-  // the email — it stays unique in the DB, so a live account otherwise blocks
-  // it forever from being reused by a new/reactivated account.
-  const linkedUser = await prisma.user.findFirst({ where: { studentId: req.params.id } });
-  if (linkedUser) {
-    await prisma.user.update({
-      where: { id: linkedUser.id },
-      data: { isActive: false, email: `deleted_${linkedUser.id}_${linkedUser.email}` },
-    });
-    invalidateUserCache(linkedUser.id);
-  }
+  // After commit — this clears an in-memory cache, not database state.
+  if (linkedUser) invalidateUserCache(linkedUser.id);
 
   res.json({ data: { message: "Student deactivated" } });
 });

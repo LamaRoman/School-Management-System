@@ -148,13 +148,22 @@ router.post("/login", async (req, res) => {
   if (!user || !user.isActive) {
     // Dummy compare so this path takes ~the same time as a real password check.
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    // Unknown emails are counted towards the lockout exactly like real ones, on
+    // purpose: if only real accounts could lock, an attacker could probe six bad
+    // passwords and read account existence off "locked" vs "invalid". The client
+    // therefore learns nothing — the distinction is logged server-side instead,
+    // which is where an admin asking "why can't this teacher sign in?" needs it.
     await recordFailedAttempt(email);
+    console.warn(
+      `[auth] Login rejected for ${email}: ${user ? "account is deactivated" : "no account exists with this email"}`
+    );
     throw new AppError("Invalid email or password", 401);
   }
 
   const validPassword = await bcrypt.compare(password, user.password);
   if (!validPassword) {
     await recordFailedAttempt(email);
+    console.warn(`[auth] Login rejected for ${email}: incorrect password`);
     throw new AppError("Invalid email or password", 401);
   }
 
