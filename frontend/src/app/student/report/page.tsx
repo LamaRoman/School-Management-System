@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
-import { GRADING_SCALE } from "@/lib/gradingScale";
+import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
 
 interface ColumnSettings {
   showPassMarks: boolean;
@@ -39,7 +39,7 @@ function getResult(overallGrade: string): { description: string; result: string 
   const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
   return {
     description: entry?.description || "—",
-    result: overallGrade === "NG" ? "Fail" : "Pass",
+    result: isPassingGrade(overallGrade) ? "Pass" : "Fail",
   };
 }
 
