@@ -8,6 +8,7 @@ import {
   calculatePercentage,
   calculateWeightedPercentage,
   calculateOverallGpa,
+  calculateOverallGpaWeighted,
   hasPassed,
 } from "../services/grading.service";
 import {
@@ -88,34 +89,77 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
 
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
   const hasPracticalSubjects = marks.some((m) => m.subject.fullPracticalMarks > 0);
+  const gradingStyle = student.section.grade.gradingStyle;
 
-  const subjects = marks.map((m) => {
-    const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-    const theory = m.theoryMarks || 0;
-    const practical = m.practicalMarks || 0;
-    const total = theory + practical;
-    const pct = calculatePercentage(total, fullMarks);
-    const gradeResult = getGradeFromPercentage(pct);
-    return {
-      subjectName: m.subject.name,
-      fullMarks,
-      passMarks: m.subject.passMarks,
-      theoryMarks: theory,
-      practicalMarks: practical,
-      totalMarks: total,
-      percentage: parseFloat(pct.toFixed(1)),
-      grade: gradeResult.grade,
-      gpa: gradeResult.gpa,
-      hasPassed: hasPassed(total, m.subject.passMarks),
-    };
-  });
+  let subjects: any[];
+  let overallGpa: number | null;
+  let overallPct: number;
+  let overallGradeLabel: string;
 
-  const gpas = subjects.map((s) => s.gpa);
-  const overallGpa = calculateOverallGpa(gpas);
-  const overallPct = parseFloat(
-    (subjects.reduce((a, s) => a + s.percentage, 0) / subjects.length).toFixed(1)
-  );
-  const overallGrade = getGradeFromPercentage(overallPct);
+  if (gradingStyle === "CREDIT_GRADE_BASED") {
+    // Credit-hour / grade-point style (SEE/NEB-like): Theory and Practical
+    // are each graded on their own full marks, then a Final Grade is derived
+    // from the combined percentage — algebraically the same as weighting the
+    // two component grade points by their share of full marks. See the
+    // Aug-2026 report-card design discussion for why this reduces cleanly.
+    subjects = marks.map((m) => {
+      const hasPracticalComponent = m.subject.fullPracticalMarks > 0;
+      const theoryResult = getGradeFromPercentage(
+        calculatePercentage(m.theoryMarks || 0, m.subject.fullTheoryMarks)
+      );
+      const practicalResult = hasPracticalComponent
+        ? getGradeFromPercentage(calculatePercentage(m.practicalMarks || 0, m.subject.fullPracticalMarks))
+        : null;
+
+      const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+      const total = (m.theoryMarks || 0) + (m.practicalMarks || 0);
+      const finalResult = getGradeFromPercentage(calculatePercentage(total, fullMarks));
+
+      return {
+        subjectName: m.subject.name,
+        creditHour: m.subject.creditHour,
+        theoryGrade: theoryResult.grade,
+        practicalGrade: practicalResult?.grade ?? null,
+        finalGrade: finalResult.grade,
+        gradePoint: finalResult.gpa,
+      };
+    });
+
+    overallGpa = calculateOverallGpaWeighted(
+      subjects.map((s) => ({ gpa: s.gradePoint, creditHour: s.creditHour }))
+    );
+    overallPct = 0; // not used by the credit-grade template
+    overallGradeLabel = "";
+  } else {
+    const marksSubjects = marks.map((m) => {
+      const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+      const theory = m.theoryMarks || 0;
+      const practical = m.practicalMarks || 0;
+      const total = theory + practical;
+      const pct = calculatePercentage(total, fullMarks);
+      const gradeResult = getGradeFromPercentage(pct);
+      return {
+        subjectName: m.subject.name,
+        fullMarks,
+        passMarks: m.subject.passMarks,
+        theoryMarks: theory,
+        practicalMarks: practical,
+        totalMarks: total,
+        percentage: parseFloat(pct.toFixed(1)),
+        grade: gradeResult.grade,
+        gpa: gradeResult.gpa,
+        hasPassed: hasPassed(total, m.subject.passMarks),
+      };
+    });
+    subjects = marksSubjects;
+
+    const gpas = marksSubjects.map((s) => s.gpa);
+    overallGpa = calculateOverallGpa(gpas);
+    overallPct = parseFloat(
+      (marksSubjects.reduce((a, s) => a + s.percentage, 0) / marksSubjects.length).toFixed(1)
+    );
+    overallGradeLabel = getGradeFromPercentage(overallPct).grade;
+  }
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
@@ -172,10 +216,11 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     examType: examType.name,
     paperSize: examType.paperSize,
     isTermReport: true,
+    gradingStyle,
     hasPractical: hasPracticalSubjects,
     subjects,
     overallPercentage: overallPct,
-    overallGrade: overallGrade.grade,
+    overallGrade: overallGradeLabel,
     overallGpa,
     rank,
     totalStudents,
@@ -255,12 +300,66 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
     };
   });
 
-  const gpas = finalSubjects.map((s) => s.gpa);
-  const overallGpa = calculateOverallGpa(gpas);
-  const overallPct = parseFloat(
-    (finalSubjects.reduce((a, s) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1)
-  );
-  const overallGrade = getGradeFromPercentage(overallPct);
+  // Credit-hour / grade-point style reshapes the annual report the same way
+  // buildTermReportData does for term reports — otherwise a grade set to
+  // CREDIT_GRADE_BASED would get the SEE-style term report but fall through
+  // to the marks-based template at year end.
+  //
+  // Grades are derived weighted-marks-first: each component's term marks are
+  // combined using the existing gradingPolicy weightages, and the resulting
+  // percentage is graded once. That matches how the marks-based annual report
+  // already consolidates terms, so both styles rank and pass/fail identically.
+  const gradingStyle = student.section.grade.gradingStyle;
+
+  let reportSubjects: any[];
+  let overallGpa: number | null;
+  let overallPct: number;
+  let overallGradeLabel: string;
+
+  if (gradingStyle === "CREDIT_GRADE_BASED") {
+    const weightedComponentPct = (subjectId: string, component: "theory" | "practical", componentFullMarks: number) =>
+      calculateWeightedPercentage(
+        policies.map((policy) => {
+          const mark = allMarks.find((m) => m.subjectId === subjectId && m.examTypeId === policy.examTypeId);
+          const obtained = component === "theory" ? mark?.theoryMarks || 0 : mark?.practicalMarks || 0;
+          return { obtained, fullMarks: componentFullMarks, weightage: policy.weightagePercent };
+        })
+      );
+
+    reportSubjects = subjects.map((subject, i) => {
+      // finalSubjects is built from `subjects` in order, so index i lines up.
+      const consolidatedSubject = finalSubjects[i];
+      const hasPracticalComponent = subject.fullPracticalMarks > 0;
+      const theoryPct = weightedComponentPct(subject.id, "theory", subject.fullTheoryMarks);
+      const practicalPct = hasPracticalComponent
+        ? weightedComponentPct(subject.id, "practical", subject.fullPracticalMarks)
+        : null;
+
+      return {
+        subjectName: subject.name,
+        creditHour: subject.creditHour,
+        theoryGrade: getGradeFromPercentage(theoryPct).grade,
+        practicalGrade: practicalPct === null ? null : getGradeFromPercentage(practicalPct).grade,
+        // Final grade comes from the already-consolidated weighted percentage
+        // across theory + practical — same value the marks-based report grades.
+        finalGrade: consolidatedSubject.grade,
+        gradePoint: consolidatedSubject.gpa,
+      };
+    });
+
+    overallGpa = calculateOverallGpaWeighted(
+      reportSubjects.map((s) => ({ gpa: s.gradePoint, creditHour: s.creditHour }))
+    );
+    overallPct = 0; // not used by the credit-grade template
+    overallGradeLabel = "";
+  } else {
+    reportSubjects = finalSubjects;
+    overallGpa = calculateOverallGpa(finalSubjects.map((s) => s.gpa));
+    overallPct = parseFloat(
+      (finalSubjects.reduce((a, s) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1)
+    );
+    overallGradeLabel = getGradeFromPercentage(overallPct).grade;
+  }
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId } },
@@ -331,10 +430,11 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
     examType: finalExamType?.name || "Final",
     paperSize: finalExamType?.paperSize || "A4",
     isTermReport: false,
+    gradingStyle,
     hasPractical: subjects.some((s) => s.fullPracticalMarks > 0),
-    subjects: finalSubjects,
+    subjects: reportSubjects,
     overallPercentage: overallPct,
-    overallGrade: overallGrade.grade,
+    overallGrade: overallGradeLabel,
     overallGpa,
     rank,
     totalStudents,

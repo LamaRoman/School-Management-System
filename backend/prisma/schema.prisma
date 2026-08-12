@@ -30,6 +30,14 @@ enum AttendanceStatus {
   ABSENT
 }
 
+// Report card style for a grade/class level.
+// MARKS_BASED: existing full-marks / pass-marks / theory+practical report (unchanged default).
+// CREDIT_GRADE_BASED: new credit-hour + letter-grade + grade-point report (SEE/NEB style).
+enum GradingStyle {
+  MARKS_BASED
+  CREDIT_GRADE_BASED
+}
+
 // ─── SCHOOL ─────────────────────────────────────────────
 
 model School {
@@ -123,6 +131,9 @@ model Grade {
   name           String
   displayOrder   Int          @map("display_order")
   academicYearId String       @map("academic_year_id")
+  // Which report card layout this grade/class level uses. Defaults to the
+  // existing marks-based report so current grades render exactly as before.
+  gradingStyle   GradingStyle @default(MARKS_BASED) @map("grading_style")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -168,6 +179,9 @@ model Subject {
   fullTheoryMarks    Int      @map("full_theory_marks")
   fullPracticalMarks Int      @default(0) @map("full_practical_marks")
   passMarks          Int      @map("pass_marks")
+  // Only used by grades with gradingStyle = CREDIT_GRADE_BASED. Harmless
+  // default for existing marks-based subjects that never read this field.
+  creditHour         Int      @default(4) @map("credit_hour")
   isOptional         Boolean  @default(false) @map("is_optional")
   displayOrder       Int      @default(0) @map("display_order")
   gradeId            String   @map("grade_id")

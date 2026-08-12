@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Printer, Download, ChevronLeft, Users } from "lucide-react";
-import { GRADING_SCALE } from "@/lib/gradingScale";
+import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
 
 interface ClassTeacherSection {
   assignmentId: string;
@@ -52,7 +52,7 @@ function getResult(overallGrade: string): { description: string; result: string 
   const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
   return {
     description: entry?.description || "—",
-    result: overallGrade === "NG" ? "Fail" : "Pass",
+    result: isPassingGrade(overallGrade) ? "Pass" : "Fail",
   };
 }
 
