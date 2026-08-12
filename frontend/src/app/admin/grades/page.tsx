@@ -6,14 +6,14 @@ import { Plus, Trash2, Users, Layers, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Section { id: string; name: string; _count: { students: number } }
-interface Grade { id: string; name: string; displayOrder: number; sections: Section[]; _count: { subjects: number; sections: number } }
+interface Grade { id: string; name: string; displayOrder: number; gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED"; sections: Section[]; _count: { subjects: number; sections: number } }
 
 export default function GradesPage() {
   const confirm = useConfirm();
   const [grades, setGrades] = useState<Grade[]>([]);
   const [activeYear, setActiveYear] = useState<any>(null);
   const [showGradeForm, setShowGradeForm] = useState(false);
-  const [gradeForm, setGradeForm] = useState({ name: "", displayOrder: 0 });
+  const [gradeForm, setGradeForm] = useState<{ name: string; displayOrder: number; gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED" }>({ name: "", displayOrder: 0, gradingStyle: "MARKS_BASED" });
   const [addingSectionFor, setAddingSectionFor] = useState<string | null>(null);
   const [sectionName, setSectionName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function GradesPage() {
       await api.post("/grades", { ...gradeForm, academicYearId: activeYear.id });
       toast.success("Grade added");
       setShowGradeForm(false);
-      setGradeForm({ name: "", displayOrder: grades.length });
+      setGradeForm({ name: "", displayOrder: grades.length, gradingStyle: "MARKS_BASED" });
       fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -51,6 +51,14 @@ export default function GradesPage() {
       setAddingSectionFor(null);
       setSectionName("");
       fetchData();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const updateGradingStyle = async (id: string, gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED") => {
+    try {
+      await api.put(`/grades/${id}`, { gradingStyle });
+      toast.success("Report style updated");
+      setGrades((prev) => prev.map((g) => (g.id === id ? { ...g, gradingStyle } : g)));
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -95,7 +103,7 @@ export default function GradesPage() {
           {grades.length === 0 && activeYear && (
             <button onClick={seedAllGrades} className="btn-outline text-xs">Quick: Add Nursery–X</button>
           )}
-          <button onClick={() => { setShowGradeForm(!showGradeForm); setGradeForm({ name: "", displayOrder: grades.length }); }} className="btn-primary">
+          <button onClick={() => { setShowGradeForm(!showGradeForm); setGradeForm({ name: "", displayOrder: grades.length, gradingStyle: "MARKS_BASED" }); }} className="btn-primary">
             <Plus size={16} /> Add Grade
           </button>
         </div>
@@ -131,6 +139,13 @@ export default function GradesPage() {
             <div className="w-28">
               <label className="label">Order</label>
               <input type="number" className="input" value={gradeForm.displayOrder} onChange={(e) => setGradeForm({ ...gradeForm, displayOrder: parseInt(e.target.value) || 0 })} />
+            </div>
+            <div className="min-w-[190px]">
+              <label className="label">Report Style</label>
+              <select className="input" value={gradeForm.gradingStyle} onChange={(e) => setGradeForm({ ...gradeForm, gradingStyle: e.target.value as "MARKS_BASED" | "CREDIT_GRADE_BASED" })}>
+                <option value="MARKS_BASED">Marks-based (Full/Pass Marks)</option>
+                <option value="CREDIT_GRADE_BASED">Credit Hour + Grade Point</option>
+              </select>
             </div>
             <div className="flex gap-2">
               <button type="submit" className="btn-primary text-sm">Save</button>
@@ -178,6 +193,19 @@ export default function GradesPage() {
                 >
                   <Trash2 size={14} />
                 </button>
+              </div>
+
+              {/* Report Style */}
+              <div className="px-5 pt-3">
+                <label className="text-[10px] text-gray-400 block mb-1">Report Card Style</label>
+                <select
+                  className="input text-xs py-1.5"
+                  value={grade.gradingStyle}
+                  onChange={(e) => updateGradingStyle(grade.id, e.target.value as "MARKS_BASED" | "CREDIT_GRADE_BASED")}
+                >
+                  <option value="MARKS_BASED">Marks-based (Full/Pass Marks)</option>
+                  <option value="CREDIT_GRADE_BASED">Credit Hour + Grade Point</option>
+                </select>
               </div>
 
               {/* Sections */}

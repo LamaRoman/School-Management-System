@@ -10,9 +10,17 @@ const router = Router();
 const subjectSchema = z.object({
   name: z.string().min(1),
   nameNp: z.string().optional(),
-  fullTheoryMarks: z.number().int().min(0),
+  // Every subject is theory-first: practical is an optional component added on
+  // top of theory, never a subject on its own. A practical-only subject
+  // (fullTheoryMarks = 0) is not a thing in our report cards, so reject it at
+  // the boundary rather than letting the templates render a meaningless
+  // theory grade for it.
+  fullTheoryMarks: z.number().int().min(1),
   fullPracticalMarks: z.number().int().min(0).default(0),
   passMarks: z.number().int().min(0),
+  // Only used for report rendering when the subject's grade has
+  // gradingStyle = CREDIT_GRADE_BASED. Harmless default for everyone else.
+  creditHour: z.number().int().min(1).default(4),
   isOptional: z.boolean().default(false),
   displayOrder: z.number().int().default(0),
   gradeId: z.string().min(1),
@@ -55,6 +63,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     fullTheoryMarks: data.fullTheoryMarks,
     fullPracticalMarks: data.fullPracticalMarks,
     passMarks: data.passMarks,
+    creditHour: data.creditHour,
     isOptional: data.isOptional,
     displayOrder: data.displayOrder,
     grade: { connect: { id: data.gradeId } },
@@ -82,6 +91,7 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
           fullTheoryMarks: sub.fullTheoryMarks,
           fullPracticalMarks: sub.fullPracticalMarks,
           passMarks: sub.passMarks,
+          creditHour: sub.creditHour,
           isOptional: sub.isOptional,
           displayOrder: sub.displayOrder || i + 1,
           grade: { connect: { id: gradeId } },

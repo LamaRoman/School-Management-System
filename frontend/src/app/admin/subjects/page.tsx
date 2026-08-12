@@ -7,13 +7,13 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Subject {
   id: string; name: string; nameNp?: string;
-  fullTheoryMarks: number; fullPracticalMarks: number; passMarks: number;
+  fullTheoryMarks: number; fullPracticalMarks: number; passMarks: number; creditHour: number;
   isOptional: boolean; displayOrder: number;
   grade: { name: string };
 }
 interface Grade { id: string; name: string; displayOrder: number }
 
-const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, isOptional: false, displayOrder: 0, gradeId: "" };
+const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, creditHour: 4, isOptional: false, displayOrder: 0, gradeId: "" };
 
 export default function SubjectsPage() {
   const confirm = useConfirm();
@@ -59,7 +59,7 @@ export default function SubjectsPage() {
   };
 
   const startEdit = (s: Subject) => {
-    setForm({ name: s.name, nameNp: s.nameNp || "", fullTheoryMarks: s.fullTheoryMarks, fullPracticalMarks: s.fullPracticalMarks, passMarks: s.passMarks, isOptional: s.isOptional, displayOrder: s.displayOrder, gradeId: selectedGrade });
+    setForm({ name: s.name, nameNp: s.nameNp || "", fullTheoryMarks: s.fullTheoryMarks, fullPracticalMarks: s.fullPracticalMarks, passMarks: s.passMarks, creditHour: s.creditHour, isOptional: s.isOptional, displayOrder: s.displayOrder, gradeId: selectedGrade });
     setEditId(s.id);
     setShowForm(true);
   };
@@ -108,7 +108,7 @@ export default function SubjectsPage() {
             </div>
             <div>
               <label className="label">Theory Full Marks</label>
-              <input type="number" className="input" value={form.fullTheoryMarks} onChange={(e) => setForm({ ...form, fullTheoryMarks: parseInt(e.target.value) || 0 })} required />
+              <input type="number" min={1} className="input" value={form.fullTheoryMarks} onChange={(e) => setForm({ ...form, fullTheoryMarks: parseInt(e.target.value) || 1 })} required />
             </div>
             <div>
               <label className="label">Practical Full Marks</label>
@@ -117,6 +117,10 @@ export default function SubjectsPage() {
             <div>
               <label className="label">Pass Marks</label>
               <input type="number" className="input" value={form.passMarks} onChange={(e) => setForm({ ...form, passMarks: parseInt(e.target.value) || 0 })} required />
+            </div>
+            <div>
+              <label className="label">Credit Hour</label>
+              <input type="number" min={1} className="input" value={form.creditHour} onChange={(e) => setForm({ ...form, creditHour: parseInt(e.target.value) || 1 })} title="Used only for grades set to the credit-hour/grade-point report style" />
             </div>
             <div>
               <label className="label">Order</label>
@@ -144,13 +148,14 @@ export default function SubjectsPage() {
               <th className="text-center px-5 py-3">Practical</th>
               <th className="text-center px-5 py-3">Full Marks</th>
               <th className="text-center px-5 py-3">Pass Marks</th>
+              <th className="text-center px-5 py-3">Credit Hr.</th>
               <th className="text-center px-5 py-3">Type</th>
               <th className="text-right px-5 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {subjects.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</td></tr>
+              <tr><td colSpan={9} className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</td></tr>
             ) : subjects.map((s, i) => (
               <tr key={s.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
                 <td className="px-5 py-3 text-gray-400">{i + 1}</td>
@@ -162,6 +167,7 @@ export default function SubjectsPage() {
                 <td className="px-5 py-3 text-center">{s.fullPracticalMarks || "—"}</td>
                 <td className="px-5 py-3 text-center font-semibold">{s.fullTheoryMarks + s.fullPracticalMarks}</td>
                 <td className="px-5 py-3 text-center">{s.passMarks}</td>
+                <td className="px-5 py-3 text-center">{s.creditHour}</td>
                 <td className="px-5 py-3 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${s.isOptional ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>
                     {s.isOptional ? "Optional" : "Compulsory"}
