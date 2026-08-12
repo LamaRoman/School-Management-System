@@ -468,7 +468,7 @@ export function buildReportCardHtml(
       </table>
     </div>`;
 
-  // Grading Scale (official Nepal CDC scale — single source of truth in grading.service.ts)
+  // Grading Scale (source of truth in grading.service.ts)
   const gradingScaleHtml = `
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">

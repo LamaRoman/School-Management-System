@@ -1,7 +1,10 @@
 /**
- * Nepal CDC Grading System (official SEE-style scale)
- * This is the SINGLE SOURCE OF TRUTH for all grade/GPA calculations.
- * Never duplicate this logic elsewhere.
+ * Grading system, matching the school's own printed grade sheets.
+ *
+ * This is the source of truth for all grade/GPA calculations on the server.
+ * One deliberate duplicate exists — frontend/src/lib/gradingScale.ts, which
+ * renders the scale in the student, teacher and admin pages. Change both
+ * together or the web UI and the PDFs will disagree.
  */
 
 export interface GradeResult {
@@ -104,8 +107,10 @@ export function calculateWeightedPercentage(
 
 /**
  * Calculate overall GPA from an array of subject GPAs.
- * Subjects graded NG (gpa === null) carry no grade point and are excluded
- * from the average. If every subject is NG, there is no overall GPA.
+ *
+ * Every band in GRADING_SCALE now carries a grade point, so in practice no
+ * subject is skipped. The null handling is kept as a guard for callers that
+ * pass an ungraded subject through; if nothing is graded there is no GPA.
  */
 export function calculateOverallGpa(subjectGpas: (number | null)[]): number | null {
   const graded = subjectGpas.filter((gpa): gpa is number => gpa !== null);
@@ -117,8 +122,8 @@ export function calculateOverallGpa(subjectGpas: (number | null)[]): number | nu
 /**
  * Calculate overall GPA weighted by each subject's credit hour.
  * Used only by the credit-hour/grade-point report style (Grade.gradingStyle
- * === "CREDIT_GRADE_BASED"). Subjects graded NG (gpa === null) are excluded
- * from the average, same convention as calculateOverallGpa above.
+ * === "CREDIT_GRADE_BASED"). Same null-handling convention as
+ * calculateOverallGpa above.
  */
 export function calculateOverallGpaWeighted(
   subjects: { gpa: number | null; creditHour: number }[]
