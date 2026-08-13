@@ -68,6 +68,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
         passed: obtained >= subject.passMarks,
+        isAbsent: mark?.isAbsent ?? false,
       };
     });
 

@@ -11,7 +11,7 @@ interface GradeSheetProps {
 }
 
 interface SubjectHeader { id: string; name: string; fullMarks: number; passMarks: number }
-interface SubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean }
+interface SubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean; isAbsent?: boolean }
 interface Row {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: SubjectResult[];
@@ -131,7 +131,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                             !s.passed ? "text-red-600 font-bold" : ""
                           }`}
                         >
-                          {value ?? "—"}
+                          {s.isAbsent ? "Ab" : (value ?? "—")}
                         </td>
                       );
                     })}

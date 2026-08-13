@@ -203,25 +203,33 @@ function cardMinHeight(isA5: boolean): string {
 }
 
 /**
- * A single tall row that carries the table's vertical column rules down
- * through the unused part of the page, the way the school's printed grade
- * sheet does. Left/right borders only — no top or bottom — so the empty area
- * reads as one blank region of a ruled form rather than a run of empty rows.
+ * Empty rows that carry the table's vertical column rules down through the
+ * unused part of the page, the way the school's printed grade sheet does.
  *
- * Because this soaks up the leftover height, everything below the table
- * (result summary, grading scale, remarks, signatures) lands at the same
- * position on every sheet regardless of how many subjects a student takes —
- * which is what makes a printed class set look uniform.
+ * The table targets a fixed slot count (A4 = 14, A5 = 12) rather than
+ * stretching to fill the entire page. With max ~12 subjects, this keeps a
+ * small ruled margin below the last subject while leaving room for the
+ * bottom section (Result, Grading Scale, signatures) to render at a
+ * comfortable size instead of being squeezed into whatever's left over.
  *
- * The column count is derived from the assembled header rather than
- * recomputed, so it cannot drift out of sync with the optional columns
- * (pass marks, %, grade, GPA, per-term columns).
+ * Each filler row uses the same cell padding as the real data rows, so its
+ * height matches. Left/right borders continue the column rules.
  */
-function buildTableFillerRow(theadInnerHtml: string, borderColor: string): string {
+function buildTableFillerRows(
+  theadInnerHtml: string,
+  borderColor: string,
+  subjectCount: number,
+  isA5: boolean,
+): string {
+  const targetRows = isA5 ? 9 : 11;
+  const fillerCount = Math.max(0, targetRows - subjectCount);
+  if (fillerCount === 0) return "";
   const columnCount = (theadInnerHtml.match(/<th\b/g) || []).length;
   if (columnCount === 0) return "";
-  const cell = `<td style="border-left:1px solid ${borderColor};border-right:1px solid ${borderColor};"></td>`;
-  return `<tr style="height:100%;">${cell.repeat(columnCount)}</tr>`;
+  const cellPad = isA5 ? "6px 3px" : "9px 8px";
+  const cell = `<td style="padding:${cellPad};border-left:1px solid ${borderColor};border-right:1px solid ${borderColor};">&nbsp;</td>`;
+  const row = `<tr>${cell.repeat(columnCount)}</tr>`;
+  return row.repeat(fillerCount);
 }
 
 /** Issue date, in BS, matching the printed sheet's "Date of Issue" field. */
@@ -306,21 +314,17 @@ export function buildReportCardHtml(
     info: isA5 ? "9px" : "10px",
     th: isA5 ? "8px" : "10px",
     td: isA5 ? "8px" : "10px",
-    footer: isA5 ? "8px" : "10px",
-    sig: isA5 ? "8px" : "9px",
-    overall: isA5 ? "8px" : "10px",
-    legend: isA5 ? "7px" : "8px",
+    footer: isA5 ? "9px" : "11px",
+    sig: isA5 ? "8px" : "10px",
+    overall: isA5 ? "9px" : "11px",
+    legend: isA5 ? "8px" : "9px",
   };
   const pad = {
     header: isA5 ? "8px 10px" : "12px 16px",
     info: isA5 ? "6px 10px" : "10px 16px",
-    // Vertical padding sets the subject-row height. Roomier than the other
-    // blocks on purpose: this is the table people actually read, and tight
-    // rows made it look cramped. Taller rows eat into the filler space, so
-    // the reportCard page-count tests bound how far this can go.
     cell: isA5 ? "6px 3px" : "9px 8px",
     cellCenter: isA5 ? "6px 2px" : "9px 4px",
-    bottom: isA5 ? "8px 10px" : "12px 16px",
+    bottom: isA5 ? "10px 10px" : "14px 16px",
   };
 
   // Term headers for final report
@@ -341,16 +345,24 @@ export function buildReportCardHtml(
       let dataCols = "";
 
       if (isTermReport) {
-        if (hasPractical) {
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.theoryMarks)}</td>`;
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.practicalMarks || "—")}</td>`;
+        if (s.isAbsent) {
+          if (hasPractical) {
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
+          }
+          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">Ab</td>`;
+        } else {
+          if (hasPractical) {
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.theoryMarks)}</td>`;
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.practicalMarks || "—")}</td>`;
+          }
+          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">${esc(s.totalMarks)}</td>`;
         }
-        dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">${esc(s.totalMarks)}</td>`;
       } else {
         dataCols = (s.terms || [])
           .map(
             (term: any) =>
-              `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(term.totalMarks)}</td>`,
+              `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${term.isAbsent ? "Ab" : esc(term.totalMarks)}</td>`,
           )
           .join("");
       }
@@ -450,7 +462,7 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">General Observation</caption>
-        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
+        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
       </table>
     </div>`
       : "";
@@ -460,11 +472,11 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallPercentage)}%</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.description)}</td></tr>
-        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
-        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? t.positive : t.accent};">${esc(divResult.result)}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallPercentage)}%</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.description)}</td></tr>
+        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
+        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? t.positive : t.accent};">${esc(divResult.result)}</td></tr>
       </table>
     </div>`;
 
@@ -473,7 +485,7 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
-        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
+        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
       </table>
     </div>`;
 
@@ -582,12 +594,7 @@ export function buildReportCardHtml(
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;padding:${pad.info};background:${t.infoBg};border-bottom:1px solid ${t.border};">
       ${infoRows}
     </div>
-    <!-- flex:1 makes the subject table claim the leftover page height, and the
-         filler row inside it turns that space into ruled columns. It must be
-         flex:1 and not height:100% — a percentage height on a flex item does
-         not resolve here, leaving the table at its content height and the
-         space blank (verified in Chrome 146). -->
-    <table style="flex:1;">
+    <table>
       <thead>
         <tr style="background:${t.theadBg};">
           ${theadHtml}
@@ -595,19 +602,21 @@ export function buildReportCardHtml(
       </thead>
       <tbody>
         ${subjectRows}
-        ${buildTableFillerRow(theadHtml, t.border)}
+        ${buildTableFillerRows(theadHtml, t.border, (reportData.subjects || []).length, isA5)}
       </tbody>
     </table>
-    <div style="padding:${pad.bottom};border-top:2px solid ${t.primary};">
-      ${bottomInfoHtml}
-      <div style="display:flex;gap:${isA5 ? "8px" : "16px"};flex-wrap:wrap;margin-bottom:8px;">
-        ${observationHtml}
-        ${resultSummaryHtml}
-        ${gradingScaleHtml}
+    <div style="flex:1;padding:${pad.bottom};border-top:2px solid ${t.primary};display:flex;flex-direction:column;justify-content:space-between;">
+      <div>
+        ${bottomInfoHtml}
+        <div style="display:flex;gap:${isA5 ? "12px" : "20px"};flex-wrap:wrap;margin-bottom:8px;">
+          ${observationHtml}
+          ${resultSummaryHtml}
+          ${gradingScaleHtml}
+        </div>
+        ${commentsHtml}
+        ${promotionHtml}
       </div>
-      ${commentsHtml}
-      ${promotionHtml}
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:${isA5 ? "28px" : "40px"};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:${isA5 ? "16px" : "24px"};">
         ${issueDateHtml(fs.sig)}
         ${["Class Teacher", "Exam Coordinator", "Principal"].map((role) => `<div style="text-align:center;min-width:${isA5 ? "70px" : "100px"};"><div style="border-bottom:1px solid ${t.border};height:${isA5 ? "14px" : "20px"};margin-bottom:3px;"></div><span style="font-size:${fs.sig};font-weight:600;">${role}</span></div>`).join("")}
       </div>
@@ -648,20 +657,16 @@ function buildCreditGradeReportCardHtml(
     info: isA5 ? "9px" : "10px",
     th: isA5 ? "8px" : "10px",
     td: isA5 ? "8px" : "10px",
-    footer: isA5 ? "8px" : "10px",
-    sig: isA5 ? "8px" : "9px",
-    legend: isA5 ? "7px" : "8px",
+    footer: isA5 ? "9px" : "11px",
+    sig: isA5 ? "8px" : "10px",
+    legend: isA5 ? "8px" : "9px",
   };
   const pad = {
     header: isA5 ? "8px 10px" : "12px 16px",
     info: isA5 ? "6px 10px" : "10px 16px",
-    // Vertical padding sets the subject-row height. Roomier than the other
-    // blocks on purpose: this is the table people actually read, and tight
-    // rows made it look cramped. Taller rows eat into the filler space, so
-    // the reportCard page-count tests bound how far this can go.
     cell: isA5 ? "6px 3px" : "9px 8px",
     cellCenter: isA5 ? "6px 2px" : "9px 4px",
-    bottom: isA5 ? "8px 10px" : "12px 16px",
+    bottom: isA5 ? "10px 10px" : "14px 16px",
   };
 
   const hasPracticalCol =
@@ -673,15 +678,15 @@ function buildCreditGradeReportCardHtml(
       const bg = i % 2 === 0 ? "#ffffff" : t.altRow;
       let midCols = "";
       if (hasPracticalCol) {
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.theoryGrade)}</td>`;
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.practicalGrade || "—")}</td>`;
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.theoryGrade)}</td>`;
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.practicalGrade || "—")}</td>`;
       }
       let resultCols = "";
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.finalGrade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "Ab" : esc(s.finalGrade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gradePoint)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.gradePoint)}</td>`;
       }
       return `<tr style="background:${bg};">
         <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${i + 1}</td>
@@ -723,8 +728,8 @@ function buildCreditGradeReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa ?? "—")}</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${anyFailed ? t.accent : t.positive};">${anyFailed ? "Fail" : "Pass"}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa ?? "—")}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${anyFailed ? t.accent : t.positive};">${anyFailed ? "Fail" : "Pass"}</td></tr>
       </table>
     </div>`;
 
@@ -732,7 +737,7 @@ function buildCreditGradeReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
-        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
+        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
       </table>
     </div>`;
 
@@ -742,7 +747,7 @@ function buildCreditGradeReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">General Observation</caption>
-        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:2px 6px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
+        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
       </table>
     </div>`
       : "";
@@ -857,7 +862,7 @@ function buildCreditGradeReportCardHtml(
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;padding:${pad.info};background:${t.infoBg};border-bottom:1px solid ${t.border};">
       ${infoRows}
     </div>
-    <table style="flex:1;">
+    <table>
       <thead>
         <tr style="background:${t.theadBg};">
           ${theadHtml}
@@ -865,19 +870,21 @@ function buildCreditGradeReportCardHtml(
       </thead>
       <tbody>
         ${subjectRows}
-        ${buildTableFillerRow(theadHtml, t.border)}
+        ${buildTableFillerRows(theadHtml, t.border, (reportData.subjects || []).length, isA5)}
       </tbody>
     </table>
-    <div style="padding:${pad.bottom};border-top:2px solid ${t.primary};">
-      ${bottomInfoHtml}
-      <div style="display:flex;gap:${isA5 ? "8px" : "16px"};flex-wrap:wrap;margin-bottom:8px;">
-        ${observationHtml}
-        ${resultSummaryHtml}
-        ${gradingScaleHtml}
+    <div style="flex:1;padding:${pad.bottom};border-top:2px solid ${t.primary};display:flex;flex-direction:column;justify-content:space-between;">
+      <div>
+        ${bottomInfoHtml}
+        <div style="display:flex;gap:${isA5 ? "12px" : "20px"};flex-wrap:wrap;margin-bottom:8px;">
+          ${observationHtml}
+          ${resultSummaryHtml}
+          ${gradingScaleHtml}
+        </div>
+        ${commentsHtml}
+        ${promotionHtml}
       </div>
-      ${commentsHtml}
-      ${promotionHtml}
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:${isA5 ? "28px" : "40px"};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:${isA5 ? "16px" : "24px"};">
         ${issueDateHtml(fs.sig)}
         ${["Class Teacher", "Exam Coordinator", "Principal"].map((role) => `<div style="text-align:center;min-width:${isA5 ? "70px" : "100px"};"><div style="border-bottom:1px solid ${t.border};height:${isA5 ? "14px" : "20px"};margin-bottom:3px;"></div><span style="font-size:${fs.sig};font-weight:600;">${role}</span></div>`).join("")}
       </div>

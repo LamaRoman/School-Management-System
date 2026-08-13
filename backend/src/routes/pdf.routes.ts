@@ -122,6 +122,7 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
         practicalGrade: practicalResult?.grade ?? null,
         finalGrade: finalResult.grade,
         gradePoint: finalResult.gpa,
+        isAbsent: m.isAbsent,
       };
     });
 
@@ -149,6 +150,7 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
         hasPassed: hasPassed(total, m.subject.passMarks),
+        isAbsent: m.isAbsent,
       };
     });
     subjects = marksSubjects;
@@ -276,6 +278,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
         percentage: parseFloat(pct.toFixed(1)),
         weightage: policy.weightagePercent,
         weightedContribution: parseFloat((pct * (policy.weightagePercent / 100)).toFixed(1)),
+        isAbsent: mark?.isAbsent ?? false,
       };
     });
 
@@ -335,15 +338,17 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
         ? weightedComponentPct(subject.id, "practical", subject.fullPracticalMarks)
         : null;
 
+      const subjectMarks = allMarks.filter((m) => m.subjectId === subject.id);
+      const allAbsent = subjectMarks.length > 0 && subjectMarks.every((m) => m.isAbsent);
+
       return {
         subjectName: subject.name,
         creditHour: subject.creditHour,
         theoryGrade: getGradeFromPercentage(theoryPct).grade,
         practicalGrade: practicalPct === null ? null : getGradeFromPercentage(practicalPct).grade,
-        // Final grade comes from the already-consolidated weighted percentage
-        // across theory + practical — same value the marks-based report grades.
         finalGrade: consolidatedSubject.grade,
         gradePoint: consolidatedSubject.gpa,
+        isAbsent: allAbsent,
       };
     });
 

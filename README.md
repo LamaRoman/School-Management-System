@@ -79,12 +79,13 @@ npx expo start
 
 ## Features
 
-- Configurable grading (Nepal CDC: A+ to E, GPA 4.0–0.8)
+- Two report card styles per grade: marks-based (A+ to E, GPA 4.0–0.8) or credit-hour/grade-point (SEE/NEB-style, GPA weighted by subject credit hours)
 - Weightage-based final results (percentage-first method)
+- Absent marks shown as "Ab" instead of 0, both in the app and on printed report cards
 - Bikram Sambat date system
 - A4/A5 paper size per exam type
-- Color and B&W print support
-- Conditional practical columns
+- Color and genuinely ink-friendly B&W print support (line-art, no solid fills)
+- Conditional practical columns — subjects without a practical component don't show one
 
 ## Testing
 

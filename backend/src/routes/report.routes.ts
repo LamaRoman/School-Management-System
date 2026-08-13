@@ -325,6 +325,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
         percentage: parseFloat(pct.toFixed(1)),
         weightage: policy.weightagePercent,
         weightedContribution: parseFloat((pct * (policy.weightagePercent / 100)).toFixed(1)),
+        isAbsent: mark?.isAbsent ?? false,
       };
     });
 
