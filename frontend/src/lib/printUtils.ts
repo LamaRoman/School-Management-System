@@ -245,7 +245,7 @@ ${schoolHeaderHtml(school, headerSettings)}
 // ─── Grade Sheet Print ──────────────────────────────────────────────────────
 
 interface GradeSheetSubject { id: string; name: string; fullMarks: number }
-interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean }
+interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean; isAbsent?: boolean }
 interface GradeSheetRow {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: GradeSheetSubjectResult[];
@@ -267,7 +267,7 @@ export async function printGradeSheet(data: {
     const subjectCells = row.subjects.map(s => {
       const value = isFinal ? s.weightedPercentage : s.obtained;
       const style = !s.passed ? 'color:#dc2626;font-weight:700' : '';
-      return `<td class="text-center" style="${style}">${value ?? "—"}</td>`;
+      return `<td class="text-center" style="${style}">${s.isAbsent ? "Ab" : (value ?? "—")}</td>`;
     }).join("");
 
     return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9f9f9'}">

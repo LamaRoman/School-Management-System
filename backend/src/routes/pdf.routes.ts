@@ -104,6 +104,17 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     // Aug-2026 report-card design discussion for why this reduces cleanly.
     subjects = marks.map((m) => {
       const hasPracticalComponent = m.subject.fullPracticalMarks > 0;
+      if (m.isAbsent) {
+        return {
+          subjectName: m.subject.name,
+          creditHour: m.subject.creditHour,
+          theoryGrade: "NG",
+          practicalGrade: hasPracticalComponent ? "NG" : null,
+          finalGrade: "NG",
+          gradePoint: null,
+          isAbsent: true,
+        };
+      }
       const theoryResult = getGradeFromPercentage(
         calculatePercentage(m.theoryMarks || 0, m.subject.fullTheoryMarks)
       );
@@ -122,6 +133,7 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
         practicalGrade: practicalResult?.grade ?? null,
         finalGrade: finalResult.grade,
         gradePoint: finalResult.gpa,
+        isAbsent: m.isAbsent,
       };
     });
 
@@ -133,6 +145,21 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
   } else {
     const marksSubjects = marks.map((m) => {
       const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+      if (m.isAbsent) {
+        return {
+          subjectName: m.subject.name,
+          fullMarks,
+          passMarks: m.subject.passMarks,
+          theoryMarks: 0,
+          practicalMarks: 0,
+          totalMarks: 0,
+          percentage: 0,
+          grade: "NG",
+          gpa: null,
+          hasPassed: false,
+          isAbsent: true,
+        };
+      }
       const theory = m.theoryMarks || 0;
       const practical = m.practicalMarks || 0;
       const total = theory + practical;
@@ -149,16 +176,18 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
         hasPassed: hasPassed(total, m.subject.passMarks),
+        isAbsent: m.isAbsent,
       };
     });
     subjects = marksSubjects;
 
     const gpas = marksSubjects.map((s) => s.gpa);
     overallGpa = calculateOverallGpa(gpas);
-    overallPct = parseFloat(
-      (marksSubjects.reduce((a, s) => a + s.percentage, 0) / marksSubjects.length).toFixed(1)
-    );
-    overallGradeLabel = getGradeFromPercentage(overallPct).grade;
+    const gradedSubjects = marksSubjects.filter((s) => !s.isAbsent);
+    overallPct = gradedSubjects.length > 0
+      ? parseFloat((gradedSubjects.reduce((a, s) => a + s.percentage, 0) / gradedSubjects.length).toFixed(1))
+      : 0;
+    overallGradeLabel = gradedSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
   const attendance = await prisma.attendance.findUnique({
@@ -276,8 +305,24 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
         percentage: parseFloat(pct.toFixed(1)),
         weightage: policy.weightagePercent,
         weightedContribution: parseFloat((pct * (policy.weightagePercent / 100)).toFixed(1)),
+        isAbsent: mark?.isAbsent ?? false,
       };
     });
+
+    const allTermsAbsent = terms.every((t: any) => t.isAbsent);
+    if (allTermsAbsent) {
+      return {
+        subjectName: subject.name,
+        fullMarks,
+        passMarks: subject.passMarks,
+        terms,
+        weightedPercentage: 0,
+        grade: "NG",
+        gpa: null,
+        hasPassed: false,
+        isAbsent: true,
+      };
+    }
 
     const weightedPct = calculateWeightedPercentage(
       policies.map((policy) => {
@@ -297,6 +342,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(weightedPct, (subject.passMarks / fullMarks) * 100),
+      isAbsent: false,
     };
   });
 
@@ -335,15 +381,29 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
         ? weightedComponentPct(subject.id, "practical", subject.fullPracticalMarks)
         : null;
 
+      const subjectMarks = allMarks.filter((m) => m.subjectId === subject.id);
+      const allAbsent = subjectMarks.length > 0 && subjectMarks.every((m) => m.isAbsent);
+
+      if (allAbsent) {
+        return {
+          subjectName: subject.name,
+          creditHour: subject.creditHour,
+          theoryGrade: "NG",
+          practicalGrade: hasPracticalComponent ? "NG" : null,
+          finalGrade: "NG",
+          gradePoint: null,
+          isAbsent: true,
+        };
+      }
+
       return {
         subjectName: subject.name,
         creditHour: subject.creditHour,
         theoryGrade: getGradeFromPercentage(theoryPct).grade,
         practicalGrade: practicalPct === null ? null : getGradeFromPercentage(practicalPct).grade,
-        // Final grade comes from the already-consolidated weighted percentage
-        // across theory + practical — same value the marks-based report grades.
         finalGrade: consolidatedSubject.grade,
         gradePoint: consolidatedSubject.gpa,
+        isAbsent: false,
       };
     });
 
@@ -354,11 +414,12 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
     overallGradeLabel = "";
   } else {
     reportSubjects = finalSubjects;
-    overallGpa = calculateOverallGpa(finalSubjects.map((s) => s.gpa));
-    overallPct = parseFloat(
-      (finalSubjects.reduce((a, s) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1)
-    );
-    overallGradeLabel = getGradeFromPercentage(overallPct).grade;
+    overallGpa = calculateOverallGpa(finalSubjects.map((s: any) => s.gpa));
+    const gradedFinalSubjects = finalSubjects.filter((s: any) => !s.isAbsent);
+    overallPct = gradedFinalSubjects.length > 0
+      ? parseFloat((gradedFinalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / gradedFinalSubjects.length).toFixed(1))
+      : 0;
+    overallGradeLabel = gradedFinalSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
   const attendance = await prisma.attendance.findUnique({

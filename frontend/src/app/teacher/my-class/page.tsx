@@ -83,6 +83,7 @@ function ReportCard({
 
   const hasPractical = reportData.hasPractical && cols.showTheoryPrac;
   const divResult = getResult(reportData.overallGrade);
+  const anyAbsent = reportData.subjects?.some((s: any) => s.isAbsent) ?? false;
 
   return (
     <div className="bg-white border-2 rounded" style={{ borderColor: t.primary }}>
@@ -166,22 +167,22 @@ function ReportCard({
               {cols.showPassMarks && <td className="p-2 border text-center" style={{ borderColor: t.border, color: t.pct }}>{s.passMarks}</td>}
               {reportData.isTermReport ? (
                 <>
-                  {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.theoryMarks}</td>}
-                  {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.practicalMarks || "—"}</td>}
-                  <td className="p-2 border text-center font-semibold" style={{ borderColor: t.border }}>{s.totalMarks}</td>
+                  {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : s.theoryMarks}</td>}
+                  {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : (s.practicalMarks || "—")}</td>}
+                  <td className="p-2 border text-center font-semibold" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : s.totalMarks}</td>
                 </>
               ) : (
                 s.terms?.map((term: any, j: number) => (
-                  <td key={j} className="p-2 border text-center" style={{ borderColor: t.border }}>{term.totalMarks}</td>
+                  <td key={j} className="p-2 border text-center" style={{ borderColor: t.border }}>{term.isAbsent ? "Ab" : term.totalMarks}</td>
                 ))
               )}
               {cols.showPercentage && (
                 <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>
-                  {reportData.isTermReport ? s.percentage : s.weightedPercentage}
+                  {s.isAbsent ? "NG" : (reportData.isTermReport ? s.percentage : s.weightedPercentage)}
                 </td>
               )}
-              {cols.showGrade && <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>{s.grade}</td>}
-              {cols.showGpa && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.gpa}</td>}
+              {cols.showGrade && <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>{s.isAbsent ? "NG" : s.grade}</td>}
+              {cols.showGpa && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "NG" : s.gpa}</td>}
             </tr>
           ))}
         </tbody>
@@ -255,7 +256,7 @@ function ReportCard({
                 )}
                 <tr>
                   <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Result</td>
-                  <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: divResult.result === "Pass" ? "#15803d" : t.accent }}>{divResult.result}</td>
+                  <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: anyAbsent ? t.accent : (divResult.result === "Pass" ? "#15803d" : t.accent) }}>{anyAbsent ? "Incomplete" : divResult.result}</td>
                 </tr>
               </tbody>
             </table>
@@ -273,6 +274,14 @@ function ReportCard({
                     <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.gpa}</td>
                   </tr>
                 ))}
+                <tr>
+                  <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>NG</td>
+                  <td className="border px-2 py-1" style={{ borderColor: t.border }} colSpan={2}>Not Graded</td>
+                </tr>
+                <tr>
+                  <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Ab</td>
+                  <td className="border px-2 py-1" style={{ borderColor: t.border }} colSpan={2}>Absent</td>
+                </tr>
               </tbody>
             </table>
           </div>

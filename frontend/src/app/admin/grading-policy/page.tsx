@@ -166,7 +166,7 @@ export default function GradingPolicyPage() {
 
       {/* Official grading scale reference */}
       <div className="card p-6 mt-6">
-        <h2 className="text-lg font-display font-bold text-primary">Grading Scale (Nepal CDC)</h2>
+        <h2 className="text-lg font-display font-bold text-primary">Grading Scale</h2>
         <p className="text-sm text-gray-500 mt-1 mb-4">
           Every subject percentage is converted to a letter grade and grade point using this fixed scale.
           Grade sheets and report cards use it automatically — it isn&apos;t configurable per grade.
@@ -194,8 +194,9 @@ export default function GradingPolicyPage() {
           </table>
         </div>
         <p className="text-xs text-gray-400 mt-3">
-          Overall GPA is the average of grade points across subjects. Subjects graded NG (below 35%) have no grade point
-          and are excluded from that average.
+          Overall GPA is the average of grade points across subjects — weighted by credit hour for classes using the
+          credit-hour report style. Every band down to 0% carries a grade point, so no subject is left out of that
+          average.
         </p>
       </div>
     </div>
