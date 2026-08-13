@@ -371,13 +371,13 @@ export function buildReportCardHtml(
 
       let resultCols = "";
       if (cols.showPercentage) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(pctValue)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(pctValue)}</td>`;
       }
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.grade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(s.grade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gpa)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.gpa)}</td>`;
       }
 
       let passMark = "";
@@ -436,6 +436,7 @@ export function buildReportCardHtml(
           ${resultHeaders}`;
 
   // Result summary (description + pass/fail)
+  const anyAbsent = (reportData.subjects || []).some((s: any) => s.isAbsent);
   const divResult = getResultSummary(reportData.overallGrade);
 
   // Rank + Attendance
@@ -476,7 +477,7 @@ export function buildReportCardHtml(
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.description)}</td></tr>
         ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
         ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${divResult.result === "Pass" ? t.positive : t.accent};">${esc(divResult.result)}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${anyAbsent ? t.accent : (divResult.result === "Pass" ? t.positive : t.accent)};">${anyAbsent ? "Incomplete" : esc(divResult.result)}</td></tr>
       </table>
     </div>`;
 
@@ -486,6 +487,8 @@ export function buildReportCardHtml(
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
         ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">NG</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Not Graded</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Ab</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Absent</td></tr>
       </table>
     </div>`;
 
@@ -678,15 +681,17 @@ function buildCreditGradeReportCardHtml(
       const bg = i % 2 === 0 ? "#ffffff" : t.altRow;
       let midCols = "";
       if (hasPracticalCol) {
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.theoryGrade)}</td>`;
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.practicalGrade || "—")}</td>`;
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.theoryGrade)}</td>`;
+        // A theory-only subject has no practical column value even when absent
+        // (practicalGrade is null); keep the structural "—" rather than NG.
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.practicalGrade === null ? "—" : (s.isAbsent ? "NG" : esc(s.practicalGrade))}</td>`;
       }
       let resultCols = "";
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "Ab" : esc(s.finalGrade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(s.finalGrade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.gradePoint)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.gradePoint)}</td>`;
       }
       return `<tr style="background:${bg};">
         <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${i + 1}</td>
@@ -721,15 +726,18 @@ function buildCreditGradeReportCardHtml(
   // A student fails the term if any subject landed in a failing band — see
   // FAILING_GRADES in grading.service. Keyed off the grade rather than a
   // percentage because the credit-grade payload carries grades, not marks.
-  const anyFailed = (reportData.subjects || []).some(
-    (s: any) => !isPassingGrade(s.finalGrade),
+  const anyAbsentCG = (reportData.subjects || []).some((s: any) => s.isAbsent);
+  const anyFailed = !anyAbsentCG && (reportData.subjects || []).some(
+    (s: any) => !s.isAbsent && !isPassingGrade(s.finalGrade),
   );
+  const cgResult = anyAbsentCG ? "Incomplete" : (anyFailed ? "Fail" : "Pass");
+  const cgResultColor = cgResult === "Pass" ? t.positive : t.accent;
   const resultSummaryHtml = `
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa ?? "—")}</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${anyFailed ? t.accent : t.positive};">${anyFailed ? "Fail" : "Pass"}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${cgResultColor};">${cgResult}</td></tr>
       </table>
     </div>`;
 
@@ -738,6 +746,8 @@ function buildCreditGradeReportCardHtml(
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
         ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">NG</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Not Graded</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Ab</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Absent</td></tr>
       </table>
     </div>`;
 

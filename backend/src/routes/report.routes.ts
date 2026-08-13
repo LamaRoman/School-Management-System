@@ -199,6 +199,22 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
   const subjects = marks.map((m) => {
     const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+    if (m.isAbsent) {
+      return {
+        subjectName: m.subject.name,
+        subjectNameNp: m.subject.nameNp,
+        fullMarks,
+        passMarks: m.subject.passMarks,
+        theoryMarks: 0,
+        practicalMarks: 0,
+        totalMarks: 0,
+        percentage: 0,
+        grade: "NG",
+        gpa: null,
+        hasPassed: false,
+        isAbsent: true,
+      };
+    }
     const theory = m.theoryMarks || 0;
     const practical = m.practicalMarks || 0;
     const total = theory + practical;
@@ -217,16 +233,17 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(total, m.subject.passMarks),
-      isAbsent: m.isAbsent,
+      isAbsent: false,
     };
   });
 
   const gpas = subjects.map((s) => s.gpa);
   const overallGpa = calculateOverallGpa(gpas);
-  const overallPct = parseFloat(
-    (subjects.reduce((a, s) => a + s.percentage, 0) / subjects.length).toFixed(1)
-  );
-  const overallGrade = getGradeFromPercentage(overallPct);
+  const gradedSubjects = subjects.filter((s) => !s.isAbsent);
+  const overallPct = gradedSubjects.length > 0
+    ? parseFloat((gradedSubjects.reduce((a, s) => a + s.percentage, 0) / gradedSubjects.length).toFixed(1))
+    : 0;
+  const overallGrade = gradedSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
@@ -329,6 +346,22 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
       };
     });
 
+    const allTermsAbsent = terms.every((t: any) => t.isAbsent);
+    if (allTermsAbsent) {
+      return {
+        subjectName: subject.name,
+        subjectNameNp: subject.nameNp,
+        fullMarks,
+        passMarks: subject.passMarks,
+        terms,
+        weightedPercentage: 0,
+        grade: "NG",
+        gpa: null,
+        hasPassed: false,
+        isAbsent: true,
+      };
+    }
+
     const weightedPct = calculateWeightedPercentage(
       policies.map((policy) => {
         const mark = allMarks.find(
@@ -351,15 +384,17 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(weightedPct, (subject.passMarks / fullMarks) * 100),
+      isAbsent: false,
     };
   });
 
   const gpas = finalSubjects.map((s) => s.gpa);
   const overallGpa = calculateOverallGpa(gpas);
-  const overallPct = parseFloat(
-    (finalSubjects.reduce((a, s) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1)
-  );
-  const overallGrade = getGradeFromPercentage(overallPct);
+  const gradedFinalSubjects = finalSubjects.filter((s: any) => !s.isAbsent);
+  const overallPct = gradedFinalSubjects.length > 0
+    ? parseFloat((gradedFinalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / gradedFinalSubjects.length).toFixed(1))
+    : 0;
+  const overallGrade = gradedFinalSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId } },

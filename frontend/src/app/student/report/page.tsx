@@ -163,6 +163,7 @@ export default function StudentReportPage() {
 
   const hasPractical = reportData?.hasPractical && cols.showTheoryPrac;
   const divResult = reportData ? getResult(reportData.overallGrade) : null;
+  const anyAbsent = reportData?.subjects?.some((s: any) => s.isAbsent) ?? false;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-primary">Loading...</div></div>;
 
@@ -297,11 +298,11 @@ export default function StudentReportPage() {
                     )}
                     {cols.showPercentage && (
                       <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>
-                        {s.isAbsent ? "Ab" : (reportData.isTermReport ? s.percentage : s.weightedPercentage)}
+                        {s.isAbsent ? "NG" : (reportData.isTermReport ? s.percentage : s.weightedPercentage)}
                       </td>
                     )}
-                    {cols.showGrade && <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>{s.isAbsent ? "Ab" : s.grade}</td>}
-                    {cols.showGpa && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : s.gpa}</td>}
+                    {cols.showGrade && <td className="p-2 border text-center font-bold" style={{ borderColor: t.border, color: t.primary }}>{s.isAbsent ? "NG" : s.grade}</td>}
+                    {cols.showGpa && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "NG" : s.gpa}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -375,7 +376,7 @@ export default function StudentReportPage() {
                       )}
                       <tr>
                         <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Result</td>
-                        <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: divResult?.result === "Pass" ? "#15803d" : t.accent }}>{divResult?.result}</td>
+                        <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border, color: anyAbsent ? t.accent : (divResult?.result === "Pass" ? "#15803d" : t.accent) }}>{anyAbsent ? "Incomplete" : divResult?.result}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -393,6 +394,14 @@ export default function StudentReportPage() {
                           <td className="border px-2 py-1 font-bold" style={{ borderColor: t.border }}>{row.gpa}</td>
                         </tr>
                       ))}
+                      <tr>
+                        <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>NG</td>
+                        <td className="border px-2 py-1" style={{ borderColor: t.border }} colSpan={2}>Not Graded</td>
+                      </tr>
+                      <tr>
+                        <td className="border px-2 py-1 font-semibold" style={{ borderColor: t.border }}>Ab</td>
+                        <td className="border px-2 py-1" style={{ borderColor: t.border }} colSpan={2}>Absent</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
