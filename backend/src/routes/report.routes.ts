@@ -10,6 +10,7 @@ import {
   calculateOverallGpa,
   hasPassed,
 } from "../services/grading.service";
+import { computeSectionRanks } from "../services/rank.service";
 
 const router = Router();
 
@@ -29,60 +30,24 @@ async function verifyStudentAccess(userId: string, role: string, studentId: stri
   throw new AppError("Not authorized to view reports", 403);
 }
 
-// Helper: calculate rank for a student among section peers for a given exam
+// Helper: calculate rank for a student among section peers for a given exam.
+// The algorithm lives in services/rank.service.ts — this used to be a second copy of
+// it, and the PDF report card a third (R7). Keeping the thin wrapper so the call sites
+// below read the same as before.
 async function calculateTermRank(
   studentId: string,
   sectionId: string,
   examTypeId: string,
   academicYearId: string
 ): Promise<{ rank: number; totalStudents: number }> {
-  const sectionStudents = await prisma.student.findMany({
-    where: { sectionId, isActive: true },
-    select: { id: true },
-  });
-
-  const allMarks = await prisma.mark.findMany({
-    where: {
-      examTypeId,
-      academicYearId,
-      studentId: { in: sectionStudents.map((s) => s.id) },
-    },
-    include: { subject: true },
-  });
-
-  const studentPercentages: { studentId: string; avgPct: number }[] = [];
-
-  for (const stu of sectionStudents) {
-    const stuMarks = allMarks.filter((m) => m.studentId === stu.id);
-    if (stuMarks.length === 0) continue;
-
-    let totalPct = 0;
-    for (const m of stuMarks) {
-      const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-      const obtained = (m.theoryMarks || 0) + (m.practicalMarks || 0);
-      totalPct += calculatePercentage(obtained, fullMarks);
-    }
-    const avgPct = totalPct / stuMarks.length;
-    studentPercentages.push({ studentId: stu.id, avgPct });
+  const ranking = await computeSectionRanks(sectionId, examTypeId, academicYearId);
+  const entry = ranking.ranks.get(studentId);
+  // rank 0 means "not ranked" to this route's callers — preserved for a student with
+  // no marks at all, who would otherwise be shown as last in the class.
+  if (!entry?.hasAnyMarks) {
+    return { rank: 0, totalStudents: ranking.totalStudents };
   }
-
-  studentPercentages.sort((a, b) => b.avgPct - a.avgPct);
-
-  let rank = 0;
-  let prevPct = -1;
-  let actualPosition = 0;
-  for (const sp of studentPercentages) {
-    actualPosition++;
-    if (sp.avgPct !== prevPct) {
-      rank = actualPosition;
-      prevPct = sp.avgPct;
-    }
-    if (sp.studentId === studentId) {
-      return { rank, totalStudents: studentPercentages.length };
-    }
-  }
-
-  return { rank: 0, totalStudents: studentPercentages.length };
+  return { rank: entry.rank, totalStudents: ranking.totalStudents };
 }
 
 // Helper: calculate rank for final weighted result
@@ -195,38 +160,50 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
   const school = await prisma.school.findFirst({ where: { id: schoolId } });
 
-  const hasPracticalSubjects = marks.some((m) => m.subject.fullPracticalMarks > 0);
+  // Every subject in the grade, not only the ones with a mark row — see the same
+  // reasoning in pdf.routes.ts. The portal and the printed card must agree.
+  const gradeSubjects = await prisma.subject.findMany({
+    where: { gradeId: student.section.gradeId },
+    orderBy: { displayOrder: "asc" },
+  });
+  const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
 
-  const subjects = marks.map((m) => {
-    const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+  const hasPracticalSubjects = gradeSubjects.some((s) => s.fullPracticalMarks > 0);
+
+  const subjects = gradeSubjects.map((subject) => {
+    const m = markBySubjectId.get(subject.id);
+    const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
     // Absent falls through to the normal path: null marks read as 0, grading
     // the subject E / 0.8 so it counts toward the averages below rather than
-    // being dropped from them. Kept deliberately identical to the PDF builder
-    // in pdf.routes.ts — the portal and the printed card must agree.
-    const theory = m.theoryMarks || 0;
-    const practical = m.practicalMarks || 0;
+    // being dropped from them. A subject with no mark row at all is scored the
+    // same way and differs only in how it prints. Kept deliberately identical to
+    // the PDF builder in pdf.routes.ts.
+    const theory = m?.theoryMarks || 0;
+    const practical = m?.practicalMarks || 0;
     const total = theory + practical;
     const pct = calculatePercentage(total, fullMarks);
     const gradeResult = getGradeFromPercentage(pct);
 
     return {
-      subjectName: m.subject.name,
-      subjectNameNp: m.subject.nameNp,
+      subjectName: subject.name,
+      subjectNameNp: subject.nameNp,
       fullMarks,
-      passMarks: m.subject.passMarks,
+      passMarks: subject.passMarks,
       theoryMarks: theory,
       practicalMarks: practical,
       totalMarks: total,
       percentage: parseFloat(pct.toFixed(1)),
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
-      hasPassed: hasPassed(total, m.subject.passMarks),
-      isAbsent: m.isAbsent,
+      hasPassed: hasPassed(total, subject.passMarks),
+      isAbsent: m?.isAbsent ?? false,
+      notEntered: !m,
     };
   });
 
-  // Averaged over every subject, absent included, so a missed exam lowers the
-  // result instead of raising it and the figures agree with the rank below.
+  // Averaged over every subject in the grade — absent and not-yet-entered
+  // included, so a missing paper lowers the result instead of raising it and the
+  // figures stay on the same basis as the rank below.
   const overallGpa = calculateOverallGpa(subjects.map((s) => s.gpa));
   const overallPct = subjects.length > 0
     ? parseFloat((subjects.reduce((a, s) => a + s.percentage, 0) / subjects.length).toFixed(1))

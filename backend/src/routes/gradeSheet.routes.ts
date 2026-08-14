@@ -9,6 +9,7 @@ import {
   calculateWeightedPercentage,
   calculateOverallGpa,
 } from "../services/grading.service";
+import { computeSectionRanks } from "../services/rank.service";
 
 const router = Router();
 
@@ -101,19 +102,17 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     };
   });
 
-  // Calculate ranks
-  const sorted = [...rows].sort((a, b) => b.percentage - a.percentage);
-  let rank = 0;
-  let prevPct = -1;
-  let position = 0;
-  for (const row of sorted) {
-    position++;
-    if (row.percentage !== prevPct) {
-      rank = position;
-      prevPct = row.percentage;
-    }
-    const original = rows.find((r) => r.studentId === row.studentId);
-    if (original) original.rank = rank;
+  // Ranks come from the one shared implementation (R7) so this sheet and the report
+  // cards printed from the same marks cannot disagree. It recomputes the averages from
+  // the same rule used for the Percentage column above — deliberately, so the service
+  // stays the single definition rather than this passing its own numbers in.
+  const { ranks } = await computeSectionRanks(
+    String(sectionId),
+    String(examTypeId),
+    String(academicYearId)
+  );
+  for (const row of rows) {
+    row.rank = ranks.get(row.studentId)?.rank ?? 0;
   }
 
   res.json({

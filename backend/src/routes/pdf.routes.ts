@@ -18,6 +18,8 @@ import {
   defaultColumnSettings,
 } from "../services/pdf.service";
 import type { ReportCardColumnSettings } from "../services/pdf.service";
+import { computeSectionRanks } from "../services/rank.service";
+import type { SectionRanking } from "../services/rank.service";
 
 const router = Router();
 
@@ -65,7 +67,17 @@ async function getObservations(studentId: string, examTypeId: string, gradeId: s
 
 // ─── REPORT DATA BUILDERS ───────────────────────────────
 
-async function buildTermReportData(studentId: string, examTypeId: string, schoolId: string) {
+/**
+ * `precomputedRanking` lets a bulk caller compute the section's ranking once and pass
+ * it in, instead of this rebuilding the identical ranking for every student in the
+ * class — the quadratic behaviour described in P3.
+ */
+async function buildTermReportData(
+  studentId: string,
+  examTypeId: string,
+  schoolId: string,
+  precomputedRanking?: SectionRanking
+) {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: { section: { include: { grade: true } } },
@@ -87,8 +99,19 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
 
   if (marks.length === 0) return null;
 
+  // Every subject in the grade, not just the ones this student has a mark row for.
+  // A subject whose marks have not been entered yet still counts as 0 toward the
+  // averages and the rank (R7), so it has to appear on the card — otherwise the
+  // printed rows do not add up to the printed percentage, which is precisely the
+  // hand-checkability R4 was about.
+  const gradeSubjects = await prisma.subject.findMany({
+    where: { gradeId: student.section.gradeId },
+    orderBy: { displayOrder: "asc" },
+  });
+  const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
+
   const school = await prisma.school.findUnique({ where: { id: schoolId } });
-  const hasPracticalSubjects = marks.some((m) => m.subject.fullPracticalMarks > 0);
+  const hasPracticalSubjects = gradeSubjects.some((s) => s.fullPracticalMarks > 0);
   const gradingStyle = student.section.grade.gradingStyle;
 
   let subjects: any[];
@@ -102,8 +125,9 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     // from the combined percentage — algebraically the same as weighting the
     // two component grade points by their share of full marks. See the
     // Aug-2026 report-card design discussion for why this reduces cleanly.
-    subjects = marks.map((m) => {
-      const hasPracticalComponent = m.subject.fullPracticalMarks > 0;
+    subjects = gradeSubjects.map((subject) => {
+      const m = markBySubjectId.get(subject.id);
+      const hasPracticalComponent = subject.fullPracticalMarks > 0;
       // An absent subject deliberately falls through to the normal path below.
       // Its marks are null, so `|| 0` scores it 0%, which the scale grades as
       // E / 0.8 — and that grade point then counts toward the credit-weighted
@@ -117,24 +141,28 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
       // The "Ab" / "NG" printed on the card is driven by the isAbsent flag in
       // pdf.service.ts, not by these values, so the display is unaffected.
       const theoryResult = getGradeFromPercentage(
-        calculatePercentage(m.theoryMarks || 0, m.subject.fullTheoryMarks)
+        calculatePercentage(m?.theoryMarks || 0, subject.fullTheoryMarks)
       );
       const practicalResult = hasPracticalComponent
-        ? getGradeFromPercentage(calculatePercentage(m.practicalMarks || 0, m.subject.fullPracticalMarks))
+        ? getGradeFromPercentage(calculatePercentage(m?.practicalMarks || 0, subject.fullPracticalMarks))
         : null;
 
-      const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-      const total = (m.theoryMarks || 0) + (m.practicalMarks || 0);
+      const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
+      const total = (m?.theoryMarks || 0) + (m?.practicalMarks || 0);
       const finalResult = getGradeFromPercentage(calculatePercentage(total, fullMarks));
 
       return {
-        subjectName: m.subject.name,
-        creditHour: m.subject.creditHour,
+        subjectName: subject.name,
+        creditHour: subject.creditHour,
         theoryGrade: theoryResult.grade,
         practicalGrade: practicalResult?.grade ?? null,
         finalGrade: finalResult.grade,
         gradePoint: finalResult.gpa,
-        isAbsent: m.isAbsent,
+        isAbsent: m?.isAbsent ?? false,
+        // Distinct from isAbsent: the student was not recorded absent, the mark
+        // simply has not been entered. Scores 0 like an absence, but prints "—"
+        // rather than "Ab", which would assert something untrue about the student.
+        notEntered: !m,
       };
     });
 
@@ -144,37 +172,40 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     overallPct = 0; // not used by the credit-grade template
     overallGradeLabel = "";
   } else {
-    const marksSubjects = marks.map((m) => {
-      const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
+    const marksSubjects = gradeSubjects.map((subject) => {
+      const m = markBySubjectId.get(subject.id);
+      const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
       // Absent falls through to the normal path — null marks become 0, which
       // grades as E / 0.8 and counts toward the averages below. See the note in
       // the credit-grade branch above for why a null gpa short-circuit here is
-      // the bug this replaced.
-      const theory = m.theoryMarks || 0;
-      const practical = m.practicalMarks || 0;
+      // the bug this replaced. A subject with no mark row at all is treated the
+      // same way for arithmetic, and distinguished only in how it prints.
+      const theory = m?.theoryMarks || 0;
+      const practical = m?.practicalMarks || 0;
       const total = theory + practical;
       const pct = calculatePercentage(total, fullMarks);
       const gradeResult = getGradeFromPercentage(pct);
       return {
-        subjectName: m.subject.name,
+        subjectName: subject.name,
         fullMarks,
-        passMarks: m.subject.passMarks,
+        passMarks: subject.passMarks,
         theoryMarks: theory,
         practicalMarks: practical,
         totalMarks: total,
         percentage: parseFloat(pct.toFixed(1)),
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
-        hasPassed: hasPassed(total, m.subject.passMarks),
-        isAbsent: m.isAbsent,
+        hasPassed: hasPassed(total, subject.passMarks),
+        isAbsent: m?.isAbsent ?? false,
+        notEntered: !m,
       };
     });
     subjects = marksSubjects;
 
-    // Averaged over every subject the student was entered for, absent included.
-    // Filtering absences out here would shrink the denominator per student, so
-    // missing an exam would raise the average instead of lowering it — and it
-    // would no longer agree with the rank below, which scores absences as 0.
+    // Averaged over every subject in the grade — absent included, not-yet-entered
+    // included. Shrinking the denominator per student would mean missing an exam
+    // raises the average instead of lowering it, and would put this figure on a
+    // different basis from the rank below, which scores both as 0.
     overallGpa = calculateOverallGpa(marksSubjects.map((s) => s.gpa));
     overallPct = marksSubjects.length > 0
       ? parseFloat((marksSubjects.reduce((a, s) => a + s.percentage, 0) / marksSubjects.length).toFixed(1))
@@ -186,39 +217,21 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
   });
 
-  // Rank
+  // Rank — one shared implementation, see services/rank.service.ts (R7).
   let rank: number | undefined;
   let totalStudents: number | undefined;
   if (examType.showRank) {
-    const sectionStudents = await prisma.student.findMany({
-      where: { sectionId: student.sectionId, isActive: true },
-      select: { id: true },
-    });
-    const allMarks = await prisma.mark.findMany({
-      where: {
-        examTypeId,
-        academicYearId: examType.academicYearId,
-        studentId: { in: sectionStudents.map((s) => s.id) },
-      },
-      include: { subject: true },
-    });
-    const studentPercentages: { studentId: string; avgPct: number }[] = [];
-    for (const stu of sectionStudents) {
-      const stuMarks = allMarks.filter((m) => m.studentId === stu.id);
-      if (stuMarks.length === 0) continue;
-      let totalPctSum = 0;
-      for (const m of stuMarks) {
-        const fm = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-        totalPctSum += calculatePercentage((m.theoryMarks || 0) + (m.practicalMarks || 0), fm);
-      }
-      studentPercentages.push({ studentId: stu.id, avgPct: totalPctSum / stuMarks.length });
-    }
-    studentPercentages.sort((a, b) => b.avgPct - a.avgPct);
-    let r = 0, prevPct = -1, pos = 0;
-    for (const sp of studentPercentages) {
-      pos++;
-      if (sp.avgPct !== prevPct) { r = pos; prevPct = sp.avgPct; }
-      if (sp.studentId === studentId) { rank = r; totalStudents = studentPercentages.length; break; }
+    const ranking =
+      precomputedRanking ??
+      (await computeSectionRanks(student.sectionId, examTypeId, examType.academicYearId));
+    const entry = ranking.ranks.get(studentId);
+    // A student with no marks at all sorts last on 0%. That is right for the class
+    // mark sheet, but printing "last of 40" on the report card of someone who
+    // transferred in mid-year and has nothing to be ranked on is not — they get no
+    // rank, exactly as before.
+    if (entry?.hasAnyMarks) {
+      rank = entry.rank;
+      totalStudents = ranking.totalStudents;
     }
   }
 
@@ -569,9 +582,17 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN"
   const examType = await prisma.examType.findUniqueOrThrow({ where: { id: examTypeId } });
   const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId } });
 
+  // Compute the section's ranking once for the whole batch. This loop used to rebuild
+  // the identical ranking inside every student's report — loading every mark in the
+  // section, sorting the whole class, and keeping one number from it, 40 times over
+  // (P3). The ranking is the same for every student in the batch by definition.
+  const ranking = examType.showRank
+    ? await computeSectionRanks(sectionId, examTypeId, examType.academicYearId)
+    : undefined;
+
   const reportDataArray: any[] = [];
   for (const stu of students) {
-    const data = await buildTermReportData(stu.id, examTypeId, schoolId);
+    const data = await buildTermReportData(stu.id, examTypeId, schoolId, ranking);
     if (data) {
       data._observations = await getObservations(stu.id, examTypeId, section.gradeId);
       reportDataArray.push(data);

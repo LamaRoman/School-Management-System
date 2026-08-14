@@ -334,7 +334,25 @@ May be the intended forgiving reading — confirm and document either way.
 
 ---
 
-### [ ] R7. De-duplicate the rank calculation
+### [x] R7. De-duplicate the rank calculation
+
+> **DONE 2026-08-14.** `services/rank.service.ts` — `computeSectionRanks(sectionId, examTypeId, academicYearId)` returns a Map for the whole section. Used by all three surfaces: the PDF card, the web portal, and the class mark sheet.
+>
+> **It was three copies, not two.** `gradeSheet.routes.ts` had a third, and it was the one that disagreed.
+>
+> **Two decisions were needed, both taken with the school owner rather than assumed:**
+>
+> 1. **The divisor is every subject in the grade**, with a missing mark scoring 0 — the mark sheet's long-standing rule. The report card used to divide by however many mark rows a student happened to have, so an incomplete record was ranked on a different basis from classmates and came out inflated (**R6**), and the two printed documents disagreed during entry (**R3**'s remainder). A rank whose divisor changes per student is not a rank.
+> 2. **The card now lists every subject in the grade**, un-entered ones printed as `—`. This followed necessarily: moving the rank without moving the printed percentage would have recreated **R2** exactly — two numbers on one page on incompatible bases. With both moved, the rows a parent can add up reach the percentage printed at the bottom, which is the hand-checkability **R4** was about.
+>
+> **`notEntered` is deliberately not `isAbsent`.** They score identically, but "Ab" asserts the student did not turn up, which is a different and possibly untrue claim about a child. Un-entered marks print `—` while still grading 0 in the columns beside them. A card with any un-entered subject also reports its result as **Incomplete** rather than a confident Pass/Fail.
+>
+> **This closes R3 and R6, and does most of P3.** The bulk PDF route now computes the ranking once per batch instead of rebuilding it per student — see the note under **P3**.
+>
+> Pinned by 10 tests in `src/test/__tests__/sectionRank.test.ts`; the 3 that exercise the routes were verified to fail against the old code, and the template assertions render the real HTML. Suite 174 → **177**. Also confirmed live on seeded data: for five students in I-A the grade sheet and the term report now return identical rank *and* identical percentage, over identical subject counts.
+>
+> - [ ] **R7a. Not carried over: `Subject.isOptional` is still ignored everywhere.** It exists on the model and is referenced by no route. A grade with an optional subject now scores every student who does not take it as 0 for it — which the *grade sheet has always done*, so this change does not introduce it, but it does make one shared place where it can finally be fixed properly. Worth closing before any grade starts using optional subjects.
+
 **Where:** `pdf.routes.ts:200–231` (PDF) and `report.routes.ts:39–80` (web) — same algorithm, two copies
 
 `CLAUDE.md` documents this risk class for the grading scale, and that discipline is working — the scale is verifiably in sync. The rank duplication isn't documented anywhere, so nobody knows to keep them aligned.
@@ -518,7 +536,11 @@ At one school / one year (~10,000 marks) that's ~10ms and invisible. This is mul
 
 ---
 
-### [ ] P3. Bulk report-card generation is O(n²)
+### [~] P3. Bulk report-card generation is O(n²)
+
+> **The quadratic half is fixed (2026-08-14, with R7).** The rank block described below — loading every student and every mark in the section, computing the whole class ranking, and keeping one number from it, once per student — now runs **once per batch**. `buildTermReportData` takes an optional precomputed ranking and `GET /pdf/class/term/...` passes it in.
+>
+> **Still open:** the per-student `buildTermReportData` + `getObservations` calls are still serial (~10 queries × n), and `school` / `academicYear` / `examType` / `reportCardSettings` are still refetched per student. Those are the remaining ~n×10 round trips. The connection-pool concern below stands until they are batched too.
 **Where:** `backend/src/routes/pdf.routes.ts:598` and `:644`
 
 Serial loop, one student at a time; each `buildTermReportData` issues ~8 queries and `getObservations` 2 more. **A 40-student class = ~400 sequential DB round trips for one PDF.**
@@ -904,7 +926,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | Item | Effort | Why |
 |---|---|---|
 | ~~R1 (absent-in-average policy)~~ | ✅ **done** | Decided as count-as-zero; R2, R4, R5 fell out with it |
-| R7 (single rank function) | ~half day | Resolves R3's remainder, R6, and unblocks P3 |
+| ~~R7 (single rank function)~~ | ✅ **done** | Was three copies, not two. Resolved R3's remainder + R6, and did the quadratic half of P3 |
 | ~~R4 (grade sheet totals)~~ | ✅ **done** | Resolved by R1 |
 | ~~**S1, S2, S3**~~ (unverified student IDs) | ✅ **done** | All three closed (S1 with S1a). **F4a is now unblocked** — S2's membership check is in place as its backstop. |
 
