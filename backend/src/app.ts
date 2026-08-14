@@ -6,6 +6,7 @@ dotenv.config();
 
 import "express-async-errors";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { errorHandler } from "./middleware/errorHandler";
@@ -53,9 +54,25 @@ import { isAllowedPublicOrigin } from "./services/publicOrigins.service";
 const app = express();
 app.set("trust proxy", 1);
 
+// gzip/brotli every compressible response. The big JSON payloads here —
+// rosters, grade sheets, fee overviews — are highly repetitive and compress
+// to roughly a fifth of their size, which cuts both load time on a slow
+// mobile connection and Railway egress cost. Responses under 1KB are skipped
+// by the default threshold, and already-compressed types (PDFs, images) are
+// skipped by the default filter, so the report card path is unaffected.
+app.use(compression());
+
 // ─── Security middleware ──────────────────────────────────
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000", credentials: true }));
+// maxAge lets the browser cache the CORS preflight instead of re-asking before
+// every request. In production the frontend and API are on different
+// subdomains, so without this each call that needs a preflight pays an extra
+// round trip. Browsers clamp this to their own ceiling (Chrome 2h, Firefox 24h).
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+  maxAge: 86400,
+}));
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 

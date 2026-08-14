@@ -511,7 +511,14 @@ First screen an admin sees after login. It sets their perception of whether the 
 
 > Root cause is architectural: **58 of 58 pages are `"use client"`**, all data is fetched in `useEffect` after mount, and there's no caching layer. The items below stack multiplicatively — **P1** is the largest single contributor.
 
-### [ ] F1. Every API GET costs two network round trips instead of one
+### [x] F1. Every API GET costs two network round trips instead of one
+
+> **FIXED 2026-08-14.** `request()` now sets `Content-Type` only when there is a body, matching what `fetchRaw` already did. That makes every GET a "simple" CORS request, which browsers never preflight. `cors()` also gained `maxAge: 86400` so the preflights that legitimately remain (POST/PUT/DELETE) are cached rather than repeated (browsers clamp this — Chrome 2h, Firefox 24h).
+>
+> **Verified in the browser, not just reasoned about.** Before: every GET was preceded by an `OPTIONS`. After: zero. Proven against `/academic-years`, a URL never requested before in that session — so no preflight cache could be hiding the result. Writes still work: `PUT /students/:id` returns 200 through the real UI path with `Content-Type` intact.
+>
+> Checked `api.post`/`api.put` always pass a body, and no call site invokes them without one, so no write silently loses its `Content-Type`.
+
 **Where:** `frontend/src/lib/api.ts:63` and `backend/src/app.ts:58`
 
 `request()` sets `Content-Type: application/json` on **every** request, including GETs that have no body:
@@ -654,7 +661,23 @@ Statically imported into 6 pages (`admin/fees`, `admin/seating`, `admin/certific
 
 # X — Robustness, observability, cost
 
-### [ ] X1. No `compression` middleware
+### [x] X1. No `compression` middleware
+
+> **FIXED 2026-08-14.** `app.use(compression())` added ahead of the routes.
+>
+> **The 70–80% estimate below was conservative** — measured against real dev data, these payloads are far more repetitive than typical JSON (the same nested `section`/`grade` object repeats once per student), so they compress much harder:
+>
+> | Endpoint | Before | After | Saved |
+> |---|---|---|---|
+> | `/students` (whole school) | 168,069 B | 9,837 B | **94%** |
+> | `/grade-sheet/term` | 15,316 B | 1,522 B | 90% |
+> | `/grades` | 8,341 B | 1,183 B | 86% |
+> | `/students` (one section) | 6,427 B | 1,089 B | 83% |
+>
+> The report card path is unaffected: verified `GET /pdf/term/...` still returns an uncompressed, valid `application/pdf` (1 page, correct `%PDF-1.4` header) — `compression`'s default filter skips already-compressed types, and its 1KB threshold skips small responses.
+>
+> **Method note:** don't try to confirm this from the browser with `response.headers.get("content-encoding")` — `Content-Encoding` is not a CORS-safelisted response header, so JS reads `null` cross-origin whether or not compression is on. Measure with curl.
+
 **Where:** `backend/src/app.ts`
 
 No gzip/brotli. Endpoints like `/students`, `/fees/section-overview` and `/grade-sheet` return large JSON; gzip typically cuts JSON 70–80%, and base64 image data (**P1**) compresses poorly but still meaningfully. One `app.use(compression())` line — and it directly reduces Railway egress cost.
@@ -694,8 +717,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 |---|---|---|
 | ~~P1a (`select:` excluding photo)~~ | ✅ **done** | Biggest latency win in the project |
 | P2 (indexes) | ~1 hr | Additive migration, compounds as data grows |
-| F1 (CORS preflight) | ~1 hr | Halves request count app-wide |
-| X1 + X2 (compression, health) | ~30 min | Cost + reliability, trivial |
+| ~~F1 (CORS preflight)~~ | ✅ **done** | Halves request count app-wide — verified zero preflights on GETs |
+| ~~X1~~ + X2 (compression, health) | X1 ✅ **done** | X1 measured 83–94% smaller responses. X2 (health check) still open |
 | F3 (loading states) | ~2 hrs | Kills the "tap didn't register" feel |
 | F6 (error/loading boundaries) | ~1 hr | No more white screens |
 
@@ -749,4 +772,4 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 2. ~~**R1** — decide whether absent counts as zero~~ ✅ **done 2026-08-14.**
 3. ~~**S1** — verify student IDs in the promotion endpoint.~~ ✅ **done 2026-08-14** (with S1a).
 
-**Next up:** P2 (indexes — additive migration, zero code change), then F1 (CORS preflight) and X1/X2. F4a is also unblocked now that S2 has landed.
+**Next up:** X2 (health check should touch the DB — ~15 min), then F3 (loading states — kills the "tap didn't register" feel). F4a is unblocked now that S2 has landed.
