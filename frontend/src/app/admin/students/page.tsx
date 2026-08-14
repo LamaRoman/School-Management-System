@@ -31,24 +31,37 @@ export default function StudentsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const editIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
+  // Without these the table renders "No students in this section" while the
+  // roster is still in flight — which reads as an empty class rather than as
+  // loading, and is the reason a tap here feels like it didn't register.
+  const [loadingGrades, setLoadingGrades] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const year = await api.get<any>("/academic-years/active");
-      if (year) {
-        const g = await api.get<any[]>(`/grades?academicYearId=${year.id}`);
-        setGrades(g);
-        if (g.length > 0) {
-          setSelectedGrade(g[0].id);
-          if (g[0].sections?.length > 0) setSelectedSection(g[0].sections[0].id);
+      try {
+        const year = await api.get<any>("/academic-years/active");
+        if (year) {
+          const g = await api.get<any[]>(`/grades?academicYearId=${year.id}`);
+          setGrades(g);
+          if (g.length > 0) {
+            setSelectedGrade(g[0].id);
+            if (g[0].sections?.length > 0) setSelectedSection(g[0].sections[0].id);
+          }
         }
+      } finally {
+        setLoadingGrades(false);
       }
     })();
   }, []);
 
   useEffect(() => {
     if (!selectedSection) return;
-    api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents).catch(() => {});
+    setLoadingStudents(true);
+    api.get<Student[]>(`/students?sectionId=${selectedSection}`)
+      .then(setStudents)
+      .catch(() => {})
+      .finally(() => setLoadingStudents(false));
   }, [selectedSection]);
 
   const currentGrade = grades.find((g) => g.id === selectedGrade);
@@ -211,7 +224,9 @@ export default function StudentsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loadingGrades || loadingStudents ? (
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400 animate-pulse">Loading students...</td></tr>
+            ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-8 text-gray-400">{selectedSection ? "No students in this section" : "Select a grade and section"}</td></tr>
             ) : filtered.map((s) => (
               <tr

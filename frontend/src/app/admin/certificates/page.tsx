@@ -178,6 +178,13 @@ export default function CertificatesPage() {
         <div className="card p-5">
           <div className="text-xs font-medium text-gray-500 mb-2">Preview</div>
           <div ref={previewBoxRef} className="w-full rounded-lg border border-gray-200 overflow-hidden bg-gray-50" style={{ aspectRatio: `${CERT_W} / ${CERT_H}` }}>
+            {/* The preview needs school info before it can render anything, so
+                without this the box just sits empty and looks broken. */}
+            {!school && (
+              <div className="w-full h-full flex items-center justify-center text-sm text-gray-400 animate-pulse">
+                Loading preview...
+              </div>
+            )}
             {school && (
               <iframe
                 title="Certificate preview"

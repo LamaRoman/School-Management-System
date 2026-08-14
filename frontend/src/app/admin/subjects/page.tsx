@@ -24,18 +24,31 @@ export default function SubjectsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
 
+  // Without these the table renders "No subjects for this grade" while the
+  // fetch is still in flight, which reads as a grade with nothing set up.
+  const [loadingGrades, setLoadingGrades] = useState(true);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+
   const fetchGrades = async () => {
-    const year = await api.get<any>("/academic-years/active");
-    if (year) {
-      const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-      setGrades(g);
-      if (g.length > 0 && !selectedGrade) setSelectedGrade(g[0].id);
+    try {
+      const year = await api.get<any>("/academic-years/active");
+      if (year) {
+        const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
+        setGrades(g);
+        if (g.length > 0 && !selectedGrade) setSelectedGrade(g[0].id);
+      }
+    } finally {
+      setLoadingGrades(false);
     }
   };
 
   const fetchSubjects = () => {
     if (!selectedGrade) return;
-    api.get<Subject[]>(`/subjects?gradeId=${selectedGrade}`).then(setSubjects).catch(() => {});
+    setLoadingSubjects(true);
+    api.get<Subject[]>(`/subjects?gradeId=${selectedGrade}`)
+      .then(setSubjects)
+      .catch(() => {})
+      .finally(() => setLoadingSubjects(false));
   };
 
   useEffect(() => { fetchGrades(); }, []);
@@ -154,7 +167,9 @@ export default function SubjectsPage() {
             </tr>
           </thead>
           <tbody>
-            {subjects.length === 0 ? (
+            {loadingGrades || loadingSubjects ? (
+              <tr><td colSpan={9} className="text-center py-8 text-gray-400 animate-pulse">Loading subjects...</td></tr>
+            ) : subjects.length === 0 ? (
               <tr><td colSpan={9} className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</td></tr>
             ) : subjects.map((s, i) => (
               <tr key={s.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
