@@ -24,6 +24,16 @@ import { calculatePercentage } from "./grading.service";
  * Marked-absent subjects need no special case: their marks are stored `null`, read as
  * 0, and count toward the average — the **R1** decision, already applied everywhere.
  *
+ * **Optional subjects are the one exception** (**R7a**). For a subject with
+ * `isOptional`, a missing mark row means the student does not take it, so it is left
+ * out of their divisor entirely rather than scored 0. There is no per-student subject
+ * enrollment in the schema, so absence-of-a-mark is the only signal available: the
+ * consequence is that an optional subject a student *does* take, whose mark simply has
+ * not been entered yet, is indistinguishable from one they never took and is excluded.
+ * That is the smaller error of the two — penalising a child for an elective they never
+ * sat is the one that reaches a parent. An explicit student-to-optional-subject link is
+ * the real fix, and is worth adding before any school actually relies on this.
+ *
  * ## Ties
  *
  * Standard competition ranking: equal percentages share a rank and the next distinct
@@ -82,7 +92,7 @@ export async function computeSectionRanks(
   const [subjects, allMarks] = await Promise.all([
     prisma.subject.findMany({
       where: { gradeId: section.gradeId },
-      select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true },
+      select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true, isOptional: true },
     }),
     prisma.mark.findMany({
       where: {
@@ -114,14 +124,23 @@ export async function computeSectionRanks(
   const scored = students.map((student) => {
     const studentMarks = marksByStudent.get(student.id);
     let pctSum = 0;
+    let counted = 0;
     for (const subject of subjects) {
       const mark = studentMarks?.get(subject.id);
+      // A missing mark means two different things depending on the subject:
+      //   required → the mark has not been entered yet, and scores 0
+      //   optional → this student does not take it, and it is not theirs to be
+      //              scored on at all
+      // Scoring an elective a student never sat as 0 would drag down their
+      // percentage, GPA and rank for a subject they were never enrolled in.
+      if (!mark && subject.isOptional) continue;
       const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
       pctSum += calculatePercentage(obtained, subject.fullTheoryMarks + subject.fullPracticalMarks);
+      counted++;
     }
     return {
       studentId: student.id,
-      avgPct: subjects.length > 0 ? pctSum / subjects.length : 0,
+      avgPct: counted > 0 ? pctSum / counted : 0,
       hasAnyMarks: (studentMarks?.size ?? 0) > 0,
     };
   });

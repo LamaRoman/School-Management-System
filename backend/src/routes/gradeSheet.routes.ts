@@ -36,7 +36,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
   const subjects = await prisma.subject.findMany({
     where: { gradeId: section.gradeId },
     orderBy: { displayOrder: "asc" },
-    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true },
+    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true, isOptional: true },
   });
 
   const allMarks = await prisma.mark.findMany({
@@ -74,19 +74,27 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         gpa: gradeResult.gpa,
         passed: obtained >= subject.passMarks,
         isAbsent: mark?.isAbsent ?? false,
+        // Optional subject this student does not take (R7a). The column stays on the
+        // sheet — it is class-wide — but the cell is not theirs and must not be
+        // scored as a zero in their totals below.
+        notTaken: subject.isOptional && !mark,
       };
     });
 
-    const totalObtained = subjectResults.reduce((a, s) => a + s.obtained, 0);
-    const totalFullMarks = subjectResults.reduce((a, s) => a + s.fullMarks, 0);
-    // Averaged over every subject, absent included, so this column stays
+    // Everything the student is actually assessed on. Absences stay in (they score 0
+    // by decision R1); only an optional subject they do not take drops out.
+    const counted = subjectResults.filter((s) => !s.notTaken);
+
+    const totalObtained = counted.reduce((a, s) => a + s.obtained, 0);
+    const totalFullMarks = counted.reduce((a, s) => a + s.fullMarks, 0);
+    // Averaged over every counted subject, absent included, so this column stays
     // consistent with totalObtained / totalFullMarks above and with the rank
     // derived from it below.
-    const avgPct = subjectResults.length > 0
-      ? parseFloat((subjectResults.reduce((a, s) => a + s.percentage, 0) / subjectResults.length).toFixed(1))
+    const avgPct = counted.length > 0
+      ? parseFloat((counted.reduce((a, s) => a + s.percentage, 0) / counted.length).toFixed(1))
       : 0;
-    const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
-    const overallGrade = subjectResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
+    const avgGpa = calculateOverallGpa(counted.map((s) => s.gpa));
+    const overallGrade = counted.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
 
     return {
       studentId: student.id,

@@ -162,11 +162,16 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
   // Every subject in the grade, not only the ones with a mark row — see the same
   // reasoning in pdf.routes.ts. The portal and the printed card must agree.
-  const gradeSubjects = await prisma.subject.findMany({
-    where: { gradeId: student.section.gradeId },
-    orderBy: { displayOrder: "asc" },
-  });
   const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
+  const gradeSubjects = (
+    await prisma.subject.findMany({
+      where: { gradeId: student.section.gradeId },
+      orderBy: { displayOrder: "asc" },
+    })
+  ).filter(
+    // See pdf.routes.ts — optional-and-unmarked means "does not take it" (R7a).
+    (subject) => !(subject.isOptional && !markBySubjectId.has(subject.id))
+  );
 
   const hasPracticalSubjects = gradeSubjects.some((s) => s.fullPracticalMarks > 0);
 
