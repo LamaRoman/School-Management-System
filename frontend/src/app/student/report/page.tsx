@@ -163,7 +163,8 @@ export default function StudentReportPage() {
 
   const hasPractical = reportData?.hasPractical && cols.showTheoryPrac;
   const divResult = reportData ? getResult(reportData.overallGrade) : null;
-  const anyAbsent = reportData?.subjects?.some((s: any) => s.isAbsent) ?? false;
+  // Absent or not-yet-entered — either way the result shown is provisional.
+  const anyAbsent = reportData?.subjects?.some((s: any) => s.isAbsent || s.notEntered) ?? false;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-primary">Loading...</div></div>;
 
@@ -287,9 +288,12 @@ export default function StudentReportPage() {
                     {cols.showPassMarks && <td className="p-2 border text-center" style={{ borderColor: t.border, color: t.pct }}>{s.passMarks}</td>}
                     {reportData.isTermReport ? (
                       <>
-                        {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : s.theoryMarks}</td>}
-                        {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : (s.practicalMarks || "—")}</td>}
-                        <td className="p-2 border text-center font-semibold" style={{ borderColor: t.border }}>{s.isAbsent ? "Ab" : s.totalMarks}</td>
+                        {/* "Ab" claims the student was absent. A subject whose marks
+                            simply are not entered yet shows "—" instead, while still
+                            scoring 0 in the columns to the right. Mirrors pdf.service.ts. */}
+                        {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.notEntered ? "—" : s.isAbsent ? "Ab" : s.theoryMarks}</td>}
+                        {hasPractical && <td className="p-2 border text-center" style={{ borderColor: t.border }}>{s.notEntered ? "—" : s.isAbsent ? "Ab" : (s.practicalMarks || "—")}</td>}
+                        <td className="p-2 border text-center font-semibold" style={{ borderColor: t.border }}>{s.notEntered ? "—" : s.isAbsent ? "Ab" : s.totalMarks}</td>
                       </>
                     ) : (
                       s.terms?.map((term: any, j: number) => (

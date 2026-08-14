@@ -345,7 +345,16 @@ export function buildReportCardHtml(
       let dataCols = "";
 
       if (isTermReport) {
-        if (s.isAbsent) {
+        // "Ab" asserts the student was absent. A subject whose marks simply have not
+        // been entered yet must not say that — it prints "—" while still scoring 0
+        // in the percentage, grade and GPA columns beside it.
+        if (s.notEntered) {
+          if (hasPractical) {
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">—</td>`;
+            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">—</td>`;
+          }
+          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">—</td>`;
+        } else if (s.isAbsent) {
           if (hasPractical) {
             dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
             dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
@@ -436,7 +445,11 @@ export function buildReportCardHtml(
           ${resultHeaders}`;
 
   // Result summary (description + pass/fail)
-  const anyAbsent = (reportData.subjects || []).some((s: any) => s.isAbsent);
+  // "Incomplete" covers both an absence and a subject whose marks have not been
+  // entered yet — in either case the result on this card is not the final word, and
+  // printing a confident "Pass"/"Fail" over a missing paper is how a provisional
+  // number ends up being read as a final one.
+  const anyAbsent = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
   const divResult = getResultSummary(reportData.overallGrade);
 
   // Rank + Attendance
@@ -726,7 +739,8 @@ function buildCreditGradeReportCardHtml(
   // A student fails the term if any subject landed in a failing band — see
   // FAILING_GRADES in grading.service. Keyed off the grade rather than a
   // percentage because the credit-grade payload carries grades, not marks.
-  const anyAbsentCG = (reportData.subjects || []).some((s: any) => s.isAbsent);
+  // Same reasoning as the marks-based template above.
+  const anyAbsentCG = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
   const anyFailed = !anyAbsentCG && (reportData.subjects || []).some(
     (s: any) => !s.isAbsent && !isPassingGrade(s.finalGrade),
   );
