@@ -171,6 +171,18 @@ const sectionBTeachers = [
   { name: "Gopal Subedi", email: "gopal.subedi@school.edu.np", grade: "X" },
 ];
 
+// Applied to every grade. Without these the observation pages render an empty
+// grid for every class, so nothing on that surface can be exercised or reviewed —
+// the teacher/admin observation screens, and the observation block on report cards.
+const observationCategories = [
+  { name: "Punctuality", nameNp: "समयपालना" },
+  { name: "Discipline", nameNp: "अनुशासन" },
+  { name: "Cleanliness", nameNp: "सरसफाइ" },
+  { name: "Class Participation", nameNp: "कक्षा सहभागिता" },
+  { name: "Homework", nameNp: "गृहकार्य" },
+  { name: "Behaviour", nameNp: "व्यवहार" },
+];
+
 // ─── Main ───────────────────────────────────────────────
 
 async function main() {
@@ -299,8 +311,18 @@ async function main() {
         create: { examTypeId: et.id, gradeId: grade.id, weightagePercent: w },
       });
     }
+
+    // Observation categories
+    for (let k = 0; k < observationCategories.length; k++) {
+      const oc = observationCategories[k];
+      await prisma.observationCategory.upsert({
+        where: { name_gradeId: { name: oc.name, gradeId: grade.id } },
+        update: {},
+        create: { name: oc.name, nameNp: oc.nameNp, displayOrder: k + 1, gradeId: grade.id },
+      });
+    }
   }
-  console.log(`✅ ${gradeNames.length} grades with sections, subjects, grading policies`);
+  console.log(`✅ ${gradeNames.length} grades with sections, subjects, grading policies, observation categories`);
 
   // ══════════════════════════════════════════════════════
   // 7. EXAM ROOMS
