@@ -60,8 +60,13 @@ class ApiClient {
   }
 
   private async request<T>(path: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+    // Only send Content-Type when there is actually a body to describe.
+    // In production the API is on a separate subdomain, so every call is
+    // cross-origin; that header turns an otherwise "simple" GET into one that
+    // needs a CORS preflight, costing an extra OPTIONS round trip before the
+    // request itself. `fetchRaw` has always omitted it for the same reason.
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...(options.body != null ? { "Content-Type": "application/json" } : {}),
       ...(options.headers as Record<string, string>),
     };
 
