@@ -213,10 +213,30 @@ router.get("/", authenticate, async (req, res) => {
     }
   }
 
+  // `photo` is deliberately excluded: photos are stored as base64 data URIs, so
+  // including them turns a 40-student roster into tens of megabytes of JSON.
+  // Fetch a single student via GET /students/:id when the photo is actually needed.
   const students = await prisma.student.findMany({
     where,
     orderBy: { rollNo: "asc" },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      nameNp: true,
+      dateOfBirth: true,
+      rollNo: true,
+      symbolNumber: true,
+      gender: true,
+      fatherName: true,
+      motherName: true,
+      guardianName: true,
+      guardianPhone: true,
+      address: true,
+      sectionId: true,
+      isActive: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
       section: { include: { grade: { select: { name: true } } } },
     },
   });

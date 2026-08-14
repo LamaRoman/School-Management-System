@@ -199,6 +199,7 @@ export async function createTestStudent(
     name: string;
     rollNo: number;
     gender: string;
+    photo: string;
   }> = {},
 ) {
   return prisma.student.create({
@@ -207,6 +208,7 @@ export async function createTestStudent(
       sectionId,
       rollNo: overrides.rollNo ?? undefined,
       gender: overrides.gender ?? "Male",
+      photo: overrides.photo,
     },
   });
 }
