@@ -37,7 +37,11 @@ Then: three bulk-write endpoints accept student IDs from any school without chec
 
 # S — Security & cross-school isolation
 
-### [ ] S1. Promotion accepts unverified student IDs — can move another school's students into yours
+### [x] S1. Promotion accepts unverified student IDs — can move another school's students into yours
+
+> **FIXED 2026-08-14.** Every `studentId` in `promotions[]` is now batch-verified to belong to `sourceGradeId` within this school before anything is written, using the same `count()`-and-compare pattern as `mark.routes.ts:77`. A batch containing even one foreign id is rejected whole with a 400.
+>
+> Pinned by `src/test/__tests__/promotion.test.ts` (6 tests), verified to fail 5/6 against the old code. Full suite 151/151. Also confirmed against the running dev app: graduating a real cross-school student now 400s and leaves that student untouched, while a legitimate same-school promotion still succeeds.
 **Where:** `backend/src/routes/promotion.routes.ts:284` (`POST /promotion/promote`)
 
 `sourceYearId`, `targetYearId` and `sourceGradeId` are all verified. The `studentId` values inside the `promotions[]` array are **not**:
@@ -60,11 +64,19 @@ An admin of School A can pass **any student ID in the database** and:
 
 **Fix direction:** batch-verify every `studentId` belongs to `sourceGradeId` in this school before the loop — the same `count()`-and-compare pattern already used in `mark.routes.ts:77`.
 
-- [ ] **S1a.** The loop is **not** in a transaction, and `throw new AppError(...)` mid-loop (e.g. "No next grade found") leaves a partial promotion — the first N students already moved with `rollNo: null`, no rollback, no way to tell which. Wrap it, and validate `nextGrade`/`sameGrade` exist *before* mutating anything.
+- [x] **S1a.** The loop is **not** in a transaction, and `throw new AppError(...)` mid-loop (e.g. "No next grade found") leaves a partial promotion — the first N students already moved with `rollNo: null`, no rollback, no way to tell which. Wrap it, and validate `nextGrade`/`sameGrade` exist *before* mutating anything.
+
+  > **FIXED 2026-08-14** in the same change. The loop now only *plans* updates — resolving the target grade and section, and throwing on anything unresolvable — and the writes go out afterwards in a single `$transaction`. Nothing is written unless every entry in the batch resolves.
+  >
+  > The atomicity test fails against the old code exactly as this note predicted: a `GRADUATE` ahead of an unpromotable student stayed graduated.
 
 ---
 
-### [ ] S2. Daily attendance accepts unverified student IDs
+### [x] S2. Daily attendance accepts unverified student IDs
+
+> **FIXED 2026-08-14.** Every `studentId` in `records[]` is now verified to belong to `sectionId` before the upsert, same `count()`-and-compare pattern as S1. **This is the F4a backstop** — a page that races and saves against the roster it is no longer showing now gets a clean 400 instead of writing attendance for the wrong class, so F4a is unblocked.
+>
+> Pinned by `src/test/__tests__/bulkWriteIsolation.test.ts`. Verified live: a foreign student, a wrong-section student, and a mixed batch are all rejected; a legitimate roster still saves and recomputes totals.
 **Where:** `backend/src/routes/dailyAttendance.routes.ts:86` (`POST /daily-attendance/bulk`)
 
 `verifySection` and `verifyAcademicYear` are called, and teachers are checked for section assignment — but the `studentId`s inside `records[]` are never checked to belong to that section or school. They go straight into the upsert.
@@ -77,7 +89,13 @@ A teacher or admin can write `DailyAttendance` rows for **any student ID in the 
 
 ---
 
-### [ ] S3. Observation bulk-save accepts unverified student and category IDs
+### [x] S3. Observation bulk-save accepts unverified student and category IDs
+
+> **FIXED 2026-08-14.** `academicYearId` is now verified, and all `studentId`s and `categoryId`s are batch-verified to resolve inside this school. Also added the invariant the note below implies but doesn't state: `examType.academicYearId` must equal the submitted `academicYearId`, since both are part of the row's unique key and a mismatched pair writes a row belonging to no coherent (year, exam) combination — the same class of bug as **S4a**.
+>
+> Confirmed the frontend already sends a matching pair (`teacher/observations/page.tsx:109` sends `selectedSection.academicYearId`, and its exam types are fetched filtered by that same year), so the stricter check doesn't break the existing UI.
+>
+> Pinned by `src/test/__tests__/bulkWriteIsolation.test.ts`.
 **Where:** `backend/src/routes/observation.routes.ts:174` (`POST /observations/results/bulk`)
 
 Only `examTypeId` is verified. `studentId`, `categoryId` and `academicYearId` are all taken on trust and written directly (up to 1000 entries per call).
@@ -688,13 +706,13 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | ~~R1 (absent-in-average policy)~~ | ✅ **done** | Decided as count-as-zero; R2, R4, R5 fell out with it |
 | R7 (single rank function) | ~half day | Resolves R3's remainder, R6, and unblocks P3 |
 | ~~R4 (grade sheet totals)~~ | ✅ **done** | Resolved by R1 |
-| **S1, S2, S3** (unverified student IDs) | ~half day total | Same `count()`-and-compare fix in three places. **S2 must land before F4a** — it's the server-side backstop for the frontend race. |
+| ~~**S1, S2, S3**~~ (unverified student IDs) | ✅ **done** | All three closed (S1 with S1a). **F4a is now unblocked** — S2's membership check is in place as its backstop. |
 
 **Week 3+ — structural**
 
 | Item | Effort | Notes |
 |---|---|---|
-| F4a (race guards on the 6 write pages) | ~half day | **Do after S2**, not before |
+| F4a (race guards on the 6 write pages) | ~half day | Unblocked — S2 landed 2026-08-14 |
 | P4 (attendance `groupBy`) + P4a | ~half day | |
 | P3 (bulk PDF batching) | 1–2 days | Depends on R7 |
 | P6 (Puppeteer cap) | ~2 hrs | |
@@ -715,7 +733,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | **W4** (grade sheet Excel export) | ~1 day | Do after **W3b** — build once, against the teacher-only version |
 
 **Dependency notes**
-- **S2 → F4a.** Server-side membership checks are the safety net for the client-side race; do the backstop first.
+- ~~**S2 → F4a.**~~ S2 ✅ **done 2026-08-14** — the backstop is in place, so F4a can proceed whenever.
 - **R7 → P3.** Extracting one rank function is what makes the bulk PDF batching tractable.
 - **R1 → R2, R3, R4, R5.** Decide the absent-in-average policy once; the other three follow from it.
 - **P5 + R8** are the same handler — one visit.
@@ -729,6 +747,6 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 1. ~~**P1a** — add `select:` to the roster query.~~ ✅ **done 2026-08-14.**
 2. ~~**R1** — decide whether absent counts as zero~~ ✅ **done 2026-08-14.**
-3. **S1** — verify student IDs in the promotion endpoint. It's the only finding that lets one school destructively modify another's records.
+3. ~~**S1** — verify student IDs in the promotion endpoint.~~ ✅ **done 2026-08-14** (with S1a).
 
-**Next up:** S1 (the only cross-school destructive write), then P2 (indexes).
+**Next up:** P2 (indexes — additive migration, zero code change), then F1 (CORS preflight) and X1/X2. F4a is also unblocked now that S2 has landed.

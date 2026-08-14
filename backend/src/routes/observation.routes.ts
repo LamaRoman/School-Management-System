@@ -4,7 +4,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
-import { verifyGrade, verifyExamType, verifySection, verifyStudent } from "../utils/schoolScope";
+import { verifyGrade, verifyExamType, verifySection, verifyStudent, verifyAcademicYear } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -184,7 +184,39 @@ router.post("/results/bulk", authenticate, authorize("ADMIN", "TEACHER"), async 
   });
 
   const { examTypeId, academicYearId, entries } = schema.parse(req.body);
-  await verifyExamType(examTypeId, schoolId);
+  const examType = await verifyExamType(examTypeId, schoolId);
+  await verifyAcademicYear(academicYearId, schoolId);
+
+  // Both ids are part of the row's unique key, so a mismatched pair writes a row
+  // that looks valid but belongs to no coherent (year, exam) combination.
+  if (examType.academicYearId !== academicYearId) {
+    throw new AppError("Exam type does not belong to this academic year", 400);
+  }
+
+  // Verify every studentId and categoryId resolves inside this school. Neither
+  // was checked before, so observation grades could be written onto another
+  // school's students and would then surface on that school's report cards.
+  const uniqueStudentIds = [...new Set(entries.map((e) => e.studentId))];
+  const validStudentCount = await prisma.student.count({
+    where: {
+      id: { in: uniqueStudentIds },
+      section: { grade: { academicYear: { schoolId } } },
+    },
+  });
+  if (validStudentCount !== uniqueStudentIds.length) {
+    throw new AppError("One or more students do not belong to this school", 400);
+  }
+
+  const uniqueCategoryIds = [...new Set(entries.map((e) => e.categoryId))];
+  const validCategoryCount = await prisma.observationCategory.count({
+    where: {
+      id: { in: uniqueCategoryIds },
+      grade: { academicYear: { schoolId } },
+    },
+  });
+  if (validCategoryCount !== uniqueCategoryIds.length) {
+    throw new AppError("One or more observation categories do not belong to this school", 400);
+  }
 
   await prisma.$transaction(
     entries.map((entry) =>
