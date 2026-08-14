@@ -13,6 +13,7 @@
  */
 
 import request from "supertest";
+import { AppError } from "../../middleware/errorHandler";
 import {
   app,
   prisma,
@@ -546,5 +547,108 @@ describe("Student login account provisioning", () => {
     `;
     // The seeded context student is created directly via Prisma, not the route.
     expect(Number(orphans[0].count)).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * X7 — enrollment used to report plain success even when the student's login
+ * account was never created. The student record is deliberately still kept in
+ * that case (rolling it back over a login problem is the worse outcome), but the
+ * admin who enrolled them has to be told, or the divergence is only discovered
+ * when a parent reports that the login does not work. That is exactly how a
+ * production deployment ended up with 80 accountless students.
+ */
+describe("Enrollment reports whether the login account was created", () => {
+  async function createApprovedAdmission(studentName: string) {
+    return prisma.admission.create({
+      data: {
+        studentName,
+        applyingForGradeId: ctx.grade.id,
+        academicYearId: ctx.year.id,
+        status: "APPROVED",
+        appliedDate: "2081/01/01",
+      },
+    });
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("reports accountCreated true and provisions a working login", async () => {
+    const admission = await createApprovedAdmission("Enrolled With Login");
+
+    const res = await request(app)
+      .post(`/admissions/${admission.id}/enroll`)
+      .set("Authorization", authHeader(adminToken))
+      .send({ sectionId: ctx.section.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.accountCreated).toBe(true);
+    expect(res.body.data.message).not.toMatch(/no login account/i);
+
+    const user = await prisma.user.findFirst({ where: { studentId: res.body.data.studentId } });
+    expect(user).not.toBeNull();
+    expect(user!.role).toBe("STUDENT");
+  });
+
+  it("reports accountCreated false instead of plain success when provisioning fails", async () => {
+    // The generated address embeds a cuid suffix, so a collision cannot be
+    // arranged from outside the route. Force the same failure the production
+    // incident hit: getStudentDefaultPassword() refusing to hand out a weak
+    // fallback password.
+    const studentPassword = require("../../utils/studentPassword");
+    jest
+      .spyOn(studentPassword, "getStudentDefaultPassword")
+      .mockImplementation(() => {
+        throw new AppError(
+          "Cannot create student login account: DEFAULT_STUDENT_PASSWORD is not configured.",
+          500
+        );
+      });
+
+    const admission = await createApprovedAdmission("Enrolled Without Login");
+
+    const res = await request(app)
+      .post(`/admissions/${admission.id}/enroll`)
+      .set("Authorization", authHeader(adminToken))
+      .send({ sectionId: ctx.section.id });
+
+    // The enrollment itself still succeeds — that is deliberate.
+    expect(res.status).toBe(200);
+    expect(res.body.data.studentId).toBeTruthy();
+    const student = await prisma.student.findUnique({ where: { id: res.body.data.studentId } });
+    expect(student).not.toBeNull();
+    expect((await prisma.admission.findUniqueOrThrow({ where: { id: admission.id } })).status)
+      .toBe("ENROLLED");
+
+    // ...but it is no longer reported as unqualified success.
+    expect(res.body.data.accountCreated).toBe(false);
+    expect(res.body.data.message).toMatch(/no login account/i);
+    expect(res.body.data.accountError).toBeTruthy();
+
+    // And the account genuinely is absent, so the message is not merely cosmetic.
+    expect(await prisma.user.findFirst({ where: { studentId: res.body.data.studentId } })).toBeNull();
+  });
+
+  it("does not leak the underlying driver error to the caller", async () => {
+    const studentPassword = require("../../utils/studentPassword");
+    jest
+      .spyOn(studentPassword, "getStudentDefaultPassword")
+      .mockImplementation(() => {
+        throw new Error("connect ECONNREFUSED postgresql://postgres:hunter2@db:5432/app");
+      });
+
+    const admission = await createApprovedAdmission("Enrolled Opaque Error");
+
+    const res = await request(app)
+      .post(`/admissions/${admission.id}/enroll`)
+      .set("Authorization", authHeader(adminToken))
+      .send({ sectionId: ctx.section.id });
+
+    expect(res.body.data.accountCreated).toBe(false);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toMatch(/hunter2/);
+    expect(body).not.toMatch(/ECONNREFUSED/);
   });
 });

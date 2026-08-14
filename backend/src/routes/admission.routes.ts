@@ -250,7 +250,17 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
     },
   });
 
-  // Auto-create user account for the student
+  // Auto-create user account for the student.
+  //
+  // A failure here does NOT fail the enrollment: the student record is the
+  // important part, and rolling it back over a login problem is the worse
+  // outcome. But it must not be silent either — this catch used to swallow the
+  // error and still report plain success, which is how a production deployment
+  // ended up with students who were enrolled, on every roster, and unable to log
+  // in, discovered only when a parent complained. The outcome is reported back to
+  // the caller so the admin who enrolled them finds out at the time.
+  let accountCreated = false;
+  let accountError: string | undefined;
   try {
     const baseName = admission.studentName.toLowerCase().trim().replace(/\s+/g, ".");
     // Use studentId suffix to guarantee uniqueness — no DB loop needed
@@ -267,8 +277,16 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
         isActive: true,
       },
     });
+    accountCreated = true;
   } catch (err) {
     console.error("Failed to auto-create student user:", err);
+    // Deliberately not the raw driver message — this reaches the browser, and
+    // Prisma errors can carry the connection string. The specifics stay in the
+    // server log; the admin gets something they can act on.
+    accountError =
+      err instanceof AppError
+        ? err.message
+        : "Could not create the login account for this student.";
   }
 
   // Update admission status to ENROLLED
@@ -277,9 +295,15 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
     data: { status: "ENROLLED" },
   });
 
+  const enrolledMessage = `${admission.studentName} enrolled in ${admission.applyingForGrade.name} Section ${section.name}`;
+
   res.json({
     data: {
-      message: `${admission.studentName} enrolled in ${admission.applyingForGrade.name} Section ${section.name}`,
+      message: accountCreated
+        ? enrolledMessage
+        : `${enrolledMessage}, but no login account was created.`,
+      accountCreated,
+      ...(accountError ? { accountError } : {}),
       studentId: student.id,
     },
   });

@@ -169,7 +169,17 @@ export default function AdmissionPage() {
       const result = await api.post<any>(`/admissions/${enrollingId}/enroll`, {
         sectionId: enrollSectionId,
       });
-      toast.success(result.message);
+      if (result.accountCreated === false) {
+        // The student IS enrolled — this is not a failed enrollment. But it needs
+        // to be noticed and acted on, so it gets a long-lived toast rather than the
+        // 3s success one, which is easy to miss and reads as "all fine".
+        toast.error(
+          `${result.message}${result.accountError ? ` ${result.accountError}` : ""}`,
+          { duration: 12000 }
+        );
+      } else {
+        toast.success(result.message);
+      }
       setEnrollingId(null);
       setEnrollSectionId("");
       if (activeYear) await fetchAdmissions(activeYear.id, filterStatus);
