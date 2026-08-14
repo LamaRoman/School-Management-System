@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import toast from "react-hot-toast";
 import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
 import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
@@ -120,16 +121,29 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
   const [selectedGrade, setSelectedGrade] = useState("");
   const [entries, setEntries] = useState<{ feeCategoryId: string; amount: number; frequency: string; examTypeId?: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loadingEntries, setLoadingEntries] = useState(false);
+  const runStructure = useLatestRequest();
 
   const handleGradeChange = async (gradeId: string) => {
     setSelectedGrade(gradeId);
-    try { const data = await api.get<FeeStructure[]>(`/fees/structure?academicYearId=${activeYear.id}&gradeId=${gradeId}`); setEntries(data.length > 0 ? data.map((s) => ({ feeCategoryId: s.feeCategoryId, amount: s.amount, frequency: s.frequency, examTypeId: s.examTypeId || undefined })) : categories.map((c) => ({ feeCategoryId: c.id, amount: 0, frequency: "MONTHLY" }))); } catch { setEntries([]); }
+    // Save writes `entries` against the *currently* selected grade, and Copy to All writes
+    // them to every grade in the year — a superseded response here misprices a whole school.
+    setEntries([]);
+    setLoadingEntries(true);
+    await runStructure(
+      () => api.get<FeeStructure[]>(`/fees/structure?academicYearId=${activeYear.id}&gradeId=${gradeId}`),
+      (data) => {
+        setEntries(data.length > 0 ? data.map((s) => ({ feeCategoryId: s.feeCategoryId, amount: s.amount, frequency: s.frequency, examTypeId: s.examTypeId || undefined })) : categories.map((c) => ({ feeCategoryId: c.id, amount: 0, frequency: "MONTHLY" })));
+        setLoadingEntries(false);
+      },
+      () => { setEntries([]); setLoadingEntries(false); }
+    );
   };
   const handleEntryChange = (i: number, f: string, v: any) => { setEntries((p) => { const u = [...p]; u[i] = { ...u[i], [f]: v }; if (f === "frequency" && v !== "PER_EXAM") u[i].examTypeId = undefined; return u; }); };
   const handleAddRow = () => { setEntries((p) => [...p, { feeCategoryId: "", amount: 0, frequency: "PER_EXAM", examTypeId: "" }]); };
   const handleRemoveRow = (i: number) => { setEntries((p) => p.filter((_, idx) => idx !== i)); };
-  const handleSave = async () => { if (!selectedGrade) return; const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); setSaving(true); try { await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: selectedGrade, entries: valid }); toast.success(valid.length > 0 ? "Saved" : "Cleared"); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
-  const handleCopyToAll = async () => { if (!selectedGrade) return;
+  const handleSave = async () => { if (!selectedGrade || loadingEntries) return; const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); setSaving(true); try { await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: selectedGrade, entries: valid }); toast.success(valid.length > 0 ? "Saved" : "Cleared"); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
+  const handleCopyToAll = async () => { if (!selectedGrade || loadingEntries) return;
   if (!await showConfirm({ title: "Copy to all grades", message: "This fee structure will be copied to all other grades in the active year.", confirmLabel: "Copy", variant: "warning" })) return; setSaving(true); try { const valid = entries.filter((e) => e.feeCategoryId && e.amount > 0); for (const g of grades) { if (g.id !== selectedGrade) await api.post("/fees/structure/bulk", { academicYearId: activeYear.id, gradeId: g.id, entries: valid }); } toast.success(`Copied to ${grades.length - 1} grades`); } catch (e: any) { toast.error(e.message); } finally { setSaving(false); } };
   const calcAnnual = (e: { amount: number; frequency: string }) => e.frequency === "MONTHLY" ? e.amount * 12 : e.amount;
 
@@ -168,20 +182,25 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
   const [selectedStudent, setSelectedStudent] = useState(""); const [assignments, setAssignments] = useState<any[]>([]);
   const [gradeCategoryIds, setGradeCategoryIds] = useState<string[]>([]);
   const [form, setForm] = useState({ feeCategoryId: "", amount: "", frequency: "MONTHLY" });
+  const runGrade = useLatestRequest(); const runStudents = useLatestRequest(); const runAssignments = useLatestRequest();
 
   const handleGradeChange = async (id: string) => {
-    setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setAssignments([]); setGradeCategoryIds([]);
-    try {
-      const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`);
-      setSections(all.find((g) => g.id === id)?.sections || []);
-      if (id) {
-        const structures = await api.get<FeeStructure[]>(`/fees/structure?gradeId=${id}&academicYearId=${activeYear.id}`);
+    setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setAssignments([]); setGradeCategoryIds([]); setSections([]);
+    await runGrade(
+      async () => {
+        const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`);
+        const structures = id ? await api.get<FeeStructure[]>(`/fees/structure?gradeId=${id}&academicYearId=${activeYear.id}`) : [];
+        return { all, structures };
+      },
+      ({ all, structures }) => {
+        setSections(all.find((g) => g.id === id)?.sections || []);
         setGradeCategoryIds(structures.map((s) => s.feeCategoryId));
-      }
-    } catch { setSections([]); }
+      },
+      () => setSections([])
+    );
   };
-  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setAssignments([]); try { setStudents(await api.get<any[]>(`/students?sectionId=${id}`)); } catch { setStudents([]); } };
-  const handleStudentChange = async (id: string) => { setSelectedStudent(id); try { setAssignments(await api.get<any[]>(`/fees/assignments?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setAssignments([]); } };
+  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setAssignments([]); setStudents([]); await runStudents(() => api.get<any[]>(`/students?sectionId=${id}`), setStudents, () => setStudents([])); };
+  const handleStudentChange = async (id: string) => { setSelectedStudent(id); setAssignments([]); await runAssignments(() => api.get<any[]>(`/fees/assignments?studentId=${id}&academicYearId=${activeYear.id}`), setAssignments, () => setAssignments([])); };
   const handleAssign = async () => { if (!selectedStudent || !form.feeCategoryId || !form.amount) return; try { await api.post("/fees/assignments", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, amount: parseFloat(form.amount) || 0, frequency: form.frequency }); toast.success("Fee assigned"); setForm({ feeCategoryId: "", amount: "", frequency: "MONTHLY" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
   const handleRemove = async (id: string) => { try { await api.delete(`/fees/assignments/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
 
@@ -221,10 +240,11 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
   const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState(""); const [overrides, setOverrides] = useState<any[]>([]);
   const [form, setForm] = useState({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" });
+  const runGrade = useLatestRequest(); const runStudents = useLatestRequest(); const runOverrides = useLatestRequest();
 
-  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setOverrides([]); try { const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`); setSections(all.find((g) => g.id === id)?.sections || []); } catch { setSections([]); } };
-  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setOverrides([]); try { setStudents(await api.get<any[]>(`/students?sectionId=${id}`)); } catch { setStudents([]); } };
-  const handleStudentChange = async (id: string) => { setSelectedStudent(id); try { setOverrides(await api.get<any[]>(`/fees/overrides?studentId=${id}&academicYearId=${activeYear.id}`)); } catch { setOverrides([]); } };
+  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setOverrides([]); setSections([]); await runGrade(() => api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`), (all) => setSections(all.find((g) => g.id === id)?.sections || []), () => setSections([])); };
+  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setOverrides([]); setStudents([]); await runStudents(() => api.get<any[]>(`/students?sectionId=${id}`), setStudents, () => setStudents([])); };
+  const handleStudentChange = async (id: string) => { setSelectedStudent(id); setOverrides([]); await runOverrides(() => api.get<any[]>(`/fees/overrides?studentId=${id}&academicYearId=${activeYear.id}`), setOverrides, () => setOverrides([])); };
   const handleAdd = async () => { if (!selectedStudent || !form.feeCategoryId) return; try { await api.post("/fees/overrides", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, discountType: form.discountType, overrideAmount: form.discountType === "FLAT" ? parseFloat(form.overrideAmount) || 0 : 0, discountPercent: form.discountType === "PERCENTAGE" ? parseFloat(form.discountPercent) || 0 : undefined, reason: form.reason || undefined }); toast.success("Applied"); setForm({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
   const handleRemove = async (id: string) => { try { await api.delete(`/fees/overrides/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
 
@@ -273,33 +293,53 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [saving, setSaving] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const runSections = useLatestRequest();
+  // Section change and month change hit the same endpoint, so they are one stream and
+  // share one guard — switching month must be able to supersede an in-flight section load.
+  const runOverview = useLatestRequest();
+  const runLedger = useLatestRequest();
+
+  const fetchOverview = (sectionId: string, month: string) => {
+    setLoadingOverview(true);
+    return runOverview(
+      () => api.get<any>(`/fees/section-overview?sectionId=${sectionId}&academicYearId=${activeYear.id}&currentMonth=${month}`),
+      (data) => { setOverview(data.students || []); setLoadingOverview(false); },
+      () => { setOverview([]); setLoadingOverview(false); }
+    );
+  };
 
   const handleGradeChange = async (id: string) => {
-    setSelectedGrade(id); setSelectedSection(""); setOverview([]); setLedger(null); setReceipt(null);
-    try { const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`); setSections(all.find((g) => g.id === id)?.sections || []); } catch { setSections([]); }
+    setSelectedGrade(id); setSelectedSection(""); setOverview([]); setLedger(null); setReceipt(null); setSections([]);
+    await runSections(() => api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`), (all) => setSections(all.find((g) => g.id === id)?.sections || []), () => setSections([]));
   };
 
   const handleSectionChange = async (sectionId: string) => {
-    setSelectedSection(sectionId); setLedger(null); setReceipt(null); setLoadingOverview(true);
-    try { const data = await api.get<any>(`/fees/section-overview?sectionId=${sectionId}&academicYearId=${activeYear.id}&currentMonth=${currentMonth}`); setOverview(data.students || []); }
-    catch { setOverview([]); } finally { setLoadingOverview(false); }
+    setSelectedSection(sectionId); setLedger(null); setReceipt(null); setOverview([]);
+    await fetchOverview(sectionId, currentMonth);
   };
 
   const handleMonthChange = (month: string) => {
     setCurrentMonth(month);
-    if (selectedSection) {
-      setLoadingOverview(true);
-      api.get<any>(`/fees/section-overview?sectionId=${selectedSection}&academicYearId=${activeYear.id}&currentMonth=${month}`)
-        .then((data) => setOverview(data.students || []))
-        .catch(() => setOverview([]))
-        .finally(() => setLoadingOverview(false));
-    }
+    if (selectedSection) fetchOverview(selectedSection, month);
   };
 
   const handleOpenLedger = async (studentId: string) => {
     setReceipt(null);
-    try { const data = await api.get<LedgerData>(`/fees/student-ledger/${studentId}?academicYearId=${activeYear.id}`); setLedger(data); setPayMonths([]); setPayFixed([]); setPaymentDate(`${activeYear.yearBS}/${String(nepaliMonths.indexOf(currentMonth) + 1).padStart(2, "0")}/15`); }
-    catch { setLedger(null); }
+    // Collect posts `ledger.student.id` with amounts read off `ledger.monthGrid`. Leaving the
+    // previous student's ledger on screen while the next one loads is a window where the
+    // operator can take a payment against the student they just navigated away from.
+    setLedger(null); setPayMonths([]); setPayFixed([]);
+    setLoadingLedger(true);
+    await runLedger(
+      () => api.get<LedgerData>(`/fees/student-ledger/${studentId}?academicYearId=${activeYear.id}`),
+      (data) => {
+        setLedger(data); setPayMonths([]); setPayFixed([]);
+        setPaymentDate(`${activeYear.yearBS}/${String(nepaliMonths.indexOf(currentMonth) + 1).padStart(2, "0")}/15`);
+        setLoadingLedger(false);
+      },
+      () => { setLedger(null); setLoadingLedger(false); }
+    );
   };
 
   const handleCloseLedger = () => { setLedger(null); setReceipt(null); };
@@ -324,7 +364,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
   };
 
   const handleCollect = async () => {
-    if (!ledger || !paymentDate) return;
+    if (!ledger || !paymentDate || loadingLedger) return;
     const items: { feeCategoryId: string; amount: number; paidMonth?: string }[] = [];
 
     for (const month of payMonths) {
@@ -346,11 +386,14 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
       toast.success(`Receipt: ${result.receiptNumber}`);
       const receiptData = await api.get<any>(`/fees/receipt/${result.receiptNumber}`);
       setReceipt(receiptData);
-      // Refresh ledger
-      const newLedger = await api.get<LedgerData>(`/fees/student-ledger/${ledger.student.id}?academicYearId=${activeYear.id}`);
-      setLedger(newLedger); setPayMonths([]); setPayFixed([]);
+      // Refresh ledger — through the same guard, so it loses to a ledger the operator
+      // has already opened for the next student rather than overwriting it.
+      await runLedger(
+        () => api.get<LedgerData>(`/fees/student-ledger/${ledger.student.id}?academicYearId=${activeYear.id}`),
+        (newLedger) => { setLedger(newLedger); setPayMonths([]); setPayFixed([]); }
+      );
       // Refresh overview
-      if (selectedSection) { const data = await api.get<any>(`/fees/section-overview?sectionId=${selectedSection}&academicYearId=${activeYear.id}&currentMonth=${currentMonth}`); setOverview(data.students || []); }
+      if (selectedSection) await fetchOverview(selectedSection, currentMonth);
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 

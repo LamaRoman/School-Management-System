@@ -38,6 +38,10 @@ backend/prisma/*.db-journal
 # TypeScript
 *.tsbuildinfo
 
+# Claude Code — launch.json is shared dev config; the rest is per-developer
+.claude/settings.local.json
+.claude/*.local.json
+
 # Misc
-*.logbackend/.env.test
+*.log
 backend/.env.test

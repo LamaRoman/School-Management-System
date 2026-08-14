@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Clock, Shield, BookOpen, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -28,6 +29,8 @@ export default function TeacherAssignmentsPage() {
     const [selectedSection, setSelectedSection] = useState("");
     const [showForm, setShowForm] = useState(false);
     const [loading, setLoading] = useState(true);
+    const runAssignments = useLatestRequest();
+    const runSubjects = useLatestRequest();
 
     const [form, setForm] = useState({
         teacherId: "",
@@ -44,8 +47,10 @@ export default function TeacherAssignmentsPage() {
             : selectedGrade
                 ? `?gradeId=${selectedGrade}`
                 : "";
-        const data = await api.get<Assignment[]>(`/teacher-assignments${params}`);
-        setAssignments(data);
+        await runAssignments(
+            () => api.get<Assignment[]>(`/teacher-assignments${params}`),
+            setAssignments
+        );
     };
 
     useEffect(() => {
@@ -75,9 +80,16 @@ export default function TeacherAssignmentsPage() {
     useEffect(() => {
         const gradeId = selectedGrade || getGradeIdFromSection(form.sectionId);
         if (gradeId) {
-            api.get<Subject[]>(`/subjects?gradeId=${gradeId}`)
-                .then(setSubjects)
-                .catch(() => setSubjects([]));
+            // A superseded subject list is not just a confusing dropdown: the form posts
+            // whichever subjectId is picked from it, and the server does not yet check that
+            // the subject belongs to the section's grade (S4), so a stale list is a route to
+            // a cross-grade assignment — which then gates who may enter marks for what.
+            setSubjects([]);
+            runSubjects(
+                () => api.get<Subject[]>(`/subjects?gradeId=${gradeId}`),
+                setSubjects,
+                () => setSubjects([])
+            );
         }
     }, [selectedGrade, form.sectionId]);
 

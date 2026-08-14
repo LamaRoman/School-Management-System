@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import toast from "react-hot-toast";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import {
@@ -37,8 +38,10 @@ export default function AttendancePage() {
   const [date, setDate] = useState(getTodayBS());
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingRecords, setLoadingRecords] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const runAttendance = useLatestRequest();
 
   useEffect(() => {
     (async () => {
@@ -56,19 +59,27 @@ export default function AttendancePage() {
 
   const fetchAttendance = async () => {
     if (!selectedSection || !date) return;
-    try {
-      const data = await api.get<AttendanceRecord[]>(
+    // Drop the previous section's roster immediately. Save posts `records` against the
+    // *currently* selected sectionId, so leaving the old roster on screen while the new
+    // one is in flight is a window where one tap on Save writes another class's students.
+    setRecords([]);
+    setHasChanges(false);
+    setLoadingRecords(true);
+    await runAttendance(
+      () => api.get<AttendanceRecord[]>(
         `/daily-attendance?sectionId=${selectedSection.sectionId}&date=${date}&academicYearId=${selectedSection.academicYearId}`
-      );
-      // Default unmarked students to PRESENT
-      setRecords(data.map((r) => ({
-        ...r,
-        status: r.status || "PRESENT",
-      })));
-      setHasChanges(false);
-    } catch {
-      setRecords([]);
-    }
+      ),
+      (data) => {
+        // Default unmarked students to PRESENT
+        setRecords(data.map((r) => ({ ...r, status: r.status || "PRESENT" })));
+        setHasChanges(false);
+        setLoadingRecords(false);
+      },
+      () => {
+        setRecords([]);
+        setLoadingRecords(false);
+      }
+    );
   };
 
   useEffect(() => {
@@ -92,7 +103,7 @@ export default function AttendancePage() {
   };
 
   const handleSave = async () => {
-    if (!selectedSection) return;
+    if (!selectedSection || loadingRecords) return;
 
     // Prevent saving attendance for future dates
     if (isFutureBS(date)) {
@@ -232,12 +243,12 @@ export default function AttendancePage() {
 
       {/* Quick Actions */}
       <div className="flex gap-2 mb-4">
-        <button onClick={markAllPresent} disabled={isFutureBS(date)} className="btn-ghost text-xs flex-1">
+        <button onClick={markAllPresent} disabled={isFutureBS(date) || loadingRecords} className="btn-ghost text-xs flex-1">
           <Check size={14} /> All Present
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !hasChanges || isFutureBS(date)}
+          disabled={saving || !hasChanges || isFutureBS(date) || loadingRecords}
           className="btn-primary text-xs flex-1"
         >
           <Save size={14} /> {saving ? "Saving..." : "Save Attendance"}
@@ -246,7 +257,9 @@ export default function AttendancePage() {
 
       {/* Student List */}
       <div className="space-y-2">
-        {records.length === 0 ? (
+        {loadingRecords ? (
+          <div className="card p-8 text-center text-gray-400">Loading...</div>
+        ) : records.length === 0 ? (
           <div className="card p-8 text-center text-gray-400">No students found</div>
         ) : (
           records.map((r) => (
