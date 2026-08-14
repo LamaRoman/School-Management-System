@@ -40,7 +40,8 @@ The original assessment was mostly accurate, but four items were wrong in ways t
 - **Verify UI changes in the running app, not just via typecheck.** Several findings here were only caught by clicking through.
 - **Dev and test databases are separate** (`nepali_report_card` vs `..._test`). `helpers.ts:21` guards against the suite ever wiping the dev one — it happened once.
 - **`.claude/launch.json` is committed** (2026-08-14) — dev-server config for `backend` (port 4000) and `frontend` (port 3000), so the preview tooling starts them the same way for everyone. Per-developer Claude settings (`.claude/settings.local.json`) are gitignored. Fixed a typo in the same pass: `.gitignore` read `*.logbackend/.env.test` on one line, so `*.log` was never actually ignored.
-- **Branch hygiene.** Six merged feature branches were pruned locally on 2026-08-14. `fix/accounts-without-logins` was **kept** — it is *not* merged and carries one commit, `backfill-missing-student-accounts.ts`, a one-time script for students with no login account. Decide whether that ships or gets dropped; don't prune it by reflex.
+- **Branch hygiene.** Six merged feature branches were pruned locally on 2026-08-14. `fix/accounts-without-logins` was **shipped** the same day (PR #15) once its premise was checked and held: 80 of 261 dev students have no login account. The bug that produced them is **still open** — see **X7**.
+- **80 students in the dev database have no login account** and the backfill has not been run against it. Running it needs `DEFAULT_STUDENT_PASSWORD` set in the environment; the script refuses without one.
 - **Verifying anything in the teacher or parent portals needs a real login for that role** — an ADMIN can open `/teacher/*` (the layout allows it) but `/teacher-assignments/my` returns no class-teacher sections for them, so every section selector is empty and the page can't be exercised. Seed logins are in `seed-all.ts`.
 
 ---
@@ -702,9 +703,16 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
   >
   > - **`teacher/attendance`** — each class teacher owns exactly one section in the seed data, so the race key here is the **date**, not the section; the guard covers both since they share one effect. Old code: while a new date was loading, the *previous* date's roster stayed on screen and the superseded response then overwrote state (roster 10 → 0). With the guard: roster is cleared, Save is disabled during load, and the late response changes nothing.
   > - **`teacher/students`** — during load the table shows a `Loading...` row and **Assign Roll Numbers is disabled**; 10 rows render correctly afterwards.
-  > - **`teacher/observations`** — the loading state appears and the false *"No observation categories defined for this grade"* is correctly suppressed during load. **The grid itself could not be exercised: no `ObservationCategory` rows are seeded anywhere** (neither `seed-all.ts` nor `seed-dev.ts` creates any), so every grade's grid is legitimately empty. Seeding a few categories would make this page testable — worth doing before **W3c** touches it.
+  > - **`teacher/observations`** — the sharpest demonstration of the whole finding, once categories were seeded (see the note under **X8**). Graded one student A+ under *First Terminal* and saved, so the two exams differ observably. Then delayed First Terminal's fetch and switched to *Final*:
   >
-  > One caveat on method: an attempt to tag the superseded attendance response with a recognisable fake payload did not render as intended, for a reason not chased down. The comparison above rests on the state change actually observed (roster 10 → 0 on old code, unchanged with the guard), not on that marker.
+  >   | | old code | with guard |
+  >   |---|---|---|
+  >   | Highlighted exam | Final | Final |
+  >   | First cell shows | **A+ — First Terminal's grade** ❌ | blank (Final's) ✅ |
+  >
+  >   A Save at that moment posts `examTypeId: Final` carrying First Terminal's grades. This is the bad write F4a exists to prevent, reproduced end to end.
+  >
+  > One caveat on method: an attempt to tag the superseded *attendance* response with a recognisable fake payload did not render as intended, for a reason not chased down. The attendance comparison rests on the state change actually observed (roster 10 → 0 on old code, unchanged with the guard), not on that marker. The observations comparison above needed no such trick and is the stronger evidence.
 
 - [ ] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
 
@@ -828,6 +836,32 @@ Plain `Map`s, never pruned. Entries expire *logically* (TTL checked on read) but
 
 **Fix direction:** sweep them in the existing hourly `cleanupExpiredAuthRecords`, or bound with an LRU.
 
+### [ ] X7. Enrolling a student reports success even when their login account was never created
+
+**Where:** `backend/src/routes/admission.routes.ts:253–271` (`POST /admissions/:id/enroll`)
+
+The account-creation block is wrapped in `try { … } catch (err) { console.error(...) }`, and the handler then returns `"<name> enrolled in <grade> Section <x>"` regardless. So a student can be enrolled, reported as enrolled, appear on every roster — and have no way to log in, with nothing surfaced to the admin who did it.
+
+**This already happened, and the evidence is still in the database.** `DEFAULT_STUDENT_PASSWORD` was never set in production; `getStudentDefaultPassword()` correctly refuses the weak fallback there (predictable emails + one shared password is mass account takeover), that throw was swallowed here, and every student enrolled in that window was saved without an account. **The dev database currently has 80 of 261 students with no linked user.**
+
+The repair tool shipped separately (`prisma/backfill-missing-student-accounts.ts`, merged 2026-08-14 — idempotent, refuses to run without the env var). **The repair is not the fix.** As long as this catch is silent, the same divergence recurs on any failure — an unset variable, a duplicate email, a DB blip — and is only discovered when a parent reports the login doesn't work.
+
+**Fix direction:** don't fail the enrollment (the student record is the important part, and rolling it back over an account problem is worse), but stop reporting unqualified success. Return the account outcome in the response payload and surface it in the admin UI — *"Enrolled. Login account could not be created."* — and consider a flag on the student so the gap is queryable rather than living only in a Railway log line.
+
+- [ ] **X7a.** Same swallow-and-report-success shape exists wherever else student accounts are auto-created — check `student.routes.ts`'s direct-create path (**W3e**) before that route is removed, since it shares the pattern.
+
+---
+
+### [x] X8. No observation categories in any seed — the observation surface can't be exercised
+
+> **FIXED 2026-08-14.** `seed-all.ts` now creates six categories per grade (Punctuality, Discipline, Cleanliness, Class Participation, Homework, Behaviour, each with `nameNp`), upserted on the existing `@@unique([name, gradeId])` so re-running is safe.
+>
+> Applied to the dev database without re-running the whole seed: **84 rows across 14 grades** (13 in the main school, 1 in Portal Demo). The observations grid now renders 6 columns × 10 students for I-A.
+>
+> **Found because F4a couldn't be verified without it.** With zero categories, `teacher/observations` and `admin/observations` render an empty grid for every class, the observation block on report cards is always blank, and there is nothing to review or race-test. This is worth having in place before **W3b**/**W3c** move these screens around.
+
+---
+
 ### [ ] X5. Parents can't download report card PDFs
 **Where:** `backend/src/routes/pdf.routes.ts:516,548` — `authorize("ADMIN", "TEACHER", "STUDENT")` omits `PARENT`
 
@@ -874,6 +908,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | S4 + S4a + S4b (grade-consistency invariant) | ~half day | S4b test is worth more than the patches |
 | S6a–S6e (public routes) | ~half day | S6b needs a `code` migration |
 | X3 (logging + error tracking) | ~half day | |
+| X7 (enroll reports success on account failure) | ~2 hrs | The repair shipped; the silent failure that caused it hasn't been fixed |
 | P1b–P1d (photos → S3) + S8 | 1–2 days | |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
 | S5, F7–F10, X4, X5, X6 | as capacity allows | |
