@@ -301,3 +301,82 @@ describe("the report card template", () => {
     expect(card({ isAbsent: false, notEntered: false })).not.toContain("Incomplete");
   });
 });
+
+/**
+ * R7a — optional subjects.
+ *
+ * `Subject.isOptional` has existed on the model, been settable from the admin UI, and
+ * been read by no results calculation. Once R7 started scoring every subject in the
+ * grade, a student who does not take an elective would have been given 0 for it in
+ * their percentage, GPA and rank.
+ *
+ * There is no per-student subject enrollment in the schema, so "has no mark row" is
+ * the only available signal. The rule: required + no mark = not entered yet (scores
+ * 0); optional + no mark = not taken (excluded entirely).
+ */
+describe("optional subjects are not scored against a student who does not take them", () => {
+  let optionalSubjectId: string;
+
+  beforeAll(async () => {
+    const optional = await prisma.subject.create({
+      data: {
+        name: "Optional Music",
+        fullTheoryMarks: 100,
+        fullPracticalMarks: 0,
+        passMarks: 35,
+        displayOrder: 9,
+        isOptional: true,
+        gradeId: ctx.grade.id,
+      },
+    });
+    optionalSubjectId = optional.id;
+
+    // Hari takes it and did well. Ram and Shyam do not take it at all.
+    await prisma.mark.create({
+      data: {
+        studentId: hari.id,
+        subjectId: optional.id,
+        examTypeId,
+        academicYearId: ctx.year.id,
+        theoryMarks: 90,
+        practicalMarks: 0,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.mark.deleteMany({ where: { subjectId: optionalSubjectId } });
+    await prisma.subject.delete({ where: { id: optionalSubjectId } });
+  });
+
+  it("leaves the elective out of the divisor for students who do not take it", async () => {
+    const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
+
+    // Ram is still averaged over his two real subjects — 70%, unchanged. Scoring the
+    // elective as a zero would have dropped him to (70+70+0)/3 = 46.7%.
+    expect(ranks.get(ram.id)!.avgPct).toBeCloseTo(70, 5);
+  });
+
+  it("counts the elective for the student who does take it", async () => {
+    const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
+    // Hari: (70 + 70 + 90) / 3
+    expect(ranks.get(hari.id)!.avgPct).toBeCloseTo((70 + 70 + 90) / 3, 5);
+  });
+
+  it("keeps the elective off the report card of a student who does not take it", async () => {
+    const ramCard = await termReport(ram.id);
+    expect(ramCard.subjects.map((s: any) => s.subjectName)).not.toContain("Optional Music");
+    expect(ramCard.overallPercentage).toBeCloseTo(70, 1);
+
+    const hariCard = await termReport(hari.id);
+    expect(hariCard.subjects.map((s: any) => s.subjectName)).toContain("Optional Music");
+  });
+
+  it("still counts a REQUIRED subject with no mark as zero, unlike an optional one", async () => {
+    // Shyam's Science (required, unentered) still drags him down; the elective he does
+    // not take does not. This is the distinction the whole rule rests on.
+    const card = await termReport(shyam.id);
+    expect(card.subjects.map((s: any) => s.subjectName).sort()).toEqual(["Maths", "Science"]);
+    expect(card.overallPercentage).toBeCloseTo(37.5, 1);
+  });
+});

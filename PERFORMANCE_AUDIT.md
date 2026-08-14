@@ -351,7 +351,15 @@ May be the intended forgiving reading — confirm and document either way.
 >
 > Pinned by 10 tests in `src/test/__tests__/sectionRank.test.ts`; the 3 that exercise the routes were verified to fail against the old code, and the template assertions render the real HTML. Suite 174 → **177**. Also confirmed live on seeded data: for five students in I-A the grade sheet and the term report now return identical rank *and* identical percentage, over identical subject counts.
 >
-> - [ ] **R7a. Not carried over: `Subject.isOptional` is still ignored everywhere.** It exists on the model and is referenced by no route. A grade with an optional subject now scores every student who does not take it as 0 for it — which the *grade sheet has always done*, so this change does not introduce it, but it does make one shared place where it can finally be fixed properly. Worth closing before any grade starts using optional subjects.
+> - [x] **R7a. `Subject.isOptional` was ignored by every results calculation.**
+>
+>   > **FIXED 2026-08-14.** A missing mark row now means two different things depending on the subject: **required → not entered yet, scores 0; optional → the student does not take it, excluded entirely.** Applied in `rank.service.ts`, both report builders and the grade sheet. An optional subject a student does not take is left off their report card altogether rather than printed as a `—` row.
+>   >
+>   > **This was more live than "worth closing eventually".** 0 of 98 subjects are optional today, so nothing was broken — but `admin/subjects/page.tsx:144` has a checkbox for it and `:188` prints an "Optional"/"Compulsory" badge. The field is stored, echoed back by `subject.routes.ts`, and copied on promotion. It was read by no results calculation. One tick of that box and every student who does not take that subject silently scores 0 for it in their percentage, GPA and rank. The UI was advertising a feature the results engine did not implement.
+>   >
+>   > **The ambiguity it cannot resolve, stated plainly.** There is no per-student subject enrollment in the schema — no join table, `Subject` hangs off `Grade`. So "has no mark row" is the *only* available signal, and it cannot distinguish "does not take this elective" from "takes it, mark not entered yet". The latter is now silently excluded, which re-opens R6's inflation for optional subjects specifically. That is the smaller of the two errors: penalising a child for an elective they never sat is the one that reaches a parent. **The real fix is an explicit student↔optional-subject link**, and it should be added before any school actually relies on optional subjects.
+>   >
+>   > Pinned by 4 tests; 3 verified to fail against the pre-R7a code. Suite 177 → **181**.
 
 **Where:** `pdf.routes.ts:200–231` (PDF) and `report.routes.ts:39–80` (web) — same algorithm, two copies
 
