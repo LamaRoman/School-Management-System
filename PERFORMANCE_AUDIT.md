@@ -158,6 +158,16 @@ This is three separate problems wearing one coat:
 
 - [ ] **S6b. The identifier — the more interesting one.** Public URLs currently carry the raw cuid `schoolId`: an internal primary key that ends up embedded in the school's public website HTML where anyone can read it. `School.code` already exists and is `@unique` (`schema.prisma:47`). Keying the public routes on `code` instead stops internal IDs leaking into public pages entirely. Catch: `code` is nullable, so it would need to become required for any school with a public site — worth doing as part of the same change rather than later.
 
+  > **Investigated 2026-08-14 — decided to leave as-is until S6b is actually built.** Checked how a school can end up with `code: null`, because the dev DB's main school has one:
+  >
+  > - **Schools created through the super-admin portal always have a code.** The form initialises `code: ""` and always sends it, and `createSchoolSchema` is `z.string().min(2).max(6).optional()` — `.optional()` permits `undefined`, not `""`, so a blank code is *rejected* rather than stored as null. The `code: data.code ?? null` branch at `superAdmin.routes.ts:118` is only reachable by an API client that omits the key entirely.
+  > - **The dev null is a seed artifact.** `seed-all.ts:207` creates `default-school` directly through Prisma with no `code` field, bypassing the API.
+  > - **Nothing breaks today.** `fee.routes.ts:648` falls back to `schoolId.slice(-6).toUpperCase()` as the receipt prefix. Uniqueness holds either way — `code` is `@unique` and the fallback derives from the unique `schoolId` — and the per-school counter is atomic.
+  >
+  > **The one thing to know when S6b is built:** the receipt prefix is read fresh on every payment, so backfilling a `code` onto a school that has *already issued receipts through the API* changes its series mid-stream (`RCP-A1B2C3-000046` → `RCP-SHS-000047`). No duplicates and nothing errors — `receiptNumber` has no unique constraint and the counter keeps climbing — but it's a visible discontinuity on the document accountants reconcile and parents keep. Backfill codes *before* a school starts taking payments, or accept the break deliberately.
+  >
+  > - [ ] **S6b-i. Minor, unrelated to the migration:** the School Code input on the create-school form (`super-admin/schools/page.tsx:71`) is labelled `*` but has no `required` attribute, unlike School Name and Admin Email beside it. Leaving it blank surfaces a raw zod `String must contain at least 2 character(s)` instead of "School Code is required." Two-character fix, not worth its own PR — fold into whatever touches that form next.
+
 - [ ] **S6c. The comment.** `publicOrigins.service.ts` is honest about returning `true` for no-Origin requests, but the surrounding code reads as though CORS were the gate. Whatever you implement, make the file say plainly that CORS here is browser convenience and the `isActive` filter is the actual boundary — otherwise the next person to touch it makes the same assumption.
 
 Two more worth doing in the same pass, both hitting the cost goal:
