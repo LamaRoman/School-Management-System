@@ -37,7 +37,11 @@ Then: three bulk-write endpoints accept student IDs from any school without chec
 
 # S — Security & cross-school isolation
 
-### [ ] S1. Promotion accepts unverified student IDs — can move another school's students into yours
+### [x] S1. Promotion accepts unverified student IDs — can move another school's students into yours
+
+> **FIXED 2026-08-14.** Every `studentId` in `promotions[]` is now batch-verified to belong to `sourceGradeId` within this school before anything is written, using the same `count()`-and-compare pattern as `mark.routes.ts:77`. A batch containing even one foreign id is rejected whole with a 400.
+>
+> Pinned by `src/test/__tests__/promotion.test.ts` (6 tests), verified to fail 5/6 against the old code. Full suite 151/151. Also confirmed against the running dev app: graduating a real cross-school student now 400s and leaves that student untouched, while a legitimate same-school promotion still succeeds.
 **Where:** `backend/src/routes/promotion.routes.ts:284` (`POST /promotion/promote`)
 
 `sourceYearId`, `targetYearId` and `sourceGradeId` are all verified. The `studentId` values inside the `promotions[]` array are **not**:
@@ -60,7 +64,11 @@ An admin of School A can pass **any student ID in the database** and:
 
 **Fix direction:** batch-verify every `studentId` belongs to `sourceGradeId` in this school before the loop — the same `count()`-and-compare pattern already used in `mark.routes.ts:77`.
 
-- [ ] **S1a.** The loop is **not** in a transaction, and `throw new AppError(...)` mid-loop (e.g. "No next grade found") leaves a partial promotion — the first N students already moved with `rollNo: null`, no rollback, no way to tell which. Wrap it, and validate `nextGrade`/`sameGrade` exist *before* mutating anything.
+- [x] **S1a.** The loop is **not** in a transaction, and `throw new AppError(...)` mid-loop (e.g. "No next grade found") leaves a partial promotion — the first N students already moved with `rollNo: null`, no rollback, no way to tell which. Wrap it, and validate `nextGrade`/`sameGrade` exist *before* mutating anything.
+
+  > **FIXED 2026-08-14** in the same change. The loop now only *plans* updates — resolving the target grade and section, and throwing on anything unresolvable — and the writes go out afterwards in a single `$transaction`. Nothing is written unless every entry in the batch resolves.
+  >
+  > The atomicity test fails against the old code exactly as this note predicted: a `GRADUATE` ahead of an unpromotable student stayed graduated.
 
 ---
 
@@ -688,7 +696,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | ~~R1 (absent-in-average policy)~~ | ✅ **done** | Decided as count-as-zero; R2, R4, R5 fell out with it |
 | R7 (single rank function) | ~half day | Resolves R3's remainder, R6, and unblocks P3 |
 | ~~R4 (grade sheet totals)~~ | ✅ **done** | Resolved by R1 |
-| **S1, S2, S3** (unverified student IDs) | ~half day total | Same `count()`-and-compare fix in three places. **S2 must land before F4a** — it's the server-side backstop for the frontend race. |
+| ~~**S1**~~ + **S2, S3** (unverified student IDs) | ~half day total | S1 ✅ **done** (with S1a). Same `count()`-and-compare fix in the two remaining places. **S2 must land before F4a** — it's the server-side backstop for the frontend race. |
 
 **Week 3+ — structural**
 
@@ -729,6 +737,6 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 1. ~~**P1a** — add `select:` to the roster query.~~ ✅ **done 2026-08-14.**
 2. ~~**R1** — decide whether absent counts as zero~~ ✅ **done 2026-08-14.**
-3. **S1** — verify student IDs in the promotion endpoint. It's the only finding that lets one school destructively modify another's records.
+3. ~~**S1** — verify student IDs in the promotion endpoint.~~ ✅ **done 2026-08-14** (with S1a).
 
-**Next up:** S1 (the only cross-school destructive write), then P2 (indexes).
+**Next up:** S2 and S3 (the two remaining unverified-student-ID endpoints — same fix as S1), then P2 (indexes).

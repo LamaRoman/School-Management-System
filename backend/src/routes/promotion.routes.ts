@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
@@ -278,17 +279,31 @@ router.post("/promote", authenticate, authorize("ADMIN"), async (req, res) => {
   const nextGrade = targetGrades.find((g) => g.displayOrder === sourceGrade.displayOrder + 1);
   const sameGrade = targetGrades.find((g) => g.displayOrder === sourceGrade.displayOrder);
 
+  // Verify every studentId actually belongs to the source grade in this school.
+  // Without this, an admin could pass arbitrary student ids and graduate (or move
+  // into their own school) students belonging to another school entirely.
+  const uniqueStudentIds = [...new Set(promotions.map((p) => p.studentId))];
+  const validStudentCount = await prisma.student.count({
+    where: {
+      id: { in: uniqueStudentIds },
+      section: { grade: { id: sourceGradeId, academicYear: { schoolId } } },
+    },
+  });
+  if (validStudentCount !== uniqueStudentIds.length) {
+    throw new AppError("One or more students do not belong to the source grade", 400);
+  }
+
+  // Resolve every update before writing any of them. Validating mid-loop used to
+  // leave a partial promotion behind — the first N students already moved with
+  // their roll numbers cleared, and no way to tell which.
+  const planned: { studentId: string; data: Prisma.StudentUncheckedUpdateInput }[] = [];
   let promoted = 0;
   let retained = 0;
   let graduated = 0;
 
   for (const p of promotions) {
     if (p.action === "GRADUATE") {
-      // Mark as graduated
-      await prisma.student.update({
-        where: { id: p.studentId },
-        data: { status: "GRADUATED", isActive: false },
-      });
+      planned.push({ studentId: p.studentId, data: { status: "GRADUATED", isActive: false } });
       graduated++;
     } else if (p.action === "RETAIN") {
       // Move to same grade in new year
@@ -298,10 +313,7 @@ router.post("/promote", authenticate, authorize("ADMIN"), async (req, res) => {
         : sameGrade.sections[0];
       if (!targetSection) throw new AppError("No section found in target year for retention");
 
-      await prisma.student.update({
-        where: { id: p.studentId },
-        data: { sectionId: targetSection.id, status: "ACTIVE", rollNo: null },
-      });
+      planned.push({ studentId: p.studentId, data: { sectionId: targetSection.id, status: "ACTIVE", rollNo: null } });
       retained++;
     } else if (p.action === "PROMOTE") {
       if (!nextGrade) throw new AppError(`No next grade found after ${sourceGrade.name} in target year`);
@@ -310,13 +322,14 @@ router.post("/promote", authenticate, authorize("ADMIN"), async (req, res) => {
         : nextGrade.sections[0];
       if (!targetSection) throw new AppError("No section found in target year for promotion");
 
-      await prisma.student.update({
-        where: { id: p.studentId },
-        data: { sectionId: targetSection.id, status: "ACTIVE", rollNo: null },
-      });
+      planned.push({ studentId: p.studentId, data: { sectionId: targetSection.id, status: "ACTIVE", rollNo: null } });
       promoted++;
     }
   }
+
+  await prisma.$transaction(
+    planned.map((u) => prisma.student.update({ where: { id: u.studentId }, data: u.data })),
+  );
 
   res.json({
     data: {
