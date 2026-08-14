@@ -432,7 +432,26 @@ Cost impact too: DB storage, backup size, and Railway egress all scale with it �
 
 ---
 
-### [ ] P2. Add missing database indexes
+### [x] P2. Add missing database indexes
+
+> **FIXED 2026-08-14.** Seven indexes added via `20260814111740_add_performance_indexes` — purely `CREATE INDEX`, no table rewrites, no code change.
+>
+> **Verified the diagnosis first.** `EXPLAIN ANALYZE` against the dev database confirmed sequential scans on `marks` (by exam+year), `students` (by section) and `fee_payments` (by year), exactly as described below.
+>
+> **One correction to the table below:** `daily_attendances` is *not* unindexed for the per-student recompute. Its unique constraint is `(student_id, date, academic_year_id)` and `student_id` leads, so the P4 recompute query and the per-section attendance read both already use it — measured as an Index Scan. What genuinely lacked an index was the *dashboard* query (`analytics.routes.ts:169`, `:256`), which filters year+date across every student with no `studentId`, and so could not use that constraint. The added index targets that instead.
+>
+> **Demonstrated at scale rather than asserted.** Built the volume this item predicts (5 schools × 3 years = **259,200 marks, 10,800 students**) in the test database and measured with and without the indexes:
+>
+> | Query | Before | After | |
+> |---|---|---|---|
+> | Grade sheet — marks by exam+year+students | 15.0 ms (parallel seq scan) | 0.117 ms (index) | **128×** |
+> | Roster — students by section | 0.063 ms | 0.013 ms | 4.8× |
+> | Annual — marks by year+student | 0.029 ms | 0.011 ms | 2.6× |
+>
+> At *dev* volumes two of the seven aren't used yet — the planner correctly prefers a seq scan when a query returns 43% of a 4,000-row table, or reads a 261-row table. That's expected; the value is the scaling curve above. The other three were already picked up by live app traffic within minutes of the migration (confirmed via `pg_stat_user_indexes`).
+>
+> Full suite 160/160; grade sheet, roster and dashboard verified rendering correctly in the running app afterwards.
+
 **Where:** `backend/prisma/schema.prisma` — only 3 `@@index` declarations in 863 lines
 
 PostgreSQL doesn't auto-index foreign keys and Prisma doesn't add them. Of the 42 indexes the migrations create, essentially all come from `@@unique` constraints. Unindexed, heavily-queried columns:
@@ -752,7 +771,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | Item | Effort | Why first |
 |---|---|---|
 | ~~P1a (`select:` excluding photo)~~ | ✅ **done** | Biggest latency win in the project |
-| P2 (indexes) | ~1 hr | Additive migration, compounds as data grows |
+| ~~P2 (indexes)~~ | ✅ **done** | Additive migration, compounds as data grows. Measured 128× on the grade-sheet query at 5-school volume |
 | ~~F1 (CORS preflight)~~ | ✅ **done** | Halves request count app-wide — verified zero preflights on GETs |
 | ~~X1 + X2 (compression, health)~~ | ✅ **done** | X1 measured 83–94% smaller responses; X2 now fails 503 on a dead DB |
 | ~~F3 (loading states)~~ | ✅ **done** | Was 3 pages, not 5 — and they showed a false empty state, not a blank one |
