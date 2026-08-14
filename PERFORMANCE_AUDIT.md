@@ -836,7 +836,17 @@ Plain `Map`s, never pruned. Entries expire *logically* (TTL checked on read) but
 
 **Fix direction:** sweep them in the existing hourly `cleanupExpiredAuthRecords`, or bound with an LRU.
 
-### [ ] X7. Enrolling a student reports success even when their login account was never created
+### [x] X7. Enrolling a student reports success even when their login account was never created
+
+> **FIXED 2026-08-14.** `/admissions/:id/enroll` now returns `accountCreated` (and an `accountError` when it failed) alongside the enrollment message, and the message itself becomes *"… enrolled in …, but no login account was created."* The admin UI shows that as a 12-second error toast instead of the 3-second success one, which was easy to miss and read as "all fine".
+>
+> **The enrollment deliberately still succeeds.** The student record is the important part and rolling it back over a login problem is the worse outcome — the change is to stop reporting *unqualified* success, not to start failing.
+>
+> **The driver error is not echoed back.** Only an `AppError`'s own message is forwarded; anything else becomes a generic string, because this response reaches the browser and Prisma connection errors can carry the connection string. Same reasoning as **X2**'s health check, and pinned by a test asserting neither the password nor `ECONNREFUSED` appears in the body.
+>
+> - **X7a resolved as a smaller change than expected.** `student.routes.ts` had *already* fixed the dangerous half: account creation happens inside the student's transaction and real failures propagate (`resolveStudentPassword` distinguishes the deliberate production refusal from a genuine bug). What remained was the deliberate skip reporting nothing, so `POST /students` now returns `accountCreated` too and the admin students page warns the same way.
+>
+> Pinned by 3 tests in `accountProvisioning.test.ts`, verified to fail 3/3 against the old code. Full suite 164 → **167**.
 
 **Where:** `backend/src/routes/admission.routes.ts:253–271` (`POST /admissions/:id/enroll`)
 
@@ -848,7 +858,9 @@ The repair tool shipped separately (`prisma/backfill-missing-student-accounts.ts
 
 **Fix direction:** don't fail the enrollment (the student record is the important part, and rolling it back over an account problem is worse), but stop reporting unqualified success. Return the account outcome in the response payload and surface it in the admin UI — *"Enrolled. Login account could not be created."* — and consider a flag on the student so the gap is queryable rather than living only in a Railway log line.
 
-- [ ] **X7a.** Same swallow-and-report-success shape exists wherever else student accounts are auto-created — check `student.routes.ts`'s direct-create path (**W3e**) before that route is removed, since it shares the pattern.
+- [x] **X7a.** Same swallow-and-report-success shape exists wherever else student accounts are auto-created — check `student.routes.ts`'s direct-create path (**W3e**) before that route is removed, since it shares the pattern.
+
+  > **Checked 2026-08-14 — mostly already sound.** That path creates the login inside the student's transaction and lets real failures propagate, so it never produces the accountless student this item is about. Only the *deliberate* skip was silent; it now reports `accountCreated` like enroll does.
 
 ---
 
@@ -908,7 +920,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | S4 + S4a + S4b (grade-consistency invariant) | ~half day | S4b test is worth more than the patches |
 | S6a–S6e (public routes) | ~half day | S6b needs a `code` migration |
 | X3 (logging + error tracking) | ~half day | |
-| X7 (enroll reports success on account failure) | ~2 hrs | The repair shipped; the silent failure that caused it hasn't been fixed |
+| ~~X7 (enroll reports success on account failure)~~ | ✅ **done** | Repair shipped in #15; the silent failure behind it is now closed too |
 | P1b–P1d (photos → S3) + S8 | 1–2 days | |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
 | S5, F7–F10, X4, X5, X6 | as capacity allows | |

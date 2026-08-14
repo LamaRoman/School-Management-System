@@ -351,7 +351,11 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     console.error("Failed to auto-create admission record:", err);
   }
 
-  res.status(201).json({ data: student });
+  // Real account-creation failures already propagate (the create is inside the
+  // transaction above). What stays silent is the *deliberate* skip — production
+  // with DEFAULT_STUDENT_PASSWORD unset — which leaves a student with no login and
+  // told the admin nothing. Report it the same way `/admissions/:id/enroll` does.
+  res.status(201).json({ data: { ...student, accountCreated: hashedPassword !== null } });
 });
 
 // POST /api/students/bulk — create multiple + auto-create user accounts

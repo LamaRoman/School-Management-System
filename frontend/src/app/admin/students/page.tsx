@@ -89,8 +89,14 @@ export default function StudentsPage() {
         await api.put(`/students/${editId}`, payload);
         toast.success("Student updated");
       } else {
-        await api.post("/students", payload);
-        toast.success("Student added");
+        const created = await api.post<any>("/students", payload);
+        if (created?.accountCreated === false) {
+          // Student saved, but with no login account. Long-lived toast — the 3s
+          // success one is easy to miss and reads as "all fine".
+          toast.error("Student added, but no login account was created.", { duration: 12000 });
+        } else {
+          toast.success("Student added");
+        }
       }
       setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
       runStudents(() => api.get<Student[]>(`/students?sectionId=${selectedSection}`), setStudents);
