@@ -1,20 +1,52 @@
 # Audit — Zentara Shikshya
 
-Assessment date: 2026-08-14 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
+Assessment date: 2026-08-14 · Last worked: 2026-08-14 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do / not applicable
 
-> Assessment only — no code has been changed.
 > Findings are grouped by area and prefixed: **S** = security/tenancy, **R** = report correctness, **W** = workflow gaps (new capability, not a bug), **P** = performance, **F** = frontend, **X** = robustness/cost.
+
+---
+
+## Start here — current state (2026-08-14)
+
+**Week 1 is complete except F6. All work below is merged to `main` and deployed** (Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the P2 index migration applied on boot — deploy reported success).
+
+| Done | What it was | PR |
+|---|---|---|
+| **R1–R2, R4–R5** | Absent subjects excluded from averages → now count as zero | (earlier) |
+| **P1a** | Base64 photos dropped from the roster payload | #7 |
+| **S1 + S1a** | Promotion accepted foreign student IDs; loop wasn't transactional | #8 |
+| **S2, S3** | Attendance + observations accepted foreign student IDs | #8 |
+| **P2** | 7 missing indexes on the hot report/roster/fee queries | #9 |
+| **F1, X1** | CORS preflight on every GET; no gzip | #10 |
+| **X2, F3** | Health check ignored the DB; 3 pages had no loading state | #11 |
+
+**Suggested next:** **F6** (last Week 1 item, ~1 hr) → **F4a** (unblocked now that S2 landed) → **P4** → **R7 → P3**.
+
+### Corrections found while doing the work — read these before trusting a finding below
+
+The original assessment was mostly accurate, but four items were wrong in ways that changed the work:
+
+1. **P1's "main cause of the lag" claim is unproven.** The dev database has **0 of 261 students with a photo**. The roster payload problem is real *if photos get used*, but it was not causing lag in the data I could see. P1a is still worth having (it removes the landmine); don't assume it sped anything up.
+2. **P2 — `daily_attendances` was not unindexed** for the per-student recompute. Its unique constraint leads with `student_id`, so P4's recompute already used an index. The genuine gap was the *dashboard* query (year + date, no student filter).
+3. **F3 was 3 pages, not 5** — `accountant/fees` and `accountant/admissions` are one-line re-exports of admin pages that already had loading states. And the two table pages showed the *empty-state message* while loading ("No students in this section"), not a blank table — a stronger match for the reported symptom.
+4. **S6b — `School.code` being null is a seed artifact, not a live gap.** See the note under S6b; schools created through the portal always get a code.
+
+### Environment notes for whoever picks this up
+
+- **Two schools in the dev database.** `Shree Himalayan Secondary School` (`default-school`) has the real data — 260 students, 4,186 marks — via `admin@school.edu.np`. `Portal Demo School` is a small hand-built set for testing the parent/student portal (1 student with marks, a linked parent, a teacher); it has **no admin login** since the stale test account was removed. Seed logins are printed by `backend/prisma/seed-all.ts` and `seed-dev.ts`.
+- **Verify UI changes in the running app, not just via typecheck.** Several findings here were only caught by clicking through.
+- **Dev and test databases are separate** (`nepali_report_card` vs `..._test`). `helpers.ts:21` guards against the suite ever wiping the dev one — it happened once.
 
 ---
 
 ## Read this first — the two headline findings
 
-**1. Student photos are base64-encoded into the Postgres `students.photo` column and returned in full on every class roster fetch.** A 40-student roster can be tens of megabytes of JSON, uncompressed, on a page with no loading spinner. This is almost certainly the main cause of the lag you're seeing, and it also inflates your DB and backup costs. → **P1**
+**1.** ~~Student photos are base64-encoded into the Postgres `students.photo` column and returned in full on every class roster fetch~~ — **PARTLY FIXED 2026-08-14 (P1a), and the premise needs qualifying.** The roster no longer returns `photo`, so the payload problem is gone. But the claim that this was "almost certainly the main cause of the lag" was **never verified and looks wrong**: no student in the dev database has a photo at all, so there were no multi-megabyte rosters to observe. Treat P1b–P1d (photos → S3) as removing a real design flaw before it bites, not as a latency fix. → **P1**
 
 **2.** ~~Absent subjects are silently dropped from report card averages~~ — **✅ FIXED 2026-08-14.** Policy decided as *"an absence counts as zero"*. R1, R2, R4 and R5 all resolved by the one change; R3 partially (see its note). → **R1–R5**
 
-Then: three bulk-write endpoints accept student IDs from any school without checking membership (**S1–S3**), one of which can move another school's students into yours.
+**3.** ~~Three bulk-write endpoints accept student IDs from any school without checking membership (**S1–S3**), one of which can move another school's students into yours~~ — **✅ FIXED 2026-08-14.** All three now batch-verify membership before writing, and the promotion loop is transactional (**S1a**). The remaining tenancy items are **S4–S8**, none of which are destructive cross-school writes.
 
 **Also added since:** a full results-publish workflow (**W1**), automatic fee setup on enrollment (**W2**), an admin-portal declutter — fee management, admissions, grade sheet, observations, and both student-creation bypass routes each move to (or are closed in favor of) the one role that should own them (**W3**) — and a grade-sheet Excel export (**W4**). All designed and agreed 2026-08-14; none built yet.
 
@@ -395,7 +427,12 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 # P — Backend performance & cost
 
-### [ ] P1. Student photos are base64 blobs in Postgres, returned on every roster fetch  ← *biggest single win*
+### [~] P1. Student photos are base64 blobs in Postgres, returned on every roster fetch  ← ~~*biggest single win*~~
+
+> **P1a done 2026-08-14; P1b–P1d still open.** The roster no longer ships photos, which is the cheap half.
+>
+> **The "biggest single win" label is not supported by evidence.** Checked the dev database: **0 of 261 students have a photo**, so the tens-of-megabytes roster this describes has never actually occurred there. The storage design is still wrong and P1b–d are still worth doing — base64 in Postgres inflates rows ~33%, bloats backups, and can't be cached or resized — but schedule them as *fixing a design flaw*, not as *making the app faster*. If production turns out to have photos loaded, re-measure and re-prioritise.
+
 **Where:** storage `frontend/src/app/admin/students/page.tsx:167` (`readAsDataURL`) → `backend/src/routes/student.routes.ts:286`; retrieval `backend/src/routes/student.routes.ts:215–222`
 
 Photos are read as base64 data URIs and stored directly in the `students.photo` text column. Base64 inflates by ~33%, so a 500KB photo becomes ~667KB of text per row.
@@ -823,8 +860,22 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 ## If you only do three things
 
-1. ~~**P1a** — add `select:` to the roster query.~~ ✅ **done 2026-08-14.**
-2. ~~**R1** — decide whether absent counts as zero~~ ✅ **done 2026-08-14.**
-3. ~~**S1** — verify student IDs in the promotion endpoint.~~ ✅ **done 2026-08-14** (with S1a).
+All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**.
 
-**Next up:** Week 1 is complete apart from F6 (error/loading route boundaries, ~1 hr). After that the highest-value items are F4a (race guards — unblocked, S2 landed), P4 (attendance `groupBy`), and the F2/F5 caching work that subsumes several other items.
+**The next three, in order:**
+
+1. **F6** — error/loading route boundaries. The last Week 1 item, ~1 hr. Today an exception in any client page unmounts to a blank white screen, and with no error tracking (**X3**) you never find out it happened.
+2. **F4a** — race guards on the six pages where a stale render can produce a bad *write*. Unblocked: **S2** landed, so the server now rejects a mis-targeted attendance save with a 400 instead of writing it. That turns this from data corruption into a UI annoyance, which is why it can wait behind F6 but shouldn't wait long.
+3. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
+
+**Then:** P4 (+P4a), P5+R8 together, P6, S4–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
+
+**Not started at all:** the **W** items (W1–W4) — these are new features, not fixes, and want their own planning pass rather than being picked off this list.
+
+---
+
+## What "done" means here
+
+Every item marked ✅ above was: implemented, typechecked in both projects, covered by a test where the behaviour was testable, **verified against the old code to confirm the test actually fails without the fix**, exercised in the running app where it was user-visible, merged, and deployed. Test count went 144 → **164** over this pass.
+
+Where a finding turned out to be wrong or overstated, the correction is recorded inline under that item rather than quietly fixed — see the four listed at the top.
