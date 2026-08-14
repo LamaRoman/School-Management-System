@@ -104,17 +104,18 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     // Aug-2026 report-card design discussion for why this reduces cleanly.
     subjects = marks.map((m) => {
       const hasPracticalComponent = m.subject.fullPracticalMarks > 0;
-      if (m.isAbsent) {
-        return {
-          subjectName: m.subject.name,
-          creditHour: m.subject.creditHour,
-          theoryGrade: "NG",
-          practicalGrade: hasPracticalComponent ? "NG" : null,
-          finalGrade: "NG",
-          gradePoint: null,
-          isAbsent: true,
-        };
-      }
+      // An absent subject deliberately falls through to the normal path below.
+      // Its marks are null, so `|| 0` scores it 0%, which the scale grades as
+      // E / 0.8 — and that grade point then counts toward the credit-weighted
+      // GPA like any other subject.
+      //
+      // Do NOT reintroduce a short-circuit returning gradePoint: null here.
+      // calculateOverallGpaWeighted filters nulls, so a null drops the subject
+      // (and its credit hours) out of the average entirely, leaving a student
+      // who skipped the exam ranked ABOVE one who sat it and failed.
+      //
+      // The "Ab" / "NG" printed on the card is driven by the isAbsent flag in
+      // pdf.service.ts, not by these values, so the display is unaffected.
       const theoryResult = getGradeFromPercentage(
         calculatePercentage(m.theoryMarks || 0, m.subject.fullTheoryMarks)
       );
@@ -145,21 +146,10 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
   } else {
     const marksSubjects = marks.map((m) => {
       const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-      if (m.isAbsent) {
-        return {
-          subjectName: m.subject.name,
-          fullMarks,
-          passMarks: m.subject.passMarks,
-          theoryMarks: 0,
-          practicalMarks: 0,
-          totalMarks: 0,
-          percentage: 0,
-          grade: "NG",
-          gpa: null,
-          hasPassed: false,
-          isAbsent: true,
-        };
-      }
+      // Absent falls through to the normal path — null marks become 0, which
+      // grades as E / 0.8 and counts toward the averages below. See the note in
+      // the credit-grade branch above for why a null gpa short-circuit here is
+      // the bug this replaced.
       const theory = m.theoryMarks || 0;
       const practical = m.practicalMarks || 0;
       const total = theory + practical;
@@ -181,13 +171,15 @@ async function buildTermReportData(studentId: string, examTypeId: string, school
     });
     subjects = marksSubjects;
 
-    const gpas = marksSubjects.map((s) => s.gpa);
-    overallGpa = calculateOverallGpa(gpas);
-    const gradedSubjects = marksSubjects.filter((s) => !s.isAbsent);
-    overallPct = gradedSubjects.length > 0
-      ? parseFloat((gradedSubjects.reduce((a, s) => a + s.percentage, 0) / gradedSubjects.length).toFixed(1))
+    // Averaged over every subject the student was entered for, absent included.
+    // Filtering absences out here would shrink the denominator per student, so
+    // missing an exam would raise the average instead of lowering it — and it
+    // would no longer agree with the rank below, which scores absences as 0.
+    overallGpa = calculateOverallGpa(marksSubjects.map((s) => s.gpa));
+    overallPct = marksSubjects.length > 0
+      ? parseFloat((marksSubjects.reduce((a, s) => a + s.percentage, 0) / marksSubjects.length).toFixed(1))
       : 0;
-    overallGradeLabel = gradedSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
+    overallGradeLabel = marksSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
   const attendance = await prisma.attendance.findUnique({
@@ -309,20 +301,12 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
       };
     });
 
+    // Absent in every term still scores the subject rather than dropping it:
+    // the weighted percentage below reads null marks as 0, grading it E / 0.8.
+    // Only the display flag distinguishes it. (Absent in *some* terms already
+    // weighted those terms in as 0, so this makes partial and full absence
+    // consistent.)
     const allTermsAbsent = terms.every((t: any) => t.isAbsent);
-    if (allTermsAbsent) {
-      return {
-        subjectName: subject.name,
-        fullMarks,
-        passMarks: subject.passMarks,
-        terms,
-        weightedPercentage: 0,
-        grade: "NG",
-        gpa: null,
-        hasPassed: false,
-        isAbsent: true,
-      };
-    }
 
     const weightedPct = calculateWeightedPercentage(
       policies.map((policy) => {
@@ -342,7 +326,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(weightedPct, (subject.passMarks / fullMarks) * 100),
-      isAbsent: false,
+      isAbsent: allTermsAbsent,
     };
   });
 
@@ -384,18 +368,9 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
       const subjectMarks = allMarks.filter((m) => m.subjectId === subject.id);
       const allAbsent = subjectMarks.length > 0 && subjectMarks.every((m) => m.isAbsent);
 
-      if (allAbsent) {
-        return {
-          subjectName: subject.name,
-          creditHour: subject.creditHour,
-          theoryGrade: "NG",
-          practicalGrade: hasPracticalComponent ? "NG" : null,
-          finalGrade: "NG",
-          gradePoint: null,
-          isAbsent: true,
-        };
-      }
-
+      // Absent is graded, not skipped — the weighted percentages above read
+      // null marks as 0, so the subject scores E / 0.8 and its credit hours
+      // stay in the denominator of the weighted GPA. Only the flag differs.
       return {
         subjectName: subject.name,
         creditHour: subject.creditHour,
@@ -403,7 +378,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
         practicalGrade: practicalPct === null ? null : getGradeFromPercentage(practicalPct).grade,
         finalGrade: consolidatedSubject.grade,
         gradePoint: consolidatedSubject.gpa,
-        isAbsent: false,
+        isAbsent: allAbsent,
       };
     });
 
@@ -414,12 +389,12 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
     overallGradeLabel = "";
   } else {
     reportSubjects = finalSubjects;
+    // Every subject counts, absent included — same reasoning as the term report.
     overallGpa = calculateOverallGpa(finalSubjects.map((s: any) => s.gpa));
-    const gradedFinalSubjects = finalSubjects.filter((s: any) => !s.isAbsent);
-    overallPct = gradedFinalSubjects.length > 0
-      ? parseFloat((gradedFinalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / gradedFinalSubjects.length).toFixed(1))
+    overallPct = finalSubjects.length > 0
+      ? parseFloat((finalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1))
       : 0;
-    overallGradeLabel = gradedFinalSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
+    overallGradeLabel = finalSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
   const attendance = await prisma.attendance.findUnique({

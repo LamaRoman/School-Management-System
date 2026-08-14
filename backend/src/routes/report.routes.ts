@@ -199,22 +199,10 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 
   const subjects = marks.map((m) => {
     const fullMarks = m.subject.fullTheoryMarks + m.subject.fullPracticalMarks;
-    if (m.isAbsent) {
-      return {
-        subjectName: m.subject.name,
-        subjectNameNp: m.subject.nameNp,
-        fullMarks,
-        passMarks: m.subject.passMarks,
-        theoryMarks: 0,
-        practicalMarks: 0,
-        totalMarks: 0,
-        percentage: 0,
-        grade: "NG",
-        gpa: null,
-        hasPassed: false,
-        isAbsent: true,
-      };
-    }
+    // Absent falls through to the normal path: null marks read as 0, grading
+    // the subject E / 0.8 so it counts toward the averages below rather than
+    // being dropped from them. Kept deliberately identical to the PDF builder
+    // in pdf.routes.ts — the portal and the printed card must agree.
     const theory = m.theoryMarks || 0;
     const practical = m.practicalMarks || 0;
     const total = theory + practical;
@@ -233,17 +221,17 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(total, m.subject.passMarks),
-      isAbsent: false,
+      isAbsent: m.isAbsent,
     };
   });
 
-  const gpas = subjects.map((s) => s.gpa);
-  const overallGpa = calculateOverallGpa(gpas);
-  const gradedSubjects = subjects.filter((s) => !s.isAbsent);
-  const overallPct = gradedSubjects.length > 0
-    ? parseFloat((gradedSubjects.reduce((a, s) => a + s.percentage, 0) / gradedSubjects.length).toFixed(1))
+  // Averaged over every subject, absent included, so a missed exam lowers the
+  // result instead of raising it and the figures agree with the rank below.
+  const overallGpa = calculateOverallGpa(subjects.map((s) => s.gpa));
+  const overallPct = subjects.length > 0
+    ? parseFloat((subjects.reduce((a, s) => a + s.percentage, 0) / subjects.length).toFixed(1))
     : 0;
-  const overallGrade = gradedSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
+  const overallGrade = subjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
@@ -346,21 +334,10 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
       };
     });
 
+    // Absent in every term is still graded, not dropped — the weighted
+    // percentage below reads null marks as 0. This also makes full absence
+    // consistent with partial absence, which already weighted in as 0.
     const allTermsAbsent = terms.every((t: any) => t.isAbsent);
-    if (allTermsAbsent) {
-      return {
-        subjectName: subject.name,
-        subjectNameNp: subject.nameNp,
-        fullMarks,
-        passMarks: subject.passMarks,
-        terms,
-        weightedPercentage: 0,
-        grade: "NG",
-        gpa: null,
-        hasPassed: false,
-        isAbsent: true,
-      };
-    }
 
     const weightedPct = calculateWeightedPercentage(
       policies.map((policy) => {
@@ -384,17 +361,16 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
       grade: gradeResult.grade,
       gpa: gradeResult.gpa,
       hasPassed: hasPassed(weightedPct, (subject.passMarks / fullMarks) * 100),
-      isAbsent: false,
+      isAbsent: allTermsAbsent,
     };
   });
 
-  const gpas = finalSubjects.map((s) => s.gpa);
-  const overallGpa = calculateOverallGpa(gpas);
-  const gradedFinalSubjects = finalSubjects.filter((s: any) => !s.isAbsent);
-  const overallPct = gradedFinalSubjects.length > 0
-    ? parseFloat((gradedFinalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / gradedFinalSubjects.length).toFixed(1))
+  // Every subject counts, absent included — same reasoning as the term report.
+  const overallGpa = calculateOverallGpa(finalSubjects.map((s) => s.gpa));
+  const overallPct = finalSubjects.length > 0
+    ? parseFloat((finalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1))
     : 0;
-  const overallGrade = gradedFinalSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
+  const overallGrade = finalSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
   const attendance = await prisma.attendance.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId } },

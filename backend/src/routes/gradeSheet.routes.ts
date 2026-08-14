@@ -56,18 +56,10 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       const mark = allMarks.find(
         (m) => m.studentId === student.id && m.subjectId === subject.id
       );
-      if (mark?.isAbsent) {
-        return {
-          subjectId: subject.id,
-          obtained: 0,
-          fullMarks,
-          percentage: 0,
-          grade: "NG",
-          gpa: null,
-          passed: false,
-          isAbsent: true,
-        };
-      }
+      // Absent falls through to the normal path — null marks read as 0, so the
+      // subject grades E / 0.8 and counts toward the averages below. This is
+      // also what keeps the Total column (which has always summed absences as
+      // 0 over the full marks) agreeing with the Percentage column beside it.
       const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
       const pct = calculatePercentage(obtained, fullMarks);
       const gradeResult = getGradeFromPercentage(pct);
@@ -80,18 +72,20 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
         passed: obtained >= subject.passMarks,
-        isAbsent: false,
+        isAbsent: mark?.isAbsent ?? false,
       };
     });
 
     const totalObtained = subjectResults.reduce((a, s) => a + s.obtained, 0);
     const totalFullMarks = subjectResults.reduce((a, s) => a + s.fullMarks, 0);
-    const gradedResults = subjectResults.filter((s) => !s.isAbsent);
-    const avgPct = gradedResults.length > 0
-      ? parseFloat((gradedResults.reduce((a, s) => a + s.percentage, 0) / gradedResults.length).toFixed(1))
+    // Averaged over every subject, absent included, so this column stays
+    // consistent with totalObtained / totalFullMarks above and with the rank
+    // derived from it below.
+    const avgPct = subjectResults.length > 0
+      ? parseFloat((subjectResults.reduce((a, s) => a + s.percentage, 0) / subjectResults.length).toFixed(1))
       : 0;
     const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
-    const overallGrade = gradedResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
+    const overallGrade = subjectResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
 
     return {
       studentId: student.id,
@@ -190,18 +184,9 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     const subjectResults = subjects.map((subject) => {
       const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
       const subjectMarks = stuMarks.filter((m) => m.subjectId === subject.id);
+      // Absent in every term is graded, not dropped — the weighted percentage
+      // below reads null marks as 0. Matches the annual report builders.
       const allAbsent = subjectMarks.length > 0 && subjectMarks.every((m) => m.isAbsent);
-
-      if (allAbsent) {
-        return {
-          subjectId: subject.id,
-          weightedPercentage: 0,
-          grade: "NG",
-          gpa: null,
-          passed: false,
-          isAbsent: true,
-        };
-      }
 
       const weightedPct = calculateWeightedPercentage(
         policies.map((policy) => {
@@ -221,16 +206,16 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
         passed: weightedPct >= (subject.passMarks / fullMarks) * 100,
-        isAbsent: false,
+        isAbsent: allAbsent,
       };
     });
 
-    const gradedResults = subjectResults.filter((s) => !s.isAbsent);
-    const avgPct = gradedResults.length > 0
-      ? parseFloat((gradedResults.reduce((a, s) => a + s.weightedPercentage, 0) / gradedResults.length).toFixed(1))
+    // Every subject counts, absent included — same reasoning as the term sheet.
+    const avgPct = subjectResults.length > 0
+      ? parseFloat((subjectResults.reduce((a, s) => a + s.weightedPercentage, 0) / subjectResults.length).toFixed(1))
       : 0;
     const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
-    const overallGrade = gradedResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
+    const overallGrade = subjectResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
 
     return {
       studentId: student.id,
