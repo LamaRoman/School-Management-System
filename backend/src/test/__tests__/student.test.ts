@@ -145,6 +145,30 @@ describe("GET /students", () => {
     }
   });
 
+  it("should omit photo from the roster but keep it on the detail route", async () => {
+    const student = await createTestStudent(ctx.section.id, {
+      name: "Photographed Student",
+      photo: "data:image/png;base64,iVBORw0KGgo=",
+    });
+
+    const list = await request(app)
+      .get("/students")
+      .query({ sectionId: ctx.section.id })
+      .set("Authorization", authHeader(adminToken))
+      .expect(200);
+
+    const listed = list.body.data.find((s: any) => s.id === student.id);
+    expect(listed).toBeDefined();
+    expect(listed).not.toHaveProperty("photo");
+
+    const detail = await request(app)
+      .get(`/students/${student.id}`)
+      .set("Authorization", authHeader(adminToken))
+      .expect(200);
+
+    expect(detail.body.data.photo).toBe("data:image/png;base64,iVBORw0KGgo=");
+  });
+
   it("should filter by sectionId", async () => {
     const res = await request(app)
       .get("/students")

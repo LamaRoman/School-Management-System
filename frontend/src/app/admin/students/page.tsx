@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -10,12 +10,14 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 interface Student {
   id: string; name: string; nameNp?: string; rollNo?: number;
   dateOfBirth?: string; gender?: string; fatherName?: string; motherName?: string;
-  guardianPhone?: string; address?: string; isActive: boolean; photo?: string;
+  guardianPhone?: string; address?: string; isActive: boolean;
   section: { name: string; grade: { name: string } };
 }
 interface Grade { id: string; name: string; sections: { id: string; name: string }[] }
 
-const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "", photo: "" };
+// `photo` is undefined until the existing photo has been loaded for an edit, so a
+// save that happens before then omits the field and leaves the stored photo alone.
+const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefined, dateOfBirth: "", gender: "", fatherName: "", motherName: "", guardianPhone: "", address: "", sectionId: "", photo: "" as string | undefined };
 
 export default function StudentsPage() {
   const confirm = useConfirm();
@@ -27,6 +29,7 @@ export default function StudentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
+  const editIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -69,14 +72,20 @@ export default function StudentsPage() {
         await api.post("/students", payload);
         toast.success("Student added");
       }
-      setShowForm(false); setEditId(null); setForm(emptyForm);
+      setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
       api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents);
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const startEdit = (s: Student) => {
-    setForm({ name: s.name, nameNp: s.nameNp || "", rollNo: s.rollNo, dateOfBirth: s.dateOfBirth || "", gender: s.gender || "", fatherName: s.fatherName || "", motherName: s.motherName || "", guardianPhone: s.guardianPhone || "", address: s.address || "", sectionId: selectedSection, photo: s.photo || "" });
+  const startEdit = async (s: Student) => {
+    setForm({ name: s.name, nameNp: s.nameNp || "", rollNo: s.rollNo, dateOfBirth: s.dateOfBirth || "", gender: s.gender || "", fatherName: s.fatherName || "", motherName: s.motherName || "", guardianPhone: s.guardianPhone || "", address: s.address || "", sectionId: selectedSection, photo: undefined });
     setEditId(s.id); setShowForm(true);
+    editIdRef.current = s.id;
+    try {
+      const full = await api.get<{ photo?: string }>(`/students/${s.id}`);
+      if (editIdRef.current !== s.id) return;
+      setForm((f) => ({ ...f, photo: full.photo || "" }));
+    } catch { /* leave photo undefined so a save doesn't clear it */ }
   };
 
   const handleDelete = async (id: string) => {
@@ -100,7 +109,7 @@ export default function StudentsPage() {
               {search && students.length !== filtered.length ? ` of ${students.length}` : ""}
             </span>
           )}
-          <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm(emptyForm); }} className="btn-primary">
+          <button onClick={() => { setShowForm(!showForm); setEditId(null); editIdRef.current = null; setForm(emptyForm); }} className="btn-primary">
             <Plus size={16} /> Add Student
           </button>
         </div>
@@ -130,7 +139,7 @@ export default function StudentsPage() {
         <div className="card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-primary">{editId ? "Edit Student" : "Add Student"}</h3>
-            <button onClick={() => { setShowForm(false); setEditId(null); }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <button onClick={() => { setShowForm(false); setEditId(null); editIdRef.current = null; }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div><label className="label">Full Name *</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
@@ -213,13 +222,9 @@ export default function StudentsPage() {
                 <td className="px-5 py-3 text-gray-400 font-medium">{s.rollNo || "—"}</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
-                    {s.photo ? (
-                      <img src={s.photo} alt={s.name} className="w-7 h-7 rounded-full object-cover border border-gray-200 shrink-0" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <span className="text-[10px] font-bold text-primary">{s.name[0]}</span>
-                      </div>
-                    )}
+                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-[10px] font-bold text-primary">{s.name[0]}</span>
+                    </div>
                     <div>
                       <div className="font-medium text-primary">{s.name}</div>
                       {s.nameNp && <div className="text-xs text-gray-400">{s.nameNp}</div>}
