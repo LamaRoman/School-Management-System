@@ -9,6 +9,7 @@ import express from "express";
 import compression from "compression";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import prisma from "./utils/prisma";
 import { errorHandler } from "./middleware/errorHandler";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -128,9 +129,25 @@ if (process.env.NODE_ENV !== "test") {
   app.use("/", apiLimiter);
 }
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+// Health check.
+//
+// This has to actually touch Postgres. Returning a bare "ok" meant the process
+// could be up while the database was unreachable, and the check would still
+// pass — so Railway kept routing traffic to an instance that could not serve a
+// single request. `SELECT 1` is the cheapest query that proves the connection
+// pool can hand out a working connection.
+//
+// Failing returns 503 rather than throwing, so this reports "unhealthy" instead
+// of being swallowed by the error handler and coming back as a generic 500.
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "ok", timestamp: new Date().toISOString() });
+  } catch {
+    // Deliberately not surfacing the driver error — it can contain the
+    // connection string, and this endpoint is unauthenticated.
+    res.status(503).json({ status: "error", database: "unreachable", timestamp: new Date().toISOString() });
+  }
 });
 
 // Routes

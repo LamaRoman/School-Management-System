@@ -558,14 +558,31 @@ Three strictly sequential fetches; the second effect can't start until the first
 
 ---
 
-### [ ] F3. Five pages render an empty table with no loading indicator
+### [x] F3. Five pages render an empty table with no loading indicator
+
+> **FIXED 2026-08-14 — but it was three pages, not five.**
+>
+> **Correction:** `accountant/fees/page.tsx` and `accountant/admissions/page.tsx` are the one-line re-exports described in **W3** — they render `admin/fees` and `admin/admissions`, both of which already have a proper initial loading state (`admin/fees/page.tsx:55`, `admin/admissions/page.tsx:221`). Nothing to fix there.
+>
+> **Also worse than described on the two table pages.** They didn't render a blank table while loading — they rendered the *empty-state message*: "No students in this section" and "No subjects for this grade". So a slow load didn't look like loading, it looked like an authoritative answer that the class was empty. Both now show a `Loading...` row that takes priority over the empty state.
+>
+> `admin/certificates` isn't a table at all — it's a certificate preview that stayed blank until `/school` resolved. It now shows a placeholder in the preview box.
+>
+> - [x] `frontend/src/app/admin/students/page.tsx`
+> - [x] `frontend/src/app/admin/subjects/page.tsx`
+> - [x] `frontend/src/app/admin/certificates/page.tsx`
+> - [-] `frontend/src/app/accountant/fees/page.tsx` — re-export, already covered
+> - [-] `frontend/src/app/accountant/admissions/page.tsx` — re-export, already covered
+>
+> Verified live by throttling `fetch` and sampling the DOM during the request, so these are confirmed to actually appear rather than just to exist in the source. Note `getSchoolInfo` caches at module level (`printUtils.ts:67`), so the certificates placeholder only appears on a first hard load — confirmed by briefly delaying `GET /school`.
+
 **Where:** these have no loading, spinner, or skeleton state at all:
 
-- [ ] `frontend/src/app/admin/students/page.tsx` ← also the heaviest payload (**P1**)
-- [ ] `frontend/src/app/admin/subjects/page.tsx`
-- [ ] `frontend/src/app/admin/certificates/page.tsx`
-- [ ] `frontend/src/app/accountant/fees/page.tsx`
-- [ ] `frontend/src/app/accountant/admissions/page.tsx`
+- `frontend/src/app/admin/students/page.tsx` ← also the heaviest payload (**P1**)
+- `frontend/src/app/admin/subjects/page.tsx`
+- `frontend/src/app/admin/certificates/page.tsx`
+- `frontend/src/app/accountant/fees/page.tsx`
+- `frontend/src/app/accountant/admissions/page.tsx`
 
 They mount with empty arrays and render an empty table while fetching. Perceptually this is worse than a slower page that shows a spinner — it reads as *"the tap didn't register"*, exactly the symptom described. The other 47 pages do have a loading state, so this is a consistency gap.
 
@@ -682,7 +699,16 @@ Statically imported into 6 pages (`admin/fees`, `admin/seating`, `admin/certific
 
 No gzip/brotli. Endpoints like `/students`, `/fees/section-overview` and `/grade-sheet` return large JSON; gzip typically cuts JSON 70–80%, and base64 image data (**P1**) compresses poorly but still meaningfully. One `app.use(compression())` line — and it directly reduces Railway egress cost.
 
-### [ ] X2. Health check never touches the database
+### [x] X2. Health check never touches the database
+
+> **FIXED 2026-08-14.** `/health` now runs `SELECT 1` — the cheapest query that proves the pool can hand out a working connection — and returns 503 `{status:"error", database:"unreachable"}` when it can't, instead of a bare 200.
+>
+> The driver error is deliberately swallowed rather than echoed: this endpoint is unauthenticated and Prisma's connection errors can contain the connection string. Pinned by a test asserting the response body leaks neither the password nor the DB user.
+>
+> Pinned by `src/test/__tests__/health.test.ts` (4 tests, including a mocked outage and recovery).
+>
+> **Worth knowing before wiring this to Railway:** nothing in the repo currently configures a `healthcheckPath`, so this is presently for humans and monitoring. If it does become Railway's probe, note the liveness/readiness distinction — a DB blip will now mark the instance unhealthy, which is right for *readiness* (stop routing traffic) but would cause a restart loop if used for *liveness*. Split into `/health/live` and `/health/ready` if that ever matters.
+
 **Where:** `backend/src/app.ts:115` — returns `{status: "ok"}` unconditionally. If Postgres is down, the check passes and Railway keeps routing traffic to a broken instance.
 
 ### [ ] X3. No request logging or error tracking
@@ -718,8 +744,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | ~~P1a (`select:` excluding photo)~~ | ✅ **done** | Biggest latency win in the project |
 | P2 (indexes) | ~1 hr | Additive migration, compounds as data grows |
 | ~~F1 (CORS preflight)~~ | ✅ **done** | Halves request count app-wide — verified zero preflights on GETs |
-| ~~X1~~ + X2 (compression, health) | X1 ✅ **done** | X1 measured 83–94% smaller responses. X2 (health check) still open |
-| F3 (loading states) | ~2 hrs | Kills the "tap didn't register" feel |
+| ~~X1 + X2 (compression, health)~~ | ✅ **done** | X1 measured 83–94% smaller responses; X2 now fails 503 on a dead DB |
+| ~~F3 (loading states)~~ | ✅ **done** | Was 3 pages, not 5 — and they showed a false empty state, not a blank one |
 | F6 (error/loading boundaries) | ~1 hr | No more white screens |
 
 **Week 2 — correctness (decide, then fix together)**
@@ -772,4 +798,4 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 2. ~~**R1** — decide whether absent counts as zero~~ ✅ **done 2026-08-14.**
 3. ~~**S1** — verify student IDs in the promotion endpoint.~~ ✅ **done 2026-08-14** (with S1a).
 
-**Next up:** X2 (health check should touch the DB — ~15 min), then F3 (loading states — kills the "tap didn't register" feel). F4a is unblocked now that S2 has landed.
+**Next up:** Week 1 is complete apart from F6 (error/loading route boundaries, ~1 hr). After that the highest-value items are F4a (race guards — unblocked, S2 landed), P4 (attendance `groupBy`), and the F2/F5 caching work that subsumes several other items.
