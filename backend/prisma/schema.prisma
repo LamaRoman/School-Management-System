@@ -277,6 +277,10 @@ model Student {
 
 
   @@unique([rollNo, sectionId])
+  // The unique constraint leads with rollNo, so a plain "students in this
+  // section" lookup — the roster, mark entry, attendance, several fee pages —
+  // sequential-scans instead.
+  @@index([sectionId, isActive])
   @@map("students")
 }
 
@@ -370,6 +374,12 @@ model Mark {
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, subjectId, examTypeId, academicYearId])
+  // The unique constraint leads with studentId, so it cannot serve the queries
+  // every grade sheet and report card actually run — which filter by exam and
+  // year and only then narrow to a set of students. Without these, Postgres
+  // sequential-scans the whole marks table on each one.
+  @@index([examTypeId, academicYearId, studentId])
+  @@index([academicYearId, studentId])
   @@map("marks")
 }
 
@@ -394,6 +404,9 @@ model ConsolidatedResult {
   grade        Grade        @relation(fields: [gradeId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, academicYearId])
+  // Analytics filters by year and grade; the unique constraint leads with
+  // studentId and cannot serve that.
+  @@index([academicYearId, gradeId])
   @@map("consolidated_results")
 }
 
@@ -433,6 +446,11 @@ model DailyAttendance {
   academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, date, academicYearId])
+  // The unique constraint already serves the per-student and per-section reads
+  // (both supply studentId). This covers the ones that don't: the dashboard's
+  // "present/absent today" counts and the absentee list, which filter on year
+  // and date across every student in the school.
+  @@index([academicYearId, date])
   @@map("daily_attendances")
 }
 // ─── REPORT CARD SETTINGS ───────────────────────────────
@@ -634,6 +652,9 @@ model FeePayment {
   feeCategory   FeeCategory  @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
   academicYear  AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
+  // fee_payments had no index at all beyond its primary key.
+  @@index([studentId, academicYearId])
+  @@index([academicYearId, paymentDate])
   @@map("fee_payments")
 }
 
