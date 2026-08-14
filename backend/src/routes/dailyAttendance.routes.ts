@@ -82,6 +82,22 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     if (!assignment) throw new AppError("You are not assigned to this section", 403);
   }
 
+  // Verify every studentId actually belongs to this section. Without this, a
+  // teacher or admin could write attendance rows for arbitrary student ids —
+  // including students in another school, whose Attendance totals and report
+  // cards would then silently absorb them.
+  //
+  // This is also the server-side backstop for the client-side race where the
+  // section selector changes mid-fetch and the page saves against a roster it
+  // is no longer showing: that now fails cleanly instead of corrupting data.
+  const uniqueStudentIds = [...new Set(records.map((r) => r.studentId))];
+  const validStudentCount = await prisma.student.count({
+    where: { id: { in: uniqueStudentIds }, sectionId },
+  });
+  if (validStudentCount !== uniqueStudentIds.length) {
+    throw new AppError("One or more students do not belong to this section", 400);
+  }
+
   // Upsert each record
   const results = await prisma.$transaction(
     records.map((r) =>
