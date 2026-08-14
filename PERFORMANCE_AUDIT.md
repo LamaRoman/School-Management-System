@@ -9,7 +9,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 
 ## Start here — current state (2026-08-14)
 
-**Week 1 is complete except F6. All work below is merged to `main` and deployed** (Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the P2 index migration applied on boot — deploy reported success).
+**Week 1 is complete.** All work below is merged to `main` and deployed (Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the P2 index migration applied on boot — deploy reported success). F6 is the exception to "deployed" — it is done and verified locally but not yet merged; see its entry.
 
 | Done | What it was | PR |
 |---|---|---|
@@ -20,8 +20,9 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **P2** | 7 missing indexes on the hot report/roster/fee queries | #9 |
 | **F1, X1** | CORS preflight on every GET; no gzip | #10 |
 | **X2, F3** | Health check ignored the DB; 3 pages had no loading state | #11 |
+| **F6** | No route error/loading boundaries — any thrown error was a blank white screen | *unmerged* |
 
-**Suggested next:** **F6** (last Week 1 item, ~1 hr) → **F4a** (unblocked now that S2 landed) → **P4** → **R7 → P3**.
+**Suggested next:** **F4a** (unblocked now that S2 landed) → **P4** → **R7 → P3**.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -699,7 +700,21 @@ Every navigation refetches from scratch, with no deduplication and no stale-whil
 
 ---
 
-### [ ] F6. No `error.tsx` / `loading.tsx` route boundaries
+### [x] F6. No `error.tsx` / `loading.tsx` route boundaries
+
+> **FIXED 2026-08-14.** One `error.tsx` + `loading.tsx` per route group as described, both thin wrappers over shared `components/ui/RouteError.tsx` and `RouteLoading.tsx` so the six copies can't drift.
+>
+> **Three boundaries the original note didn't account for, all needed:**
+> - **`app/error.tsx`** — a segment's own `error.tsx` cannot catch an error thrown by its *layout*. Every portal layout calls `useAuth()`, so those failures skip the group boundary entirely and would still have been a white screen. This also covers `/` and `/login`, which are in no route group.
+> - **`app/global-error.tsx`** — for the root layout itself. Deliberately inline-styled with no imports: it replaces the whole document, so the app's CSS and providers may not be loaded at that point.
+> - **`app/loading.tsx`** — same reasoning, covers `/` and `/login`.
+>
+> **Verified in the running app, not just typechecked.** A temporary throwing page under `/admin` rendered the boundary *inside* `<main>` with the admin sidebar still on screen (so a crash is now confined to the content area, not the whole app); "Back to Dashboard" recovered to a working `/admin`. `loading.tsx` was confirmed by making that page an async server component with a 4s delay and sampling the DOM every 400ms — `Loading...` for four samples, then the page. Temp page removed afterwards; both typechecks clean.
+>
+> **The error boundary is the natural hook for X3.** `RouteError` does a `console.error` today, which is the only record a client-side crash leaves. Every route-level crash now passes through that one function — wire the error tracker there.
+>
+> **Not a substitute for F4/F5.** These catch *thrown* errors. A rejected `fetch` inside a `useEffect` that the page swallows into a toast never reaches a boundary — that's still per-page handling.
+
 **Where:** `frontend/src/app/` — zero of either file exist
 
 Without `error.tsx`, an exception in any client page unmounts to a blank white screen — and with no error tracking (**X3**) you never learn it happened.
@@ -812,7 +827,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | ~~F1 (CORS preflight)~~ | ✅ **done** | Halves request count app-wide — verified zero preflights on GETs |
 | ~~X1 + X2 (compression, health)~~ | ✅ **done** | X1 measured 83–94% smaller responses; X2 now fails 503 on a dead DB |
 | ~~F3 (loading states)~~ | ✅ **done** | Was 3 pages, not 5 — and they showed a false empty state, not a blank one |
-| F6 (error/loading boundaries) | ~1 hr | No more white screens |
+| ~~F6 (error/loading boundaries)~~ | ✅ **done** | No more white screens. Needed 3 more boundaries than the item described — layout errors skip the group boundary |
 
 **Week 2 — correctness (decide, then fix together)**
 
@@ -860,13 +875,13 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 ## If you only do three things
 
-All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**.
+All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**. So is ~~**F6**~~, which closes Week 1.
 
 **The next three, in order:**
 
-1. **F6** — error/loading route boundaries. The last Week 1 item, ~1 hr. Today an exception in any client page unmounts to a blank white screen, and with no error tracking (**X3**) you never find out it happened.
-2. **F4a** — race guards on the six pages where a stale render can produce a bad *write*. Unblocked: **S2** landed, so the server now rejects a mis-targeted attendance save with a 400 instead of writing it. That turns this from data corruption into a UI annoyance, which is why it can wait behind F6 but shouldn't wait long.
-3. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
+1. **F4a** — race guards on the six pages where a stale render can produce a bad *write*. Unblocked: **S2** landed, so the server now rejects a mis-targeted attendance save with a 400 instead of writing it. That turns this from data corruption into a UI annoyance, but it shouldn't wait long.
+2. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
+3. **P4 (+P4a)** — the attendance `groupBy`. Highest-frequency write path in the app and it gets measurably worse every month of the school year.
 
 **Then:** P4 (+P4a), P5+R8 together, P6, S4–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
 
