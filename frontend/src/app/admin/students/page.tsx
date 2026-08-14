@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save, Search, Camera } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
@@ -36,6 +37,7 @@ export default function StudentsPage() {
   // loading, and is the reason a tap here feels like it didn't register.
   const [loadingGrades, setLoadingGrades] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const runStudents = useLatestRequest();
 
   useEffect(() => {
     (async () => {
@@ -57,12 +59,17 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (!selectedSection) return;
+    setStudents([]);
     setLoadingStudents(true);
-    api.get<Student[]>(`/students?sectionId=${selectedSection}`)
-      .then(setStudents)
-      .catch(() => {})
-      .finally(() => setLoadingStudents(false));
-  }, [selectedSection]);
+    runStudents(
+      () => api.get<Student[]>(`/students?sectionId=${selectedSection}`),
+      (data) => {
+        setStudents(data);
+        setLoadingStudents(false);
+      },
+      () => setLoadingStudents(false)
+    );
+  }, [selectedSection, runStudents]);
 
   const currentGrade = grades.find((g) => g.id === selectedGrade);
   const sections = currentGrade?.sections || [];
@@ -86,7 +93,7 @@ export default function StudentsPage() {
         toast.success("Student added");
       }
       setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
-      api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents);
+      runStudents(() => api.get<Student[]>(`/students?sectionId=${selectedSection}`), setStudents);
     } catch (err: any) { toast.error(err.message); }
   };
 

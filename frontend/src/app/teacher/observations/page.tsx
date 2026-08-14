@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
@@ -27,7 +28,12 @@ export default function TeacherObservationsPage() {
   const [students, setStudents] = useState<StudentObs[]>([]);
   const [editedGrades, setEditedGrades] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingResults, setLoadingResults] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Two independent streams, so two guards — one counter shared between them would
+  // make selecting a section cancel an in-flight results fetch and vice versa.
+  const runExamTypes = useLatestRequest();
+  const runResults = useLatestRequest();
 
   useEffect(() => {
     (async () => {
@@ -41,39 +47,50 @@ export default function TeacherObservationsPage() {
   const handleSectionSelect = async (section: ClassTeacherSection) => {
     setSelectedSection(section);
     setSelectedExam("");
+    setExamTypes([]);
     setCategories([]);
     setStudents([]);
     setEditedGrades({});
 
-    try {
-      const et = await api.get<any[]>(`/exam-types?academicYearId=${section.academicYearId}`);
-      setExamTypes(et);
-    } catch {
-      setExamTypes([]);
-    }
+    await runExamTypes(
+      () => api.get<any[]>(`/exam-types?academicYearId=${section.academicYearId}`),
+      setExamTypes,
+      () => setExamTypes([])
+    );
   };
 
   const handleExamSelect = async (examTypeId: string) => {
     if (!selectedSection) return;
     setSelectedExam(examTypeId);
+    // Save posts `editedGrades` under the *currently* selected exam, so grades
+    // seeded from a superseded response would be written against the wrong exam.
+    setCategories([]);
+    setStudents([]);
+    setEditedGrades({});
+    setLoadingResults(true);
 
-    try {
-      const data = await api.get<{ categories: Category[]; students: StudentObs[] }>(
+    await runResults(
+      () => api.get<{ categories: Category[]; students: StudentObs[] }>(
         `/observations/results?sectionId=${selectedSection.sectionId}&examTypeId=${examTypeId}`
-      );
-      setCategories(data.categories);
-      setStudents(data.students);
+      ),
+      (data) => {
+        setCategories(data.categories);
+        setStudents(data.students);
 
-      // Initialize edited grades from existing data
-      const initial: Record<string, Record<string, string>> = {};
-      for (const stu of data.students) {
-        initial[stu.id] = { ...stu.grades };
+        // Initialize edited grades from existing data
+        const initial: Record<string, Record<string, string>> = {};
+        for (const stu of data.students) {
+          initial[stu.id] = { ...stu.grades };
+        }
+        setEditedGrades(initial);
+        setLoadingResults(false);
+      },
+      () => {
+        setCategories([]);
+        setStudents([]);
+        setLoadingResults(false);
       }
-      setEditedGrades(initial);
-    } catch {
-      setCategories([]);
-      setStudents([]);
-    }
+    );
   };
 
   const handleGradeChange = (studentId: string, categoryId: string, grade: string) => {
@@ -87,7 +104,7 @@ export default function TeacherObservationsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedSection || !selectedExam) return;
+    if (!selectedSection || !selectedExam || loadingResults) return;
     setSaving(true);
 
     try {
@@ -138,7 +155,7 @@ export default function TeacherObservationsPage() {
           <p className="text-sm text-gray-500 mt-1">Grade students on general observation categories</p>
         </div>
         {categories.length > 0 && students.length > 0 && (
-          <button onClick={handleSave} disabled={saving} className="btn-primary text-sm">
+          <button onClick={handleSave} disabled={saving || loadingResults} className="btn-primary text-sm">
             <Save size={16} /> {saving ? "Saving..." : "Save"}
           </button>
         )}
@@ -166,8 +183,14 @@ export default function TeacherObservationsPage() {
         </div>
       )}
 
+      {/* Loading the grid — takes priority over the empty state below, which would
+          otherwise read as an authoritative "no categories" while the fetch is in flight. */}
+      {loadingResults && (
+        <div className="card p-8 text-center text-gray-400">Loading...</div>
+      )}
+
       {/* No categories message */}
-      {selectedExam && categories.length === 0 && (
+      {selectedExam && !loadingResults && categories.length === 0 && (
         <div className="card p-8 text-center text-gray-400">
           <p>No observation categories defined for this grade.</p>
           <p className="text-xs mt-1">Ask the admin to set up categories in Admin → Observations.</p>

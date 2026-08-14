@@ -20,9 +20,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **P2** | 7 missing indexes on the hot report/roster/fee queries | #9 |
 | **F1, X1** | CORS preflight on every GET; no gzip | #10 |
 | **X2, F3** | Health check ignored the DB; 3 pages had no loading state | #11 |
-| **F6** | No route error/loading boundaries — any thrown error was a blank white screen | *unmerged* |
+| **F6** | No route error/loading boundaries — any thrown error was a blank white screen | #13 |
+| **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | *unmerged* |
 
-**Suggested next:** **F4a** (unblocked now that S2 landed) → **P4** → **R7 → P3**.
+**Suggested next:** **R7 → P3** → **P4 (+P4a)**. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -38,6 +39,9 @@ The original assessment was mostly accurate, but four items were wrong in ways t
 - **Two schools in the dev database.** `Shree Himalayan Secondary School` (`default-school`) has the real data — 260 students, 4,186 marks — via `admin@school.edu.np`. `Portal Demo School` is a small hand-built set for testing the parent/student portal (1 student with marks, a linked parent, a teacher); it has **no admin login** since the stale test account was removed. Seed logins are printed by `backend/prisma/seed-all.ts` and `seed-dev.ts`.
 - **Verify UI changes in the running app, not just via typecheck.** Several findings here were only caught by clicking through.
 - **Dev and test databases are separate** (`nepali_report_card` vs `..._test`). `helpers.ts:21` guards against the suite ever wiping the dev one — it happened once.
+- **`.claude/launch.json` is committed** (2026-08-14) — dev-server config for `backend` (port 4000) and `frontend` (port 3000), so the preview tooling starts them the same way for everyone. Per-developer Claude settings (`.claude/settings.local.json`) are gitignored. Fixed a typo in the same pass: `.gitignore` read `*.logbackend/.env.test` on one line, so `*.log` was never actually ignored.
+- **Branch hygiene.** Six merged feature branches were pruned locally on 2026-08-14. `fix/accounts-without-logins` was **kept** — it is *not* merged and carries one commit, `backfill-missing-student-accounts.ts`, a one-time script for students with no login account. Decide whether that ships or gets dropped; don't prune it by reflex.
+- **Verifying anything in the teacher or parent portals needs a real login for that role** — an ADMIN can open `/teacher/*` (the layout allows it) but `/teacher-assignments/my` returns no class-teacher sections for them, so every section selector is empty and the page can't be exercised. Seed logins are in `seed-all.ts`.
 
 ---
 
@@ -674,13 +678,33 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
 
 **Recommended: two phases.**
 
-- [ ] **F4a. Phase 1 — fix only the pages where a stale render can produce a bad *write*.** These six have both a section selector and a POST/PUT. Everywhere else the race produces a confusing screen; here it produces wrong data in the database:
-  - [ ] `frontend/src/app/teacher/attendance/page.tsx` ← highest risk
-  - [ ] `frontend/src/app/teacher/observations/page.tsx`
-  - [ ] `frontend/src/app/teacher/students/page.tsx`
-  - [ ] `frontend/src/app/admin/students/page.tsx`
-  - [ ] `frontend/src/app/admin/fees/page.tsx`
-  - [ ] `frontend/src/app/admin/teacher-assignments/page.tsx`
+- [x] **F4a. Phase 1 — fix only the pages where a stale render can produce a bad *write*.** These six have both a section selector and a POST/PUT. Everywhere else the race produces a confusing screen; here it produces wrong data in the database:
+  - [x] `frontend/src/app/teacher/attendance/page.tsx` ← highest risk
+  - [x] `frontend/src/app/teacher/observations/page.tsx`
+  - [x] `frontend/src/app/teacher/students/page.tsx`
+  - [x] `frontend/src/app/admin/students/page.tsx`
+  - [x] `frontend/src/app/admin/fees/page.tsx`
+  - [x] `frontend/src/app/admin/teacher-assignments/page.tsx`
+
+  > **DONE 2026-08-14** via `hooks/useLatestRequest.ts` — the "latest wins" ticket guard, option 2 in the table above. `apply` runs only if no later call was issued and the component is still mounted; a refetch of the *same* key still applies, which is what makes it safe for the reload-after-save pattern.
+  >
+  > **Reproduced the bug before fixing it, then re-ran the identical test after.** On `/admin/students`, delaying section A's roster by 3s and switching A→B within 120ms: old code ended with **"Section B" highlighted and Section A's students in the table**; with the guard, section B's students stay put. Same timings, same script, only the guard differs.
+  >
+  > **One guard per stream of requests, not per page.** The ticket counter is shared across every call from one instance, so pointing it at two unrelated fetches makes one silently cancel the other. `admin/fees`' collection tab is the case worth copying: section-change and month-change hit the *same* endpoint and deliberately share one guard, while the ledger fetch gets its own.
+  >
+  > **The guard alone wasn't enough on the write pages — the stale-data window had to be closed too.** Between switching section and the new data landing, the *previous* section's roster was still rendered and Save was still live, so one tap wrote the old class's students under the new `sectionId`. Every page in this list now clears its collection on key change, tracks a `loading…` flag, and disables the write control while it is set. Superseded responses deliberately do **not** clear that flag, or a slow loser would un-block the button mid-load.
+  >
+  > **Two findings while doing the work:**
+  > 1. `admin/teacher-assignments` was the sharpest case, and not for UI reasons: the subject dropdown is fetched per grade and the form posts whatever `subjectId` is chosen from it. The server does not check the subject belongs to the section's grade (**S4**), so a stale list was a live route to a cross-grade assignment — which then gates who may enter marks for what. **S4 is the backstop this page needs, the way S2 was for attendance.**
+  > 2. `teacher/observations` showed *"No observation categories defined for this grade"* while results were loading — the same false-empty-state that **F3** fixed on two other pages, found because clearing state on key change made it appear on every load. Now gated behind the loading flag.
+  >
+  > **Verified in the teacher portal too**, logged in as a seeded class teacher (`kiran.thapa@school.edu.np`, class teacher of I-A).
+  >
+  > - **`teacher/attendance`** — each class teacher owns exactly one section in the seed data, so the race key here is the **date**, not the section; the guard covers both since they share one effect. Old code: while a new date was loading, the *previous* date's roster stayed on screen and the superseded response then overwrote state (roster 10 → 0). With the guard: roster is cleared, Save is disabled during load, and the late response changes nothing.
+  > - **`teacher/students`** — during load the table shows a `Loading...` row and **Assign Roll Numbers is disabled**; 10 rows render correctly afterwards.
+  > - **`teacher/observations`** — the loading state appears and the false *"No observation categories defined for this grade"* is correctly suppressed during load. **The grid itself could not be exercised: no `ObservationCategory` rows are seeded anywhere** (neither `seed-all.ts` nor `seed-dev.ts` creates any), so every grade's grid is legitimately empty. Seeding a few categories would make this page testable — worth doing before **W3c** touches it.
+  >
+  > One caveat on method: an attempt to tag the superseded attendance response with a recognisable fake payload did not render as intended, for a reason not chased down. The comparison above rests on the state change actually observed (roster 10 → 0 on old code, unchanged with the guard), not on that marker.
 
 - [ ] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
 
@@ -842,7 +866,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 | Item | Effort | Notes |
 |---|---|---|
-| F4a (race guards on the 6 write pages) | ~half day | Unblocked — S2 landed 2026-08-14 |
+| ~~F4a (race guards on the 6 write pages)~~ | ✅ **done** | `useLatestRequest` guard + closing the stale-data window on each write control |
 | P4 (attendance `groupBy`) + P4a | ~half day | |
 | P3 (bulk PDF batching) | 1–2 days | Depends on R7 |
 | P6 (Puppeteer cap) | ~2 hrs | |
@@ -875,13 +899,13 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 ## If you only do three things
 
-All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**. So is ~~**F6**~~, which closes Week 1.
+All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**. So are ~~**F6**~~ (closing Week 1) and ~~**F4a**~~.
 
 **The next three, in order:**
 
-1. **F4a** — race guards on the six pages where a stale render can produce a bad *write*. Unblocked: **S2** landed, so the server now rejects a mis-targeted attendance save with a 400 instead of writing it. That turns this from data corruption into a UI annoyance, but it shouldn't wait long.
-2. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
-3. **P4 (+P4a)** — the attendance `groupBy`. Highest-frequency write path in the app and it gets measurably worse every month of the school year.
+1. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
+2. **P4 (+P4a)** — the attendance `groupBy`. Highest-frequency write path in the app and it gets measurably worse every month of the school year.
+3. **S4 (+S4a, S4b)** — promoted from Week 3+. F4a made the case concrete: `admin/teacher-assignments` posts a `subjectId` the server never checks against the section's grade, and that assignment is what gates mark entry. S4b's table-driven test is still the highest-value piece.
 
 **Then:** P4 (+P4a), P5+R8 together, P6, S4–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
 

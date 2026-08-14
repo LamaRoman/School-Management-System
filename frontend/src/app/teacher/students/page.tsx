@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Save, X, Hash } from "lucide-react";
@@ -32,7 +33,9 @@ export default function TeacherStudentsPage() {
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   const [saving, setSaving] = useState(false);
+  const runStudents = useLatestRequest();
 
   // Edit student
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,16 +58,25 @@ export default function TeacherStudentsPage() {
     setSelectedSection(section);
     setEditingId(null);
     setShowRolls(false);
+    // Roll assignment posts the *currently* selected sectionId with roll numbers derived
+    // from `students`, so the previous section's roster must not stay on screen.
+    setStudents([]);
     await fetchStudents(section.sectionId);
   };
 
   const fetchStudents = async (sectionId: string) => {
-    try {
-      const data = await api.get<Student[]>(`/students?sectionId=${sectionId}`);
-      setStudents(data);
-    } catch {
-      setStudents([]);
-    }
+    setLoadingStudents(true);
+    await runStudents(
+      () => api.get<Student[]>(`/students?sectionId=${sectionId}`),
+      (data) => {
+        setStudents(data);
+        setLoadingStudents(false);
+      },
+      () => {
+        setStudents([]);
+        setLoadingStudents(false);
+      }
+    );
   };
 
   // Edit student
@@ -127,7 +139,7 @@ export default function TeacherStudentsPage() {
   };
 
   const handleSaveRolls = async () => {
-    if (!selectedSection) return;
+    if (!selectedSection || loadingStudents) return;
     const assignments = Object.entries(rollAssignments)
       .filter(([_, rollNo]) => rollNo > 0)
       .map(([studentId, rollNo]) => ({ studentId, rollNo }));
@@ -180,7 +192,7 @@ export default function TeacherStudentsPage() {
         <>
           {/* Action buttons */}
           <div className="flex gap-2 mb-4">
-            <button onClick={handleOpenRolls}
+            <button onClick={handleOpenRolls} disabled={loadingStudents}
               className={`btn-${showRolls ? "primary" : "outline"} text-xs`}>
               <Hash size={14} /> Assign Roll Numbers
             </button>
@@ -288,7 +300,12 @@ export default function TeacherStudentsPage() {
                     )}
                   </tr>
                 ))}
-                {students.length === 0 && (
+                {loadingStudents && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading...</td>
+                  </tr>
+                )}
+                {!loadingStudents && students.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-gray-400">No students in this section yet. Students are added by the admin office.</td>
                   </tr>
