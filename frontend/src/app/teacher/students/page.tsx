@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
@@ -24,10 +24,19 @@ interface Student {
 export default function TeacherStudentsPage() {
   const { classTeacherSections: sections, loading } = useMyAssignments();
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
   const [saving, setSaving] = useState(false);
-  const runStudents = useLatestRequest();
+
+  // Roll assignment posts the *currently* selected sectionId with roll numbers
+  // derived from this roster, so the roster has to belong to that section.
+  // Keyed by section, it cannot be anything else.
+  const {
+    data: studentsData,
+    isLoading: loadingStudents,
+    mutate: fetchStudents,
+  } = useSWR<Student[]>(
+    selectedSection ? `/students?sectionId=${selectedSection.sectionId}` : null
+  );
+  const students = studentsData ?? [];
 
   // Edit student
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,30 +46,10 @@ export default function TeacherStudentsPage() {
   const [showRolls, setShowRolls] = useState(false);
   const [rollAssignments, setRollAssignments] = useState<Record<string, number>>({});
 
-
-  const handleSectionSelect = async (section: ClassTeacherSection) => {
+  const handleSectionSelect = (section: ClassTeacherSection) => {
     setSelectedSection(section);
     setEditingId(null);
     setShowRolls(false);
-    // Roll assignment posts the *currently* selected sectionId with roll numbers derived
-    // from `students`, so the previous section's roster must not stay on screen.
-    setStudents([]);
-    await fetchStudents(section.sectionId);
-  };
-
-  const fetchStudents = async (sectionId: string) => {
-    setLoadingStudents(true);
-    await runStudents(
-      () => api.get<Student[]>(`/students?sectionId=${sectionId}`),
-      (data) => {
-        setStudents(data);
-        setLoadingStudents(false);
-      },
-      () => {
-        setStudents([]);
-        setLoadingStudents(false);
-      }
-    );
   };
 
   // Edit student
@@ -96,7 +85,7 @@ export default function TeacherStudentsPage() {
       });
       toast.success("Student updated");
       setEditingId(null);
-      await fetchStudents(selectedSection.sectionId);
+      await fetchStudents();
     } catch (err: any) {
       toast.error(err.message);
     } finally { setSaving(false); }
@@ -141,7 +130,7 @@ export default function TeacherStudentsPage() {
       });
       toast.success("Roll numbers assigned");
       setShowRolls(false);
-      await fetchStudents(selectedSection.sectionId);
+      await fetchStudents();
     } catch (err: any) {
       toast.error(err.message);
     } finally { setSaving(false); }

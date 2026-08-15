@@ -1,18 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { formatGradeSection } from "@/lib/bsDate";
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
-
-interface ClassTeacherSection {
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
 
 interface Category { id: string; name: string; nameNp?: string }
 interface StudentObs { id: string; name: string; rollNo: number; grades: Record<string, string> }
@@ -20,77 +13,60 @@ interface StudentObs { id: string; name: string; rollNo: number; grades: Record<
 const gradeOptions = ["A+", "A", "B+", "B", "C+", "C", "D+", "D", "E"];
 
 export default function TeacherObservationsPage() {
-  const [sections, setSections] = useState<ClassTeacherSection[]>([]);
+  const { classTeacherSections: sections, loading } = useMyAssignments();
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
-  const [examTypes, setExamTypes] = useState<any[]>([]);
   const [selectedExam, setSelectedExam] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [students, setStudents] = useState<StudentObs[]>([]);
   const [editedGrades, setEditedGrades] = useState<Record<string, Record<string, string>>>({});
-  const [loading, setLoading] = useState(true);
-  const [loadingResults, setLoadingResults] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Two independent streams, so two guards — one counter shared between them would
-  // make selecting a section cancel an in-flight results fetch and vice versa.
-  const runExamTypes = useLatestRequest();
-  const runResults = useLatestRequest();
 
+  const { data: examTypesData } = useSWR<{ id: string; name: string }[]>(
+    selectedSection ? `/exam-types?academicYearId=${selectedSection.academicYearId}` : null
+  );
+  const examTypes = examTypesData ?? [];
+
+  // Save posts `editedGrades` under the *currently* selected exam, so grades
+  // seeded from a superseded response would be written against the wrong exam.
+  // Keying the fetch on the section and exam makes that impossible: a response
+  // can only ever populate the selection it was requested for.
+  const resultsKey =
+    selectedSection && selectedExam
+      ? `/observations/results?sectionId=${selectedSection.sectionId}&examTypeId=${selectedExam}`
+      : null;
+  const { data: results, isLoading: loadingResults } = useSWR<{
+    categories: Category[];
+    students: StudentObs[];
+  }>(resultsKey);
+  const categories = results?.categories ?? [];
+  const students = results?.students ?? [];
+
+  // The grid is edited in place, so the grades are local state seeded from the
+  // fetch. Changing section or exam empties them until that selection's own
+  // results arrive.
+  //
+  // Seeded once per *selection*, not on every change of `results`: SWR hands
+  // back a fresh object whenever it revalidates in the background, and reseeding
+  // from that would silently discard whatever the teacher had typed since. The
+  // ref records which key the grid currently holds edits for.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        setSections(data.classTeacherSections || []);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+    if (seededFor.current === resultsKey) return;
+    if (!results) {
+      // Selection changed and its results are still in flight.
+      seededFor.current = null;
+      setEditedGrades({});
+      return;
+    }
+    const initial: Record<string, Record<string, string>> = {};
+    for (const stu of results.students) {
+      initial[stu.id] = { ...stu.grades };
+    }
+    setEditedGrades(initial);
+    seededFor.current = resultsKey;
+  }, [resultsKey, results]);
 
-  const handleSectionSelect = async (section: ClassTeacherSection) => {
+  const handleSectionSelect = (section: ClassTeacherSection) => {
     setSelectedSection(section);
     setSelectedExam("");
-    setExamTypes([]);
-    setCategories([]);
-    setStudents([]);
-    setEditedGrades({});
-
-    await runExamTypes(
-      () => api.get<any[]>(`/exam-types?academicYearId=${section.academicYearId}`),
-      setExamTypes,
-      () => setExamTypes([])
-    );
-  };
-
-  const handleExamSelect = async (examTypeId: string) => {
-    if (!selectedSection) return;
-    setSelectedExam(examTypeId);
-    // Save posts `editedGrades` under the *currently* selected exam, so grades
-    // seeded from a superseded response would be written against the wrong exam.
-    setCategories([]);
-    setStudents([]);
-    setEditedGrades({});
-    setLoadingResults(true);
-
-    await runResults(
-      () => api.get<{ categories: Category[]; students: StudentObs[] }>(
-        `/observations/results?sectionId=${selectedSection.sectionId}&examTypeId=${examTypeId}`
-      ),
-      (data) => {
-        setCategories(data.categories);
-        setStudents(data.students);
-
-        // Initialize edited grades from existing data
-        const initial: Record<string, Record<string, string>> = {};
-        for (const stu of data.students) {
-          initial[stu.id] = { ...stu.grades };
-        }
-        setEditedGrades(initial);
-        setLoadingResults(false);
-      },
-      () => {
-        setCategories([]);
-        setStudents([]);
-        setLoadingResults(false);
-      }
-    );
   };
 
   const handleGradeChange = (studentId: string, categoryId: string, grade: string) => {
@@ -175,7 +151,7 @@ export default function TeacherObservationsPage() {
       {selectedSection && examTypes.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
           {examTypes.map((et) => (
-            <button key={et.id} onClick={() => handleExamSelect(et.id)}
+            <button key={et.id} onClick={() => setSelectedExam(et.id)}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${selectedExam === et.id ? "bg-accent text-white" : "bg-white border border-gray-200 text-gray-500 hover:border-accent"}`}>
               {et.name}
             </button>

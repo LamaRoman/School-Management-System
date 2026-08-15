@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -21,19 +21,30 @@ export default function GradingPolicyPage() {
 
   const selectedGrade = pickedGrade || grades[0]?.id || "";
 
-  const { data: savedPolicies } = useSWR<Policy[]>(
-    selectedGrade ? `/grading-policy?gradeId=${selectedGrade}` : null
-  );
+  const policyKey = selectedGrade ? `/grading-policy?gradeId=${selectedGrade}` : null;
+  const { data: savedPolicies } = useSWR<Policy[]>(policyKey);
 
   // The weightages are edited in place, so they are held as local state seeded
   // from the fetch. Switching grade empties them until that grade's own policy
   // arrives — previously the outgoing grade's numbers stayed on screen, and a
   // Save during that window wrote them to the grade now selected.
+  //
+  // Seeded once per *grade*, not on every change of `savedPolicies`: SWR hands
+  // back a fresh array whenever it revalidates in the background, and reseeding
+  // from that would discard weightages the admin had already typed.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
+    if (seededFor.current === policyKey) return;
+    if (!savedPolicies) {
+      seededFor.current = null;
+      setPolicies({});
+      return;
+    }
     const map: Record<string, number> = {};
-    (savedPolicies ?? []).forEach((p) => { map[p.examTypeId] = p.weightagePercent; });
+    savedPolicies.forEach((p) => { map[p.examTypeId] = p.weightagePercent; });
     setPolicies(map);
-  }, [savedPolicies]);
+    seededFor.current = policyKey;
+  }, [policyKey, savedPolicies]);
 
   // Both save paths can write policies for grades other than the selected one,
   // so they drop every cached grading policy rather than just this grade's.

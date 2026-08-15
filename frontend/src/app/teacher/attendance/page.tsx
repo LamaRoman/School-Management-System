@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
@@ -29,41 +29,43 @@ export default function AttendancePage() {
   const [pickedSection, setPickedSection] = useState<ClassTeacherSection | null>(null);
   const [date, setDate] = useState(getTodayBS());
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const runAttendance = useLatestRequest();
 
   const selectedSection = pickedSection ?? mySections[0] ?? null;
 
-  const fetchAttendance = async () => {
-    if (!selectedSection || !date) return;
-    // Drop the previous section's roster immediately. Save posts `records` against the
-    // *currently* selected sectionId, so leaving the old roster on screen while the new
-    // one is in flight is a window where one tap on Save writes another class's students.
-    setRecords([]);
-    setHasChanges(false);
-    setLoadingRecords(true);
-    await runAttendance(
-      () => api.get<AttendanceRecord[]>(
-        `/daily-attendance?sectionId=${selectedSection.sectionId}&date=${date}&academicYearId=${selectedSection.academicYearId}`
-      ),
-      (data) => {
-        // Default unmarked students to PRESENT
-        setRecords(data.map((r) => ({ ...r, status: r.status || "PRESENT" })));
-        setHasChanges(false);
-        setLoadingRecords(false);
-      },
-      () => {
-        setRecords([]);
-        setLoadingRecords(false);
-      }
-    );
-  };
+  // Save posts `records` against the *currently* selected sectionId and date, so
+  // the roster on screen has to belong to that pair. Keying the fetch on both
+  // makes it so by construction — a response for the section or day the teacher
+  // just left can only ever populate its own cache entry.
+  const attendanceKey =
+    selectedSection && date
+      ? `/daily-attendance?sectionId=${selectedSection.sectionId}&date=${date}&academicYearId=${selectedSection.academicYearId}`
+      : null;
+  const {
+    data: fetchedRecords,
+    isLoading: loadingRecords,
+    mutate: reloadAttendance,
+  } = useSWR<AttendanceRecord[]>(attendanceKey);
 
+  // The roster is toggled in place, so it is local state seeded from the fetch,
+  // and seeded once per section+date rather than on every change of the fetched
+  // array — a background revalidation would otherwise throw away the absences a
+  // teacher had marked but not yet saved.
+  const seededFor = useRef<string | null>(null);
   useEffect(() => {
-    fetchAttendance();
-  }, [selectedSection, date]);
+    if (seededFor.current === attendanceKey) return;
+    if (!fetchedRecords) {
+      seededFor.current = null;
+      setRecords([]);
+      setHasChanges(false);
+      return;
+    }
+    // Default unmarked students to PRESENT
+    setRecords(fetchedRecords.map((r) => ({ ...r, status: r.status || "PRESENT" })));
+    setHasChanges(false);
+    seededFor.current = attendanceKey;
+  }, [attendanceKey, fetchedRecords]);
 
   const toggleStatus = (studentId: string) => {
     setRecords((prev) =>
@@ -104,6 +106,10 @@ export default function AttendancePage() {
       });
       toast.success("Attendance saved");
       setHasChanges(false);
+      // Refresh the cache so a later visit to this day doesn't render what the
+      // server held before the save. The grid itself is left alone — it already
+      // shows exactly what was just written.
+      reloadAttendance();
     } catch (err: any) {
       toast.error(err.message);
     } finally { setSaving(false); }
