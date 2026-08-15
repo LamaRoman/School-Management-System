@@ -3,9 +3,29 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifyExamType, verifyGrade } from "../utils/schoolScope";
+import {
+  verifyExamType,
+  verifyGrade,
+  verifySubjectInGrade,
+  verifySubjectsInGrade,
+  verifyExamTypeInYear,
+} from "../utils/schoolScope";
 
 const router = Router();
+
+/**
+ * A routine entry is reachable only through its grade's academic year, so this
+ * is the tenancy check for the by-id handlers. They previously took the id
+ * straight from the URL into `update`/`delete`, which let an admin of one
+ * school edit or delete any other school's printed exam routine.
+ */
+async function findRoutineInSchool(id: string, schoolId: string) {
+  const routine = await prisma.examRoutine.findFirst({
+    where: { id, grade: { academicYear: { schoolId } } },
+  });
+  if (!routine) throw new AppError("Exam routine entry not found or access denied", 404);
+  return routine;
+}
 
 // GET /api/exam-routine?examTypeId=xxx&gradeId=xxx
 router.get("/", authenticate, async (req, res) => {
@@ -45,7 +65,12 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = schema.parse(req.body);
   const schoolId = getSchoolId(req);
   await verifyExamType(data.examTypeId, schoolId);
-  await verifyGrade(data.gradeId, schoolId);
+  const grade = await verifyGrade(data.gradeId, schoolId);
+  // `@@unique([examTypeId, gradeId, subjectId])` will happily persist a
+  // mismatched trio, and it prints on the routine handed to students.
+  await verifySubjectInGrade(data.subjectId, data.gradeId);
+  await verifyExamTypeInYear(data.examTypeId, grade.academicYearId);
+
   const routine = await prisma.examRoutine.create({
     data: {
       examTypeId: data.examTypeId,
@@ -83,7 +108,12 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
   const { examTypeId, gradeId, entries } = schema.parse(req.body);
   const schoolId = getSchoolId(req);
   await verifyExamType(examTypeId, schoolId);
-  await verifyGrade(gradeId, schoolId);
+  const grade = await verifyGrade(gradeId, schoolId);
+  // Whole batch or nothing — the delete below wipes the grade's existing
+  // routine, so a batch that fails halfway would leave it with no routine at
+  // all.
+  await verifySubjectsInGrade(entries.map((e) => e.subjectId), gradeId);
+  await verifyExamTypeInYear(examTypeId, grade.academicYearId);
 
   // Delete existing entries for this exam type + grade first
   await prisma.examRoutine.deleteMany({
@@ -119,6 +149,9 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   });
 
   const data = schema.parse(req.body);
+  const schoolId = getSchoolId(req);
+  await findRoutineInSchool(req.params.id, schoolId);
+
   const routine = await prisma.examRoutine.update({
     where: { id: req.params.id },
     data,
@@ -134,6 +167,9 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // DELETE /api/exam-routine/:id
 router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await findRoutineInSchool(req.params.id, schoolId);
+
   await prisma.examRoutine.delete({ where: { id: req.params.id } });
   res.json({ data: { message: "Exam routine entry deleted" } });
 });
@@ -149,8 +185,12 @@ router.post("/copy", authenticate, authorize("ADMIN"), async (req, res) => {
   const { examTypeId, sourceGradeId, targetGradeId } = schema.parse(req.body);
   const schoolId = getSchoolId(req);
   await verifyExamType(examTypeId, schoolId);
-  await verifyGrade(sourceGradeId, schoolId);
-  await verifyGrade(targetGradeId, schoolId);
+  const sourceGrade = await verifyGrade(sourceGradeId, schoolId);
+  const targetGrade = await verifyGrade(targetGradeId, schoolId);
+  // The subjects here are resolved by name within the target grade, so they
+  // can't cross a grade boundary — but the exam type still can cross a year.
+  await verifyExamTypeInYear(examTypeId, sourceGrade.academicYearId);
+  await verifyExamTypeInYear(examTypeId, targetGrade.academicYearId);
 
   const sourceEntries = await prisma.examRoutine.findMany({
     where: { examTypeId, gradeId: sourceGradeId },

@@ -25,9 +25,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **R7 + R7a/R7b** | Three rank implementations that disagreed; optional subjects ignored by every results calculation | #18, #19, #20 |
 | **P3, P6** | Bulk report cards were O(n²); Puppeteer had no concurrency cap | #21 |
 | **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | #22 |
-| **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | *this branch* |
+| **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | #23 |
+| **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | *this branch* |
 
-**Suggested next:** **S4 (+S4a, S4b)** — the performance findings are done (P1b–d aside, which is a design fix rather than a speed one), so the remaining backend risk is the tenancy/invariant gap. F4a's work on `admin/teacher-assignments` showed S4 is the server-side backstop that page needs, and **S4b**'s table-driven regression test is worth more than the four patches, since this bug got in four separate times. **W1** (results publish workflow) is the biggest *product* gap and is fully designed but unbuilt.
+**Suggested next:** **W1** — the performance findings and the tenancy/invariant class are both closed, so the biggest remaining item is a product gap rather than a defect: parents and students currently see live, half-entered results with nothing marking them as provisional. It is fully designed (W1a–g) and unbuilt. If you'd rather keep to smaller pieces first, **S5–S8** are the remaining security items (none destructive), **R8a** is an open question worth deciding, and **P1b–d** is the student-photo storage redesign.
+
+> **Bookkeeping fixed 2026-08-15:** R3 and R6 were closed by R7 on 2026-08-14 but their status boxes still read `[~]` and `[ ]`, so the list overstated what was outstanding. Both now marked done with a pointer to R7.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -148,12 +151,29 @@ Allows writing observation grades onto another school's students, which then sur
 
 ---
 
-### [ ] S4. Unverified `subjectId` leaks another school's subject names — and permits within-school mismatches
+### [x] S4. Unverified `subjectId` leaks another school's subject names — and permits within-school mismatches
+
+> **FIXED 2026-08-15.** Closed the way this entry argued for — as an invariant, not a `verifySubject` sprinkle. `schoolScope.ts` gained a "X belongs to Y" section: `verifySubjectInGrade`, `verifySubjectsInGrade`, `verifySubjectInSection`, `verifyExamTypeInYear`, `verifyExamTypesInYear`. Because the parent (grade, section, year) is already school-verified at each call site, checking the relationship closes the cross-school hole at the same time — so these *replace* a `verifySubject` call rather than joining it.
+>
+> **Two things turned up that were not in this finding, both in files it sent me to:**
+>
+> 1. **`examRoutine.routes.ts` `PUT /:id` and `DELETE /:id` had no school scoping at all.** They took the id from the URL straight into `update`/`delete`. An admin of one school could edit or delete **any other school's printed exam routine** — a cross-tenant destructive write, materially worse than the subject-name leak this finding is about. Now both resolve the entry through `grade.academicYear.schoolId` first. This is exactly what **S4b** predicted: the table-driven test finds the endpoints nobody thought to look at.
+> 2. **The exam-type/year invariant applies to exam routines too**, not just to grading policy (**S4a**). `verifyExamType` + `verifyGrade` both pass for a pair from different years in the same school, and `@@unique([examTypeId, gradeId, subjectId])` persists it happily. Added there as well.
+>
+> **Checked the UI still sends valid pairs before tightening**, the same way S3 was checked: `admin/exam-routine` and `admin/grading-policy` both fetch grades and exam types filtered by the *same* active year, so no existing screen can produce a mismatched pair.
+>
+> **Verified against the real dev data, not just the test database** — a legitimate exam-routine bulk save, homework create and grading-policy save all still succeed; the cross-grade variants of each are refused with a specific message ("Subject not found for this section's grade").
+>
+> **A note on doing that live:** `POST /exam-routine/bulk` deletes the grade's existing routine before inserting, so the check destroyed Grade I's First Terminal routine, and the grading-policy save overwrote its weightages. Both were reconstructed — the routine from Grade I's own Second Terminal rows, since the seed uses identical subjects, ordering, day names and times across every grade and term with only the date block differing, and the weightages from the 20/30/50 every other grade carries. The result matches the sibling grades exactly, but it is a **reconstruction, not a restore from backup**. Worth knowing before running destructive endpoints against the dev database again.
+>
+> Pinned by `src/test/__tests__/foreignKeyIsolation.test.ts` — see **S4b**. Suite 207 → **232**.
+
 **Where:** three endpoints accept a `subjectId` without calling `verifySubject`, then echo it back via `include`:
 
-- [ ] `backend/src/routes/teacherAssignment.routes.ts:108` — response includes `subject: { select: { name: true } }`
-- [ ] `backend/src/routes/homework.routes.ts:98` — response includes `subject: { select: { id: true, name: true } }` (the TEACHER path is indirectly constrained by `isAssignedToSection`; the ADMIN path is not)
-- [ ] `backend/src/routes/examRoutine.routes.ts:38` and `:75` — `examTypeId` and `gradeId` are verified, `subjectId` is not
+- [x] `backend/src/routes/teacherAssignment.routes.ts:108` — response includes `subject: { select: { name: true } }`
+- [x] `backend/src/routes/homework.routes.ts:98` — response includes `subject: { select: { id: true, name: true } }` (the TEACHER path is indirectly constrained by `isAssignedToSection`; the ADMIN path is not)
+- [x] `backend/src/routes/examRoutine.routes.ts:38` and `:75` — `examTypeId` and `gradeId` are verified, `subjectId` is not
+- [x] **Found while doing the work:** `examRoutine.routes.ts` `PUT /:id` and `DELETE /:id` were unscoped entirely — cross-school edit and delete
 
 An admin who obtains a foreign `subjectId` gets that school's subject name back in the API response, and creates rows whose foreign keys cross the tenancy boundary.
 
@@ -170,9 +190,21 @@ An admin who obtains a foreign `subjectId` gets that school's subject name back 
 
 **Fix direction:** extend `schoolScope.ts` with "X belongs to Y" helpers (e.g. `verifySubjectInGrade(subjectId, gradeId)`, `verifyExamTypeInYear(examTypeId, academicYearId)`) rather than sprinkling `verifySubject` calls. Same file, same style as the existing helpers, and it makes the intent legible at each call site.
 
-- [ ] **S4a. `gradingPolicy.routes.ts:31` — a correctness bug, not a security one.** It verifies `gradeId` but not the `examTypeId` values inside `policies[]`. The needed check is `examType.academicYearId === grade.academicYearId`. A policy referencing an exam type from a **different academic year** would silently produce wrong weighted final results, and nothing would ever flag it.
+- [x] **S4a. `gradingPolicy.routes.ts:31` — a correctness bug, not a security one.** It verifies `gradeId` but not the `examTypeId` values inside `policies[]`. The needed check is `examType.academicYearId === grade.academicYearId`. A policy referencing an exam type from a **different academic year** would silently produce wrong weighted final results, and nothing would ever flag it.
 
-- [ ] **S4b. Add a regression test for the whole class.** `backend/src/test/__tests__/` already exists. A table-driven test that walks every write endpoint, feeds a foreign-school ID for each FK it accepts, and asserts 404 would catch this permanently. **Worth more than the four patches** — this bug got in four separate times because nothing was checking for it.
+  > **FIXED 2026-08-15.** `verifyExamTypesInYear(policies.map(p => p.examTypeId), grade.academicYearId)`, batched, before the upsert. Checked the dev database for rows that already had this shape — there are none, so nothing needed backfilling.
+
+- [x] **S4b. Add a regression test for the whole class.** `backend/src/test/__tests__/` already exists. A table-driven test that walks every write endpoint, feeds a foreign-school ID for each FK it accepts, and asserts 404 would catch this permanently. **Worth more than the four patches** — this bug got in four separate times because nothing was checking for it.
+
+  > **BUILT 2026-08-15** — `src/test/__tests__/foreignKeyIsolation.test.ts`, 25 tests, 14 verified to fail against the unfixed routes.
+  >
+  > **It earned its keep immediately**, exactly as this note predicted: writing the table is what surfaced the unscoped `PUT`/`DELETE` on exam routines, which no finding had named.
+  >
+  > **It tests two mistakes, not one, and the second is the point.** *Cross-school* — an id from another school. *Cross-parent* — an id that is perfectly valid in this school but hangs off the wrong parent: a Grade I subject on a Grade II section, a 2081 exam type on a 2082 grade. Every school-membership check passes and the write is still wrong. A table that only fed foreign-school ids would have missed half of what S4 was actually about.
+  >
+  > **Every endpoint also has a happy-path case** asserting a fully consistent request still succeeds — otherwise a handler that rejected everything would pass the whole table.
+  >
+  > The file header says to add a case when adding an endpoint that takes a foreign key. That convention is the actual deliverable here; the 25 assertions are just its current contents.
 
 ---
 
@@ -288,11 +320,11 @@ So a card can read *"Percentage: 78.5% · Rank: 23rd"* where the rank was derive
 
 ---
 
-### [~] R3. Grade sheet rank ≠ report card rank — *absence half fixed, one gap remains*
+### [x] R3. Grade sheet rank ≠ report card rank — *absence half fixed, one gap remains*
 
 > **PARTIALLY FIXED 2026-08-14.** The absence-driven divergence is gone: both now score absences as 0.
 >
-> **Still open:** the two use different denominators when a mark row is *missing entirely* (never entered, as opposed to marked absent). The grade sheet iterates every subject in the grade and scores a missing row as 0; the report card iterates only the student's own mark rows. So during incomplete marks entry the two can still disagree. That's the same root as **R6** and should be closed with it.
+> ~~**Still open:**~~ **CLOSED 2026-08-14 by R7** — the status box was never updated, corrected 2026-08-15. The remaining half was that the two used different denominators when a mark row is *missing entirely* (never entered, as opposed to marked absent). `rank.service.ts` gave all three surfaces one divisor — every subject in the grade — so they can no longer disagree during incomplete entry. See **R7**, decision 1.
 **Where:** `backend/src/routes/gradeSheet.routes.ts:89–91` vs `pdf.routes.ts:214–223`
 
 - Grade sheet ranks by `avgPct`, which **excludes** absent subjects.
@@ -329,7 +361,10 @@ So the same absence is *"count as zero"* at the term-weighting level and *"exclu
 
 ---
 
-### [ ] R6. Rank denominator varies by how many marks each student has
+### [x] R6. Rank denominator varies by how many marks each student has
+
+> **CLOSED 2026-08-14 by R7; the status box was never updated, corrected 2026-08-15.** The divisor is now every subject in the grade, for every student, on all three surfaces — a missing mark scores 0 rather than shrinking that student's denominator. R7's note answers the "may be the intended forgiving reading" question below: it was taken to the school owner, and the answer was no — a rank whose divisor changes per student is not a rank.
+
 **Where:** `pdf.routes.ts:222` and `report.routes.ts` — `avgPct = totalPctSum / stuMarks.length`
 
 The divisor is the number of marks *that student has*. A student missing one subject's mark entry is averaged over 7 subjects while classmates are averaged over 8, inflating their rank. Rankings therefore shift as marks entry progresses, and a rank printed mid-entry won't match one printed after.
