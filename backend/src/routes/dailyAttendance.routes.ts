@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
@@ -98,59 +99,75 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     throw new AppError("One or more students do not belong to this section", 400);
   }
 
-  // Upsert each record
-  const results = await prisma.$transaction(
-    records.map((r) =>
-      prisma.dailyAttendance.upsert({
-        where: {
-          studentId_date_academicYearId: {
-            studentId: r.studentId,
-            date,
-            academicYearId,
-          },
-        },
-        update: {
-          status: r.status,
-          remarks: r.remarks || null,
-          markedById: user?.teacherId || null,
-        },
-        create: {
-          studentId: r.studentId,
-          date,
-          academicYearId,
-          status: r.status,
-          remarks: r.remarks || null,
-          markedById: user?.teacherId || null,
-        },
-      })
-    )
+  // Marking attendance is the highest-frequency write in the app — every
+  // teacher, every section, every morning — so both halves of it are single
+  // set-based statements rather than a query per student.
+  //
+  // They also run in one transaction. The totals below are derived from the
+  // rows written just above; when the recompute sat outside the write, a
+  // failure between the two left the day saved and the totals stale, and a
+  // stale total prints on a report card with nothing on the page to show it
+  // is wrong.
+  //
+  // The ids are generated in SQL because a set-based INSERT has no chance to
+  // run Prisma's client-side cuid(). Both columns are opaque TEXT surrogate
+  // keys that nothing reads or parses, so the mixed format is invisible.
+  const markedById = user?.teacherId || null;
+
+  // Last entry wins for a repeated student. ON CONFLICT DO UPDATE cannot touch
+  // the same row twice in one statement, so a duplicate id would error rather
+  // than overwrite the way the per-row upserts used to.
+  const byStudent = new Map(records.map((r) => [r.studentId, r]));
+  const rows = [...byStudent.values()].map(
+    (r) => Prisma.sql`(${r.studentId}::text, ${r.status}::"AttendanceStatus", ${r.remarks || null}::text)`
   );
 
-  // Auto-update the Attendance totals table
-  const sectionStudents = await prisma.student.findMany({
-    where: { sectionId, isActive: true },
-    select: { id: true },
+  const saved = await prisma.$transaction(async (tx) => {
+    const written = await tx.$executeRaw`
+      INSERT INTO daily_attendances
+        (id, student_id, date, academic_year_id, status, remarks, marked_by_id, created_at, updated_at)
+      SELECT gen_random_uuid()::text, v.student_id, ${date}::text, ${academicYearId}::text,
+             v.status, v.remarks, ${markedById}::text, NOW(), NOW()
+      FROM (VALUES ${Prisma.join(rows)}) AS v(student_id, status, remarks)
+      ON CONFLICT (student_id, date, academic_year_id) DO UPDATE
+        SET status       = EXCLUDED.status,
+            remarks      = EXCLUDED.remarks,
+            marked_by_id = EXCLUDED.marked_by_id,
+            updated_at   = NOW()
+    `;
+
+    // Recompute the year-to-date totals for the section in Postgres. This used
+    // to load every daily row each student had for the whole year and count
+    // them in JavaScript, once per student: ~800 rows in Baisakh, ~8,800 by
+    // Chaitra, on every save. The counting now happens where the rows already
+    // are and nothing crosses the wire.
+    //
+    // The LEFT JOIN keeps the old behaviour of giving every active student in
+    // the section a totals row, zeroed if they have no daily rows yet.
+    await tx.$executeRaw`
+      INSERT INTO attendances
+        (id, student_id, academic_year_id, total_days, present_days, absent_days, created_at, updated_at)
+      SELECT gen_random_uuid()::text, s.id, ${academicYearId}::text,
+             COUNT(d.id),
+             COUNT(d.id) FILTER (WHERE d.status = 'PRESENT'),
+             COUNT(d.id) FILTER (WHERE d.status = 'ABSENT'),
+             NOW(), NOW()
+      FROM students s
+      LEFT JOIN daily_attendances d
+        ON d.student_id = s.id AND d.academic_year_id = ${academicYearId}::text
+      WHERE s.section_id = ${sectionId}::text AND s.is_active = true
+      GROUP BY s.id
+      ON CONFLICT (student_id, academic_year_id) DO UPDATE
+        SET total_days   = EXCLUDED.total_days,
+            present_days = EXCLUDED.present_days,
+            absent_days  = EXCLUDED.absent_days,
+            updated_at   = NOW()
+    `;
+
+    return written;
   });
 
-  for (const student of sectionStudents) {
-    const dailyRecords = await prisma.dailyAttendance.findMany({
-      where: { studentId: student.id, academicYearId },
-    });
-
-    const totalDays = dailyRecords.length;
-    const presentDays = dailyRecords.filter((r) => r.status === "PRESENT").length;
-    const absentDays = dailyRecords.filter((r) => r.status === "ABSENT").length;
-
-    await prisma.attendance.upsert({
-      where: {
-        studentId_academicYearId: { studentId: student.id, academicYearId },
-      },
-      update: { totalDays, presentDays, absentDays },
-      create: { studentId: student.id, academicYearId, totalDays, presentDays, absentDays },
-    });
-  }
-
-  res.json({ data: { saved: results.length, message: "Attendance saved" } });
+  res.json({ data: { saved, message: "Attendance saved" } });
 });
 
 // GET /api/daily-attendance/summary?sectionId=xxx&academicYearId=xxx
