@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { GraduationCap, Calendar, Receipt, Megaphone, Pin } from "lucide-react";
+import ResultsPending from "@/components/ui/ResultsPending";
 
 interface Child {
   id: string;
@@ -176,7 +177,13 @@ export default function ParentDashboard() {
                   ))}
                 </div>
 
-                {reportData ? (
+                {reportData?.pending ? (
+                  <ResultsPending
+                    examName={reportData.examName}
+                    pendingTerms={reportData.pendingTerms}
+                    message={reportData.message}
+                  />
+                ) : reportData ? (
                   <div className="card overflow-hidden">
                     <table className="w-full text-sm">
                       <thead>

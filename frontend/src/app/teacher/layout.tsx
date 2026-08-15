@@ -5,7 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
-import { LogOut, GraduationCap, ClipboardList, CalendarCheck, Users, CalendarDays, BookOpen, Megaphone, KeyRound, LayoutDashboard } from "lucide-react";
+import { LogOut, GraduationCap, ClipboardList, CalendarCheck,
+  ClipboardCheck, Users, CalendarDays, BookOpen, Megaphone, KeyRound, LayoutDashboard } from "lucide-react";
 
 const allowedRoles = ["TEACHER", "ADMIN"];
 
@@ -56,6 +57,11 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
       ? [
           { href: "/teacher/students", label: "My Students", icon: Users },
           { href: "/teacher/attendance", label: "Attendance", icon: CalendarCheck },
+          // Results gets a permanent tab despite being termly: it is the
+          // hand-off that decides whether families see anything at all, and
+          // the running "6 of 8 subjects entered" indicator is meant to be
+          // glanceable *during* entry, not found only at the end.
+          { href: "/teacher/results", label: "Results", icon: ClipboardCheck },
         ]
       : []),
   ];

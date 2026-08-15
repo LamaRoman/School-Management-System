@@ -33,6 +33,20 @@ enum AttendanceStatus {
 // Report card style for a grade/class level.
 // MARKS_BASED: existing full-marks / pass-marks / theory+practical report (unchanged default).
 // CREDIT_GRADE_BASED: new credit-hour + letter-grade + grade-point report (SEE/NEB style).
+// Where a section's results for one exam have got to. Deliberately separate
+// from ExamType.isFinal (which is about weighting in the annual result) and
+// from Notice.isPublished (which is about the announcement, not the data).
+//
+//   DRAFT     — marks entry in progress. Parents and students see "Pending".
+//   READY     — the section's class teacher says entry is done. Still not
+//               visible to families; this is a hand-off, not a publish.
+//   PUBLISHED — an admin has released it. Now visible in the portals.
+enum ResultStatus {
+  DRAFT
+  READY
+  PUBLISHED
+}
+
 enum GradingStyle {
   MARKS_BASED
   CREDIT_GRADE_BASED
@@ -165,6 +179,7 @@ model Section {
   students Student[]
   teachers TeacherAssignment[]
   homeworks      Homework[]
+  resultStatuses ExamResultStatus[]
 
   @@unique([name, gradeId])
   @@map("sections")
@@ -243,9 +258,41 @@ model ExamType {
   examRoutines   ExamRoutine[]
   seatAllocations SeatAllocation[]
   feeStructures  FeeStructure[]
+  resultStatuses ExamResultStatus[]
 
   @@unique([name, academicYearId])
   @@map("exam_types")
+}
+
+// ─── EXAM RESULT STATUS (publish workflow) ──────────────
+
+// One row per (exam type × section) — the unit a class teacher owns and an
+// admin publishes. No row means DRAFT: results for a section nobody has
+// touched yet are pending, which is the safe default.
+model ExamResultStatus {
+  id              String       @id @default(cuid())
+  examTypeId      String       @map("exam_type_id")
+  sectionId       String       @map("section_id")
+  status          ResultStatus @default(DRAFT)
+  // Who said entry was done, and who released it. Two different people and
+  // two different acts (W1a vs W1d), so two pairs of columns.
+  markedReadyById String?      @map("marked_ready_by_id")
+  markedReadyAt   DateTime?    @map("marked_ready_at")
+  publishedById   String?      @map("published_by_id")
+  publishedAt     DateTime?    @map("published_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @default(now()) @map("updated_at")
+
+  examType     ExamType @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+  section      Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  markedReadyBy Teacher? @relation(fields: [markedReadyById], references: [id], onDelete: SetNull)
+  publishedBy   User?    @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([examTypeId, sectionId])
+  // The portals ask "is this one section's exam published?" on every report
+  // load; the admin overview asks for every section of one exam type.
+  @@index([sectionId])
+  @@map("exam_result_statuses")
 }
 
 // ─── GRADING POLICY (Weightage) ─────────────────────────
@@ -326,6 +373,7 @@ model Teacher {
   school      School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   assignments TeacherAssignment[]
   user        User?
+  resultsMarkedReady ExamResultStatus[]
 
   @@map("teachers")
 }
@@ -377,6 +425,7 @@ model User {
   auditLogs      AuditLog[]
   refreshTokens  RefreshToken[]
   galleryPhotos  GalleryPhoto[]
+  resultsPublished ExamResultStatus[]
   @@map("users")
 }
 

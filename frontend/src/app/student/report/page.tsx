@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
 import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
+import ResultsPending from "@/components/ui/ResultsPending";
 
 interface ColumnSettings {
   showPassMarks: boolean;
@@ -176,7 +177,7 @@ export default function StudentReportPage() {
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setMode(mode === "color" ? "bw" : "color")}
               className="btn-ghost text-xs">{mode === "color" ? "🖨️ B&W" : "🎨 Color"}</button>
-            {reportData && (
+            {reportData && !reportData.pending && (
               <>
                 <button onClick={() => openPdf(mode, "print")} disabled={downloading} className="btn-outline text-xs">
                   <Printer size={14} /> {downloading ? "..." : `Print (${reportData.paperSize || "A4"})`}
@@ -206,7 +207,15 @@ export default function StudentReportPage() {
           <div className="card p-8 text-center text-gray-400">No report data available for this exam.</div>
         )}
 
-        {reportData && (
+        {reportData?.pending && (
+          <ResultsPending
+            examName={reportData.examName}
+            pendingTerms={reportData.pendingTerms}
+            message={reportData.message}
+          />
+        )}
+
+        {reportData && !reportData.pending && (
           <div className="bg-white border-2 rounded mx-6" style={{ borderColor: t.primary }}>
             {/* Header */}
             <div className="p-4 border-b-2 text-center" style={{ borderColor: t.primary }}>
