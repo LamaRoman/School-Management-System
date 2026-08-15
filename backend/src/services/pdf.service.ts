@@ -101,12 +101,63 @@ interface PdfOptions {
   paperSize: "A4" | "A5";
 }
 
+/**
+ * Cap on concurrent Chrome pages (P6).
+ *
+ * Each open page holds 50-100MB for the duration of its render. Report cards are
+ * printed in class-sized batches at term end, which is exactly when several teachers
+ * are likely to click Print within the same minute — five concurrent renders plus the
+ * base browser is enough to OOM-kill a memory-billed instance, and an OOM kill takes
+ * every other in-flight request with it. Queueing costs the fifth teacher a few
+ * seconds; not queueing costs everyone the process.
+ *
+ * Three, not one: a single slot would serialise unrelated single-student downloads
+ * behind a 40-page class batch, and the box can comfortably hold three pages.
+ */
+const MAX_CONCURRENT_PAGES = 3;
+let activePages = 0;
+const pageQueue: Array<() => void> = [];
+
+async function acquirePageSlot(): Promise<void> {
+  if (activePages < MAX_CONCURRENT_PAGES) {
+    activePages++;
+    return;
+  }
+  // Park until a render finishes. Deliberately unbounded and FIFO — the alternative
+  // is rejecting the request, and a teacher waiting is better than a failed print run
+  // during the one week these are actually used.
+  await new Promise<void>((resolve) => pageQueue.push(resolve));
+  activePages++;
+}
+
+function releasePageSlot(): void {
+  activePages--;
+  const next = pageQueue.shift();
+  if (next) next();
+}
+
+/** Test/diagnostic hook — how many renders are running and waiting right now. */
+export function getPdfConcurrency(): { active: number; queued: number; max: number } {
+  return { active: activePages, queued: pageQueue.length, max: MAX_CONCURRENT_PAGES };
+}
+
 export async function generatePdf({
   html,
   paperSize,
 }: PdfOptions): Promise<Buffer> {
-  const browser = await getBrowser();
-  const page = await browser.newPage();
+  await acquirePageSlot();
+
+  let browser;
+  let page;
+  try {
+    browser = await getBrowser();
+    page = await browser.newPage();
+  } catch (err) {
+    // Never strand a slot if the browser or page could not be opened.
+    releasePageSlot();
+    throw err;
+  }
+
   // Cancel any pending idle-shutdown for the duration of this render — a
   // large batch can take longer than the idle window, and closing the
   // browser mid-render would kill the in-flight page.
@@ -142,8 +193,14 @@ export async function generatePdf({
 
     return Buffer.from(pdfBuffer);
   } finally {
-    await page.close();
-    resetIdleShutdown();
+    // Close the page before handing the slot on, so the next render's memory does not
+    // overlap with this one's — otherwise the cap would not actually bound peak usage.
+    try {
+      await page.close();
+    } finally {
+      releasePageSlot();
+      resetIdleShutdown();
+    }
   }
 }
 

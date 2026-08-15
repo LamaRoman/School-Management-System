@@ -65,37 +65,202 @@ async function getObservations(studentId: string, examTypeId: string, gradeId: s
   });
 }
 
+/**
+ * The same thing for a whole class in two queries instead of two per student.
+ *
+ * The categories are a property of the grade, so they are identical for every student
+ * in the batch; only the results differ. Returns a Map so the caller can index by
+ * studentId, and `null` for the whole batch when the grade has no categories — the
+ * same signal the single-student version gives.
+ */
+async function getObservationsBatch(
+  studentIds: string[],
+  examTypeId: string,
+  gradeId: string
+): Promise<Map<string, any[] | null>> {
+  const categories = await prisma.observationCategory.findMany({
+    where: { gradeId, isActive: true },
+    orderBy: { displayOrder: "asc" },
+  });
+  if (categories.length === 0) {
+    return new Map(studentIds.map((id) => [id, null]));
+  }
+
+  const results = await prisma.observationResult.findMany({
+    where: {
+      studentId: { in: studentIds },
+      examTypeId,
+      categoryId: { in: categories.map((c) => c.id) },
+    },
+  });
+
+  const byStudent = new Map<string, Map<string, string>>();
+  for (const r of results) {
+    let forStudent = byStudent.get(r.studentId);
+    if (!forStudent) {
+      forStudent = new Map();
+      byStudent.set(r.studentId, forStudent);
+    }
+    forStudent.set(r.categoryId, r.grade);
+  }
+
+  return new Map(
+    studentIds.map((id) => [
+      id,
+      categories.map((cat) => ({
+        categoryName: cat.name,
+        grade: byStudent.get(id)?.get(cat.id) || "—",
+      })),
+    ])
+  );
+}
+
 // ─── REPORT DATA BUILDERS ───────────────────────────────
 
 /**
- * `precomputedRanking` lets a bulk caller compute the section's ranking once and pass
- * it in, instead of this rebuilding the identical ranking for every student in the
- * class — the quadratic behaviour described in P3.
+ * Everything a term report needs that a *bulk* caller can fetch once for the whole
+ * class instead of once per student.
+ *
+ * Printing a class set used to issue roughly ten queries per student — and four of
+ * them (`examType`, `academicYear`, `school`, the grade's subjects) return the
+ * identical row every time, because every student in the batch shares a section. The
+ * rest are per-student but can be fetched for the whole roster in one query each.
+ * That is the remainder of **P3**: a 40-student class went from ~400 sequential round
+ * trips to a handful, on a connection pool capped at 5.
+ *
+ * Deliberately optional rather than a second builder function. A separate bulk path
+ * would be a second copy of the composition logic below, and two copies drifting apart
+ * is the exact failure **R7** just finished cleaning up.
+ */
+interface TermReportBatch {
+  examType: any;
+  academicYear: any;
+  school: any;
+  gradeSubjects: any[];
+  studentsById: Map<string, any>;
+  marksByStudent: Map<string, any[]>;
+  optionalByStudent: Map<string, Set<string>>;
+  attendanceByStudent: Map<string, any>;
+  ranking?: SectionRanking;
+}
+
+/**
+ * Gather one section's term-report data in a fixed number of queries, regardless of
+ * class size. Pass the result to `buildTermReportData` for each student.
+ */
+async function loadTermReportBatch(
+  sectionId: string,
+  examTypeId: string,
+  schoolId: string
+): Promise<TermReportBatch> {
+  const [section, examType, school] = await Promise.all([
+    prisma.section.findUniqueOrThrow({
+      where: { id: sectionId },
+      include: { grade: true },
+    }),
+    prisma.examType.findUniqueOrThrow({ where: { id: examTypeId } }),
+    prisma.school.findUnique({ where: { id: schoolId } }),
+  ]);
+
+  const [academicYear, students, gradeSubjects] = await Promise.all([
+    prisma.academicYear.findUniqueOrThrow({ where: { id: examType.academicYearId } }),
+    prisma.student.findMany({
+      where: { sectionId, isActive: true },
+      include: { section: { include: { grade: true } } },
+    }),
+    prisma.subject.findMany({
+      where: { gradeId: section.gradeId },
+      orderBy: { displayOrder: "asc" },
+    }),
+  ]);
+
+  const studentIds = students.map((s) => s.id);
+  const [marks, optional, attendances, ranking] = await Promise.all([
+    prisma.mark.findMany({
+      where: { studentId: { in: studentIds }, examTypeId },
+      include: { subject: true },
+      orderBy: { subject: { displayOrder: "asc" } },
+    }),
+    prisma.studentOptionalSubject.findMany({
+      where: { studentId: { in: studentIds } },
+      select: { studentId: true, subjectId: true },
+    }),
+    prisma.attendance.findMany({
+      where: { studentId: { in: studentIds }, academicYearId: examType.academicYearId },
+    }),
+    examType.showRank
+      ? computeSectionRanks(sectionId, examTypeId, examType.academicYearId)
+      : Promise.resolve(undefined),
+  ]);
+
+  const marksByStudent = new Map<string, any[]>();
+  for (const m of marks) {
+    const list = marksByStudent.get(m.studentId);
+    if (list) list.push(m);
+    else marksByStudent.set(m.studentId, [m]);
+  }
+
+  const optionalByStudent = new Map<string, Set<string>>();
+  for (const o of optional) {
+    let set = optionalByStudent.get(o.studentId);
+    if (!set) {
+      set = new Set();
+      optionalByStudent.set(o.studentId, set);
+    }
+    set.add(o.subjectId);
+  }
+
+  return {
+    examType,
+    academicYear,
+    school,
+    gradeSubjects,
+    studentsById: new Map(students.map((s) => [s.id, s])),
+    marksByStudent,
+    optionalByStudent,
+    attendanceByStudent: new Map(attendances.map((a) => [a.studentId, a])),
+    ranking,
+  };
+}
+
+/**
+ * `batch` lets a bulk caller supply data already fetched for the whole class. Without
+ * it this fetches everything itself, which is what the single-student routes want.
  */
 async function buildTermReportData(
   studentId: string,
   examTypeId: string,
   schoolId: string,
-  precomputedRanking?: SectionRanking
+  batch?: TermReportBatch
 ) {
-  const student = await prisma.student.findUniqueOrThrow({
-    where: { id: studentId },
-    include: { section: { include: { grade: true } } },
-  });
+  const student =
+    batch?.studentsById.get(studentId) ??
+    (await prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: { section: { include: { grade: true } } },
+    }));
 
-  const examType = await prisma.examType.findUniqueOrThrow({
-    where: { id: examTypeId },
-  });
+  const examType =
+    batch?.examType ??
+    (await prisma.examType.findUniqueOrThrow({
+      where: { id: examTypeId },
+    }));
 
-  const academicYear = await prisma.academicYear.findUniqueOrThrow({
-    where: { id: examType.academicYearId },
-  });
+  const academicYear =
+    batch?.academicYear ??
+    (await prisma.academicYear.findUniqueOrThrow({
+      where: { id: examType.academicYearId },
+    }));
 
-  const marks = await prisma.mark.findMany({
-    where: { studentId, examTypeId },
-    include: { subject: true },
-    orderBy: { subject: { displayOrder: "asc" } },
-  });
+  const marks =
+    batch?.marksByStudent.get(studentId) ??
+    (batch
+      ? []
+      : await prisma.mark.findMany({
+          where: { studentId, examTypeId },
+          include: { subject: true },
+          orderBy: { subject: { displayOrder: "asc" } },
+        }));
 
   if (marks.length === 0) return null;
 
@@ -104,20 +269,27 @@ async function buildTermReportData(
   // averages and the rank (R7), so it has to appear on the card — otherwise the
   // printed rows do not add up to the printed percentage, which is precisely the
   // hand-checkability R4 was about.
-  const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
-  const takesOptional = new Set(
-    (
-      await prisma.studentOptionalSubject.findMany({
-        where: { studentId },
-        select: { subjectId: true },
-      })
-    ).map((e) => e.subjectId)
-  );
+  const markBySubjectId = new Map(marks.map((m: any) => [m.subjectId, m]));
+  // With a batch, a student missing from the map takes no electives — that is an
+  // answer, not a cache miss. Falling through to a query on `undefined` would put a
+  // round trip back on every student who has no optional subjects, which is most of
+  // them, and quietly undo the batching.
+  const takesOptional = batch
+    ? batch.optionalByStudent.get(studentId) ?? new Set<string>()
+    : new Set(
+        (
+          await prisma.studentOptionalSubject.findMany({
+            where: { studentId },
+            select: { subjectId: true },
+          })
+        ).map((e) => e.subjectId)
+      );
   const gradeSubjects = (
-    await prisma.subject.findMany({
+    batch?.gradeSubjects ??
+    (await prisma.subject.findMany({
       where: { gradeId: student.section.gradeId },
       orderBy: { displayOrder: "asc" },
-    })
+    }))
   ).filter(
     // An optional subject appears on this card only if the student is enrolled in it
     // (R7a). Once it does appear it behaves like any other subject: a missing mark
@@ -125,8 +297,11 @@ async function buildTermReportData(
     (subject) => !subject.isOptional || takesOptional.has(subject.id)
   );
 
-  const school = await prisma.school.findUnique({ where: { id: schoolId } });
-  const hasPracticalSubjects = gradeSubjects.some((s) => s.fullPracticalMarks > 0);
+  const school =
+    batch !== undefined
+      ? batch.school
+      : await prisma.school.findUnique({ where: { id: schoolId } });
+  const hasPracticalSubjects = gradeSubjects.some((s: any) => s.fullPracticalMarks > 0);
   const gradingStyle = student.section.grade.gradingStyle;
 
   let subjects: any[];
@@ -228,16 +403,18 @@ async function buildTermReportData(
     overallGradeLabel = marksSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
-  const attendance = await prisma.attendance.findUnique({
-    where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
-  });
+  const attendance = batch
+    ? batch.attendanceByStudent.get(studentId) ?? null
+    : await prisma.attendance.findUnique({
+        where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
+      });
 
   // Rank — one shared implementation, see services/rank.service.ts (R7).
   let rank: number | undefined;
   let totalStudents: number | undefined;
   if (examType.showRank) {
     const ranking =
-      precomputedRanking ??
+      batch?.ranking ??
       (await computeSectionRanks(student.sectionId, examTypeId, examType.academicYearId));
     const entry = ranking.ranks.get(studentId);
     // A student with no marks at all sorts last on 0%. That is right for the class
@@ -594,29 +771,30 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN"
 
   if (students.length === 0) throw new AppError("No students found in this section", 404);
 
-  const examType = await prisma.examType.findUniqueOrThrow({ where: { id: examTypeId } });
   const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId } });
 
-  // Compute the section's ranking once for the whole batch. This loop used to rebuild
-  // the identical ranking inside every student's report — loading every mark in the
-  // section, sorting the whole class, and keeping one number from it, 40 times over
-  // (P3). The ranking is the same for every student in the batch by definition.
-  const ranking = examType.showRank
-    ? await computeSectionRanks(sectionId, examTypeId, examType.academicYearId)
-    : undefined;
+  // Everything the whole class shares — exam type, academic year, school, the grade's
+  // subjects, the ranking — plus every student's marks, electives and attendance,
+  // fetched once for the section rather than once per student (P3). What used to be
+  // ~10 sequential queries per student, against a pool capped at 5, is now a fixed
+  // handful regardless of class size.
+  const [batch, observationsByStudent, cols] = await Promise.all([
+    loadTermReportBatch(sectionId, examTypeId, schoolId),
+    getObservationsBatch(students.map((s) => s.id), examTypeId, section.gradeId),
+    getColumnSettings(schoolId),
+  ]);
+  const examType = batch.examType;
 
   const reportDataArray: any[] = [];
   for (const stu of students) {
-    const data = await buildTermReportData(stu.id, examTypeId, schoolId, ranking);
+    const data = await buildTermReportData(stu.id, examTypeId, schoolId, batch);
     if (data) {
-      data._observations = await getObservations(stu.id, examTypeId, section.gradeId);
+      data._observations = observationsByStudent.get(stu.id) ?? null;
       reportDataArray.push(data);
     }
   }
 
   if (reportDataArray.length === 0) throw new AppError("No marks found for any student", 404);
-
-  const cols = await getColumnSettings(schoolId);
   const html = buildBatchReportCardHtml(reportDataArray, mode, examType.paperSize as "A4" | "A5", cols);
   const pdfBuffer = await generatePdf({ html, paperSize: examType.paperSize as "A4" | "A5" });
 
@@ -651,11 +829,18 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
   const finalExamType = await prisma.examType.findFirst({ where: { isFinal: true, academicYearId } });
   const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId } });
 
+  // Observations and column settings are the same for every student here too. The
+  // annual builder itself still fetches per student — see the note under P3.
+  const [observationsByStudent, cols] = await Promise.all([
+    getObservationsBatch(students.map((s) => s.id), finalExamType?.id || "", section.gradeId),
+    getColumnSettings(schoolId),
+  ]);
+
   const reportDataArray: any[] = [];
   for (const stu of students) {
     const data = await buildFinalReportData(stu.id, academicYearId, schoolId);
     if (data) {
-      data._observations = await getObservations(stu.id, finalExamType?.id || "", section.gradeId);
+      data._observations = observationsByStudent.get(stu.id) ?? null;
       reportDataArray.push(data);
     }
   }
@@ -663,7 +848,6 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
   if (reportDataArray.length === 0) throw new AppError("No report data found", 404);
 
   const paperSize = (finalExamType?.paperSize as "A4" | "A5") || "A4";
-  const cols = await getColumnSettings(schoolId);
   const html = buildBatchReportCardHtml(reportDataArray, mode, paperSize, cols);
   const pdfBuffer = await generatePdf({ html, paperSize });
 
