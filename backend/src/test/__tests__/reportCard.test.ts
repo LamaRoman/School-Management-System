@@ -25,7 +25,7 @@ import {
   authHeader,
 } from "../helpers";
 import * as pdfService from "../../services/pdf.service";
-import { closeBrowser } from "../../services/pdf.service";
+import { closeBrowser, generatePdf, getPdfConcurrency } from "../../services/pdf.service";
 
 /**
  * Capture the HTML handed to the PDF renderer for the next request, so a test
@@ -384,4 +384,51 @@ describe("Report card PDF generation", () => {
       expect(captured[0]).toContain("#c8102e");
     }, 30000);
   });
+});
+
+/**
+ * P6 — concurrent Chrome pages are capped.
+ *
+ * Each open page holds 50-100MB while it renders. Report cards go out in class-sized
+ * batches at term end, which is precisely when several teachers hit Print at once, and
+ * an unbounded `newPage()` turns that into an OOM kill that takes every other in-flight
+ * request with it.
+ */
+describe("PDF concurrency cap", () => {
+  const html = "<html><body><h1>Concurrency probe</h1></body></html>";
+
+  // Pinned deliberately. Reading the cap out of the implementation and asserting
+  // against that same number passes at any value — including a debug value left
+  // in by mistake.
+  const EXPECTED_CAP = 3;
+
+  it("never runs more renders at once than the cap", async () => {
+    expect(getPdfConcurrency().max).toBe(EXPECTED_CAP);
+    let peak = 0;
+
+    // Deliberately more than the cap, started together.
+    const renders = Array.from({ length: EXPECTED_CAP + 3 }, () =>
+      generatePdf({ html, paperSize: "A4" }).then((buf) => {
+        peak = Math.max(peak, getPdfConcurrency().active);
+        return buf;
+      })
+    );
+
+    // Sample while they are in flight, not only at the end.
+    const sampler = setInterval(() => {
+      peak = Math.max(peak, getPdfConcurrency().active);
+    }, 5);
+
+    const buffers = await Promise.all(renders);
+    clearInterval(sampler);
+
+    expect(peak).toBeLessThanOrEqual(EXPECTED_CAP);
+    // Every one still completed — queued, not rejected.
+    expect(buffers).toHaveLength(EXPECTED_CAP + 3);
+    for (const b of buffers) expect(b.subarray(0, 5).toString()).toBe("%PDF-");
+
+    // The queue must drain back to idle, not leak slots.
+    expect(getPdfConcurrency().active).toBe(0);
+    expect(getPdfConcurrency().queued).toBe(0);
+  }, 120000);
 });
