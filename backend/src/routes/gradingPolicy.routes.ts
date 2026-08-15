@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
-import { verifyGrade } from "../utils/schoolScope";
+import { verifyGrade, verifyExamTypesInYear } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -36,7 +36,13 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
 
   const { gradeId, policies } = schema.parse(req.body);
   const schoolId = getSchoolId(req);
-  await verifyGrade(gradeId, schoolId);
+  const grade = await verifyGrade(gradeId, schoolId);
+
+  // S4a — a correctness bug rather than a security one. These weightages are
+  // what turn term marks into the annual result, so a policy pointing at an
+  // exam type from a *different* academic year produces a silently wrong
+  // weighted final result with nothing to flag it.
+  await verifyExamTypesInYear(policies.map((p) => p.examTypeId), grade.academicYearId);
 
   // Validate total = 100
   const total = policies.reduce((sum, p) => sum + p.weightagePercent, 0);

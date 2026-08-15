@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifySection, verifyAcademicYear } from "../utils/schoolScope";
+import { verifySection, verifyAcademicYear, verifySubjectInSection } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -116,6 +116,10 @@ router.post("/", authenticate, async (req, res) => {
   const schoolId = getSchoolId(req);
   await verifySection(data.sectionId, schoolId);
   await verifyAcademicYear(data.academicYearId, schoolId);
+  // Homework has to be for a subject the section actually studies. The TEACHER
+  // path below is already constrained by the assignment check; the ADMIN path
+  // had nothing.
+  await verifySubjectInSection(data.subjectId, data.sectionId);
 
   // If teacher, verify they're assigned to this section + subject
   if (user.role === "TEACHER") {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
-import { verifyTeacher, verifySection } from "../utils/schoolScope";
+import { verifyTeacher, verifySection, verifySubjectInSection } from "../utils/schoolScope";
 
 const router = Router();
 
@@ -119,6 +119,19 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   await verifyTeacher(data.teacherId, schoolId);
   await verifySection(data.sectionId, schoolId);
+
+  // The subject has to belong to the section's own grade, not merely to this
+  // school. This assignment is what gates mark entry, so a Class 3 subject
+  // attached to a Class 9 section decides who may enter marks for what — and
+  // `admin/teacher-assignments` fetches its subject dropdown per grade, so a
+  // stale list (the F4a race) posts exactly that pairing.
+  //
+  // Class-teacher assignments store no subject (see the create below), so
+  // there is nothing to check on that path.
+  if (!data.isClassTeacher && data.subjectId) {
+    await verifySubjectInSection(data.subjectId, data.sectionId);
+  }
+
 // If assigning as class teacher, check no class teacher already exists for this section
   if (data.isClassTeacher) {
     const existing = await prisma.teacherAssignment.findFirst({
