@@ -4,7 +4,7 @@ import { z } from "zod";
 import NepaliDate from "nepali-date-converter";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
-import { verifySection, verifyStudent } from "../utils/schoolScope";
+import { verifySection, verifyStudent, verifySubject } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
 import { getStudentDefaultPassword } from "../utils/studentPassword";
 import { mangleEmail, unmangleEmail } from "../utils/deactivatedEmail";
@@ -180,7 +180,7 @@ function asLoginEmailConflict(err: unknown, studentName: string): unknown {
 router.get("/", authenticate, async (req, res) => {
   const user = req.user!;
   const schoolId = getSchoolId(req);
-  const { sectionId, gradeId, search } = req.query;
+  const { sectionId, gradeId, search, subjectId } = req.query;
   const where: any = { isActive: true, section: { grade: { academicYear: { schoolId } } } };
   if (search) where.name = { contains: String(search), mode: "insensitive" };
   if (sectionId) {
@@ -188,6 +188,21 @@ router.get("/", authenticate, async (req, res) => {
     where.sectionId = String(sectionId);
   }
   if (gradeId) where.section = { ...where.section, gradeId: String(gradeId) };
+
+  // `subjectId` narrows the roster to the students who actually take that subject.
+  // Only meaningful for an optional one — everybody takes the compulsory subjects, so
+  // for those this is a no-op rather than an error. Mark entry uses it so an elective's
+  // screen lists only the students it can legitimately save marks for.
+  if (subjectId) {
+    await verifySubject(String(subjectId), schoolId);
+    const subject = await prisma.subject.findUniqueOrThrow({
+      where: { id: String(subjectId) },
+      select: { isOptional: true },
+    });
+    if (subject.isOptional) {
+      where.optionalSubjects = { some: { subjectId: String(subjectId) } };
+    }
+  }
 
   // Students and parents should use /students/me or /parents/my-children
   if (user.role === "STUDENT" || user.role === "PARENT") {
@@ -277,6 +292,81 @@ router.get("/:id", authenticate, async (req, res) => {
   await authorizeStudentRead(req.user!.userId, req.user!.role, student.id, student.sectionId);
 
   res.json({ data: student });
+});
+
+// GET /api/students/:id/optional-subjects
+//
+// Every optional subject offered by this student's grade, each flagged with whether
+// this student takes it. Compulsory subjects are deliberately not listed — everyone
+// in the grade takes those, so there is nothing to choose.
+router.get("/:id/optional-subjects", authenticate, async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
+
+  const student = await prisma.student.findUniqueOrThrow({
+    where: { id: req.params.id },
+    select: { id: true, sectionId: true, section: { select: { gradeId: true } } },
+  });
+  await authorizeStudentRead(req.user!.userId, req.user!.role, student.id, student.sectionId);
+
+  const [offered, enrolled] = await Promise.all([
+    prisma.subject.findMany({
+      where: { gradeId: student.section.gradeId, isOptional: true },
+      orderBy: { displayOrder: "asc" },
+      select: { id: true, name: true, nameNp: true },
+    }),
+    prisma.studentOptionalSubject.findMany({
+      where: { studentId: student.id },
+      select: { subjectId: true },
+    }),
+  ]);
+
+  const enrolledIds = new Set(enrolled.map((e) => e.subjectId));
+  res.json({
+    data: offered.map((s) => ({ ...s, isEnrolled: enrolledIds.has(s.id) })),
+  });
+});
+
+// PUT /api/students/:id/optional-subjects — Admin only. Replaces the whole set.
+router.put("/:id/optional-subjects", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
+
+  const schema = z.object({ subjectIds: z.array(z.string().min(1)).max(50) });
+  const { subjectIds } = schema.parse(req.body);
+
+  const student = await prisma.student.findUniqueOrThrow({
+    where: { id: req.params.id },
+    select: { id: true, section: { select: { gradeId: true } } },
+  });
+
+  // Every submitted subject must be an optional subject of THIS student's grade.
+  // Without this an admin could enrol a student in another grade's — or another
+  // school's — subject, the same class of unverified-FK hole S1-S4 covered.
+  if (subjectIds.length > 0) {
+    const valid = await prisma.subject.count({
+      where: {
+        id: { in: subjectIds },
+        gradeId: student.section.gradeId,
+        isOptional: true,
+      },
+    });
+    if (valid !== new Set(subjectIds).size) {
+      throw new AppError("One or more subjects are not optional subjects of this student's grade");
+    }
+  }
+
+  // Replace wholesale inside a transaction — a partial write would leave the student
+  // enrolled in some electives and not others with no way to tell which.
+  await prisma.$transaction([
+    prisma.studentOptionalSubject.deleteMany({ where: { studentId: student.id } }),
+    prisma.studentOptionalSubject.createMany({
+      data: subjectIds.map((subjectId) => ({ studentId: student.id, subjectId })),
+      skipDuplicates: true,
+    }),
+  ]);
+
+  res.json({ data: { studentId: student.id, subjectIds } });
 });
 
 // POST /api/students — Admin only. Creates student + user account + admission paper trail.

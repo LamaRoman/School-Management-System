@@ -3,9 +3,10 @@ import { useEffect, useState, Fragment } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import toast from "react-hot-toast";
 import { BS_MONTH_NAMES, formatBSDateLong } from "@/lib/bsDate";
 import {
-  ArrowLeft, User, CalendarCheck, GraduationCap, Receipt, Eye, Phone, MapPin, ChevronDown, ChevronRight,
+  ArrowLeft, User, CalendarCheck, GraduationCap, Receipt, Eye, Phone, MapPin, ChevronDown, ChevronRight, BookOpen,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────
@@ -28,6 +29,7 @@ interface Payment { id: string; category: string; amount: number; paidMonth: str
 interface Ledger { monthGrid: LedgerMonth[]; fixedFees: FixedFee[]; recentPayments: Payment[] }
 interface Observation { categoryName: string; categoryNameNp?: string; grade: string }
 interface MonthAttendance { month: number; present: number; absent: number; total: number; absentDates: string[] }
+interface OptionalSubject { id: string; name: string; nameNp?: string; isEnrolled: boolean }
 
 // ─── Helpers ────────────────────────────────────────────
 function markValue(m: Mark | undefined): string {
@@ -54,6 +56,8 @@ export default function StudentProfilePage() {
   const [observations, setObservations] = useState<{ examTypeId: string; items: Observation[] }[]>([]);
   const [monthlyAttendance, setMonthlyAttendance] = useState<MonthAttendance[]>([]);
   const [expandedMonth, setExpandedMonth] = useState<number | null>(null);
+  const [optionalSubjects, setOptionalSubjects] = useState<OptionalSubject[]>([]);
+  const [savingOptional, setSavingOptional] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -93,6 +97,9 @@ export default function StudentProfilePage() {
               .catch(() => ({ examTypeId: et.id, items: [] as Observation[] }))
           )
         ).then(setObservations).catch(() => setObservations([]));
+
+        api.get<OptionalSubject[]>(`/students/${studentId}/optional-subjects`)
+          .then(setOptionalSubjects).catch(() => setOptionalSubjects([]));
       } catch (err) {
         console.error(err);
         setStudent(null);
@@ -101,6 +108,19 @@ export default function StudentProfilePage() {
       }
     })();
   }, [studentId]);
+
+  const handleSaveOptional = async () => {
+    setSavingOptional(true);
+    try {
+      const subjectIds = optionalSubjects.filter((s) => s.isEnrolled).map((s) => s.id);
+      await api.put(`/students/${studentId}/optional-subjects`, { subjectIds });
+      toast.success("Optional subjects updated");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingOptional(false);
+    }
+  };
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading profile...</div>;
   if (!student) return (
@@ -397,6 +417,48 @@ export default function StudentProfilePage() {
           <Empty>No observations recorded for this year.</Empty>
         )}
       </Section>
+
+      {/* Optional subjects — only rendered when this grade actually offers any, so it
+          stays invisible for the schools that don't use electives at all. */}
+      {optionalSubjects.length > 0 && (
+        <Section icon={<BookOpen size={16} />} title="Optional Subjects">
+          <p className="text-xs text-gray-500 mb-3">
+            Only the subjects ticked here count toward this student&apos;s percentage, GPA and rank.
+            An unticked subject is left off their report card entirely.
+          </p>
+          <div className="space-y-2">
+            {optionalSubjects.map((s) => (
+              <label
+                key={s.id}
+                className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 cursor-pointer hover:border-primary/40"
+              >
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={s.isEnrolled}
+                  disabled={savingOptional}
+                  onChange={(e) =>
+                    setOptionalSubjects((prev) =>
+                      prev.map((p) => (p.id === s.id ? { ...p, isEnrolled: e.target.checked } : p))
+                    )
+                  }
+                />
+                <span className="text-sm text-gray-700">
+                  {s.name}
+                  {s.nameNp ? <span className="text-gray-400 ml-1">({s.nameNp})</span> : null}
+                </span>
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={handleSaveOptional}
+            disabled={savingOptional}
+            className="btn-primary text-xs mt-3"
+          >
+            {savingOptional ? "Saving..." : "Save Optional Subjects"}
+          </button>
+        </Section>
+      )}
     </div>
   );
 }

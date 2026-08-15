@@ -57,7 +57,11 @@ export default function MarksEntryPage() {
 
   useEffect(() => {
     if (currentAssignment) {
-      api.get<Student[]>(`/students?sectionId=${currentAssignment.sectionId}`).then(setStudents).catch(() => setStudents([]));
+      // Pass the subject so an OPTIONAL subject lists only the students enrolled in it.
+      // Saving a mark for a student who does not take it is rejected by the server, and
+      // would be ignored by every results calculation anyway.
+      api.get<Student[]>(`/students?sectionId=${currentAssignment.sectionId}&subjectId=${currentAssignment.subjectId}`)
+        .then(setStudents).catch(() => setStudents([]));
     } else {
       setStudents([]);
     }

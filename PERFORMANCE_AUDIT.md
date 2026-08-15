@@ -357,9 +357,34 @@ May be the intended forgiving reading — confirm and document either way.
 >   >
 >   > **This was more live than "worth closing eventually".** 0 of 98 subjects are optional today, so nothing was broken — but `admin/subjects/page.tsx:144` has a checkbox for it and `:188` prints an "Optional"/"Compulsory" badge. The field is stored, echoed back by `subject.routes.ts`, and copied on promotion. It was read by no results calculation. One tick of that box and every student who does not take that subject silently scores 0 for it in their percentage, GPA and rank. The UI was advertising a feature the results engine did not implement.
 >   >
->   > **The ambiguity it cannot resolve, stated plainly.** There is no per-student subject enrollment in the schema — no join table, `Subject` hangs off `Grade`. So "has no mark row" is the *only* available signal, and it cannot distinguish "does not take this elective" from "takes it, mark not entered yet". The latter is now silently excluded, which re-opens R6's inflation for optional subjects specifically. That is the smaller of the two errors: penalising a child for an elective they never sat is the one that reaches a parent. **The real fix is an explicit student↔optional-subject link**, and it should be added before any school actually relies on optional subjects.
+>   > **The ambiguity the first cut could not resolve — since closed, see R7b.** With no per-student enrollment, "has no mark row" was the only available signal and could not distinguish "does not take this elective" from "takes it, mark not entered yet". The second case was silently excluded, re-opening R6's inflation for optional subjects specifically.
 >   >
 >   > Pinned by 4 tests; 3 verified to fail against the pre-R7a code. Suite 177 → **181**.
+>
+> - [x] **R7b. The missing domain model: which students actually take which elective.**
+>
+>   > **BUILT 2026-08-14.** New `StudentOptionalSubject` join table (migration `20260815004712`, purely additive — `CREATE TABLE` plus indexes and FKs, no `ALTER` on anything existing). An optional subject now counts for exactly the students enrolled in it, and enrollment is explicit rather than inferred.
+>   >
+>   > **What this fixes that R7a could not.** An enrolled student whose elective mark has not been entered yet now scores **0** for it, like any other subject — instead of having it silently dropped from their divisor and their percentage quietly inflated. Verified end to end on real data (Aarav, Grade I-A):
+>   >
+>   > | state | subjects on card | percentage | rank |
+>   > |---|---|---|---|
+>   > | not enrolled | 7 | 89.1% | — |
+>   > | **enrolled, mark not entered** | **8** | **78.0%** | **2** |
+>   > | enrolled, marked 95 | 8 | 89.9% | 1 |
+>   > | non-enrolled classmate | 7 | 62.3% | unchanged |
+>   >
+>   > Under R7a's heuristic that middle row read 89.1% / rank 1 — an unmarked paper hidden completely.
+>   >
+>   > **Surfaces:**
+>   > - `GET|PUT /students/:id/optional-subjects` — lists only the grade's *optional* subjects with an enrolment flag; the PUT replaces the whole set in a transaction and rejects a subject from another grade or a compulsory one.
+>   > - Admin UI on the student detail page, rendered **only when the grade offers electives** so it stays invisible for schools that don't use them.
+>   > - `GET /students?subjectId=` narrows the roster to enrolled students — a no-op for compulsory subjects, since everyone takes those. Mark entry passes it.
+>   > - `POST /marks/bulk` rejects marks for a student not enrolled in an optional subject. Without this a mark could sit in the database looking entered while every results calculation ignored it.
+>   >
+>   > **The zero-cost timing was the argument for doing it now:** 0 of 98 subjects are optional, so the backfill was empty and there was no historical enrollment to infer. Once a school turns that checkbox on, this becomes a migration with real data behind it.
+>   >
+>   > Pinned by 9 further tests (23 in `sectionRank.test.ts`). Suite 181 → **190**. Verified through the running app end to end — subject created, student enrolled and un-enrolled through the admin UI, marks accepted only after enrolment, roster filtered — then the temporary subject removed, leaving the dev database exactly as found (98 subjects, 0 optional, 0 enrollments).
 
 **Where:** `pdf.routes.ts:200–231` (PDF) and `report.routes.ts:39–80` (web) — same algorithm, two copies
 
