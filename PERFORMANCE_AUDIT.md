@@ -23,7 +23,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F6** | No route error/loading boundaries — any thrown error was a blank white screen | #13 |
 | **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | *unmerged* |
 
-**Suggested next:** **R7 → P3** → **P4 (+P4a)**. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
+**Suggested next:** **P4 (+P4a)** — R7, P3 and P6 are done, so the PDF path is off the critical list and attendance is the remaining hot one. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -569,11 +569,23 @@ At one school / one year (~10,000 marks) that's ~10ms and invisible. This is mul
 
 ---
 
-### [~] P3. Bulk report-card generation is O(n²)
+### [x] P3. Bulk report-card generation is O(n²)
 
-> **The quadratic half is fixed (2026-08-14, with R7).** The rank block described below — loading every student and every mark in the section, computing the whole class ranking, and keeping one number from it, once per student — now runs **once per batch**. `buildTermReportData` takes an optional precomputed ranking and `GET /pdf/class/term/...` passes it in.
+> **FIXED — the quadratic half 2026-08-14 with R7, the remainder 2026-08-15.** The rank block described below now runs **once per batch** instead of once per student, and the per-student work is batched with it: `buildTermReportData` and `getObservations` accept pre-fetched inputs, and `school` / `academicYear` / `examType` / `reportCardSettings` are gathered once for the whole batch rather than refetched for each student.
 >
-> **Still open:** the per-student `buildTermReportData` + `getObservations` calls are still serial (~10 queries × n), and `school` / `academicYear` / `examType` / `reportCardSettings` are still refetched per student. Those are the remaining ~n×10 round trips. The connection-pool concern below stands until they are batched too.
+> **Measured through the real route**, with the generated PDF byte-identical before and after (680,903 bytes):
+>
+> | class size | queries before | queries after |
+> |---|---|---|
+> | 10 | 134 | 27 |
+> | 40 | 494 | 27 |
+>
+> Flat rather than linear — ~12 queries per student became 0.
+>
+> **The first pass was not flat, and only the scaling measurement showed it.** The optional-subject lookup fell through to a per-student query whenever a student had no electives — the *common* case — so the count still crept up ~1 per student. At 10 students that still looked like a large win; comparing 10 against 40 is what exposed it. Worth repeating for **P4**: measure at two sizes, not one.
+>
+> **The connection-pool concern below is resolved with it** — a class PDF now holds a connection for ~27 queries rather than ~400, so two or three teachers printing at once no longer starves the pool.
+
 **Where:** `backend/src/routes/pdf.routes.ts:598` and `:644`
 
 Serial loop, one student at a time; each `buildTermReportData` issues ~8 queries and `getObservations` 2 more. **A 40-student class = ~400 sequential DB round trips for one PDF.**
@@ -625,7 +637,14 @@ First screen an admin sees after login. It sets their perception of whether the 
 
 ---
 
-### [ ] P6. Cap Puppeteer concurrency
+### [x] P6. Cap Puppeteer concurrency
+
+> **FIXED 2026-08-15.** `generatePdf` now takes a slot from a FIFO semaphore capping concurrent Chrome pages at **3**, queueing past the cap rather than rejecting — a teacher waiting a few seconds beats a failed print run during the one week these are used. Three rather than one so a single-student download is not serialised behind a 40-page class batch.
+>
+> Two details that make the cap real rather than nominal: the page is closed **before** the slot is handed on (releasing first would let the incoming render's page overlap the outgoing one's, so peak memory would exceed the cap), and a failure to open the browser or page releases the slot instead of stranding it.
+>
+> **Test note:** the test pins the expected cap as its own constant. Reading the cap back from `getPdfConcurrency()` and asserting `peak <= max` passes at *any* value — including a debug value left in by mistake, which is precisely the failure it exists to catch.
+
 **Where:** `backend/src/services/pdf.service.ts:108`
 
 `generatePdf` calls `browser.newPage()` with no queue or limit. Each page holds 50–100MB for the duration of a render. Five teachers printing class PDFs at term end = five concurrent Chrome pages plus the base browser on a memory-billed Railway instance → OOM kill, every in-flight request dies, precisely during peak week.
@@ -969,8 +988,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 |---|---|---|
 | ~~F4a (race guards on the 6 write pages)~~ | ✅ **done** | `useLatestRequest` guard + closing the stale-data window on each write control |
 | P4 (attendance `groupBy`) + P4a | ~half day | |
-| P3 (bulk PDF batching) | 1–2 days | Depends on R7 |
-| P6 (Puppeteer cap) | ~2 hrs | |
+| ~~P3 (bulk PDF batching)~~ | ✅ **done** | ~12 queries per student → 0; flat at 10 and 40 students, PDFs byte-identical |
+| ~~P6 (Puppeteer cap)~~ | ✅ **done** | FIFO semaphore at 3 concurrent pages, queueing rather than rejecting |
 | P5 (analytics cache) + R8 | ~half day | Same handler, do together |
 | S4 + S4a + S4b (grade-consistency invariant) | ~half day | S4b test is worth more than the patches |
 | S6a–S6e (public routes) | ~half day | S6b needs a `code` migration |
@@ -990,7 +1009,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 **Dependency notes**
 - ~~**S2 → F4a.**~~ S2 ✅ **done 2026-08-14** — the backstop is in place, so F4a can proceed whenever.
-- **R7 → P3.** Extracting one rank function is what makes the bulk PDF batching tractable.
+- ~~**R7 → P3.**~~ Both ✅ **done** — R7 hoisted the ranking out of the per-student loop 2026-08-14, and P3 batched the rest 2026-08-15.
 - **R1 → R2, R3, R4, R5.** Decide the absent-in-average policy once; the other three follow from it.
 - **P5 + R8** are the same handler — one visit.
 - **F5 → F3, F4b, F6.** Adopting a fetching library resolves several frontend items at once, which is why the standalone fixes for those are scoped to "cheap now, migrate later."
@@ -1001,15 +1020,15 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 ## If you only do three things
 
-All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**. So are ~~**F6**~~ (closing Week 1) and ~~**F4a**~~.
+All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14**. So are ~~**F6**~~ (closing Week 1), ~~**F4a**~~, and the whole report-card path — ~~**R7**~~, ~~**R7a**~~, ~~**R7b**~~, ~~**P3**~~, ~~**P6**~~.
 
 **The next three, in order:**
 
-1. **R7 → P3** — extract one `computeSectionRanks()`. It resolves R3's remainder and R6, and is what makes the bulk-PDF batching in P3 tractable. P3 is the one that bites at term end, when whole classes are printed at once.
-2. **P4 (+P4a)** — the attendance `groupBy`. Highest-frequency write path in the app and it gets measurably worse every month of the school year.
-3. **S4 (+S4a, S4b)** — promoted from Week 3+. F4a made the case concrete: `admin/teacher-assignments` posts a `subjectId` the server never checks against the section's grade, and that assignment is what gates mark entry. S4b's table-driven test is still the highest-value piece.
+1. **P4 (+P4a)** — the attendance `groupBy`. Highest-frequency write path in the app and it gets measurably worse every month of the school year. Now the largest remaining performance item, with the PDF path closed.
+2. **S4 (+S4a, S4b)** — promoted from Week 3+. F4a made the case concrete: `admin/teacher-assignments` posts a `subjectId` the server never checks against the section's grade, and that assignment is what gates mark entry. S4b's table-driven test is still the highest-value piece.
+3. **P5 (+R8)** — the analytics cache. Same handler as R8, so one visit covers both.
 
-**Then:** P4 (+P4a), P5+R8 together, P6, S4–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
+**Then:** S5–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
 
 **Not started at all:** the **W** items (W1–W4) — these are new features, not fixes, and want their own planning pass rather than being picked off this list.
 
