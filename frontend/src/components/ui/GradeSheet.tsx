@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { Printer } from "lucide-react";
+import { Printer, FileSpreadsheet } from "lucide-react";
+import toast from "react-hot-toast";
 import { printGradeSheet } from "@/lib/printUtils";
+import type { SheetData } from "@/lib/gradeSheetExcel";
 
 interface GradeSheetProps {
   sectionId: string;
@@ -10,23 +12,26 @@ interface GradeSheetProps {
   examTypes: { id: string; name: string; isFinal: boolean }[];
 }
 
-interface SubjectHeader { id: string; name: string; fullMarks: number; passMarks: number }
-interface SubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean; isAbsent?: boolean }
-interface Row {
-  studentId: string; studentName: string; rollNo: number | null;
-  subjects: SubjectResult[];
-  totalObtained?: number; totalFullMarks?: number;
-  percentage: number; gpa: number | null; grade: string; rank: number;
-}
-interface SheetData {
-  gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
-  subjects: SubjectHeader[]; rows: Row[]; totalStudents: number;
-}
-
 export default function GradeSheet({ sectionId, academicYearId, examTypes }: GradeSheetProps) {
   const [selectedExam, setSelectedExam] = useState("");
   const [data, setData] = useState<SheetData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // exceljs is pulled in on click, not at page load — see gradeSheetExcel.ts.
+  const downloadExcel = async () => {
+    if (!data) return;
+    setExporting(true);
+    try {
+      const { exportGradeSheetToExcel } = await import("@/lib/gradeSheetExcel");
+      await exportGradeSheetToExcel(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not build the Excel file");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadSheet = async (examTypeId: string) => {
     setSelectedExam(examTypeId);
@@ -71,9 +76,14 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
           </button>
         ))}
         {data && (
-          <button onClick={() => data && printGradeSheet(data)} className="btn-primary text-xs ml-auto">
-            <Printer size={14} /> Print
-          </button>
+          <div className="flex gap-2 ml-auto">
+            <button onClick={downloadExcel} disabled={exporting} className="btn-outline text-xs">
+              <FileSpreadsheet size={14} /> {exporting ? "Building..." : "Excel"}
+            </button>
+            <button onClick={() => printGradeSheet(data)} className="btn-primary text-xs">
+              <Printer size={14} /> Print
+            </button>
+          </div>
         )}
       </div>
 
