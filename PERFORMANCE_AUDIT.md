@@ -27,9 +27,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | #22 |
 | **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | #23 |
 | **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | #24 |
-| **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | *this branch* |
+| **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | #25 |
+| **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | *this branch* |
 
-**Suggested next:** **W2** (auto-assign fees on enrolment) and **W3** (admin-portal declutter) — both fully designed, and **W3e** is a precondition for W2 actually holding for every student rather than most. **W4** (grade-sheet Excel export) is the smallest of the W items and is best done after W3b so it isn't built twice. Otherwise: **S5–S8** are the remaining security items (none destructive), **R8a** and **P4b** are open questions worth deciding, and **P1b–d** is the student-photo storage redesign.
+**Suggested next:** **W4** (grade-sheet Excel export) — now unblocked, since W3b removed the admin copy so it only needs building once, against the teacher page. Needs a new dependency (no spreadsheet library exists in either `package.json`). Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
 
 > **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
 
@@ -502,7 +503,20 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 ---
 
-### [ ] W2. Enrolling a student doesn't set up their fees — a second, disconnected manual step
+### [-] W2. Enrolling a student doesn't set up their fees — a second, disconnected manual step
+
+> **NOT BUILT 2026-08-15 — the premise is wrong, and building it as designed would have introduced a billing bug.** Checked before writing any code:
+>
+> - **`buildInvoice` bills from the grade's `FeeStructure` directly** (`fee.routes.ts:93`), keyed on the student's `section.gradeId`. A student owes the grade's fees from the moment they have a section, which `/enroll` sets. There is nothing to connect.
+> - **`StudentFeeAssignment` is the exception mechanism**, not the thing that makes a student owe money: it exists for categories that apply to *one* student and are not in the grade structure.
+> - **`POST /fees/assignments` already refuses to create one for a grade-level category** — *"This fee category is already assigned at the grade level. Use Fee Structure tab instead."* (`fee.routes.ts:556`). The codebase is stating the invariant this finding proposed to break.
+> - **`buildInvoice` sums structures and individual assignments with no dedupe** (lines 125/139, 156/168, 181/211). Copying the grade structure into per-student assignments at enrolment — exactly what this item specifies — would have **billed every newly enrolled student twice for every grade-level category**.
+>
+> **Confirmed on real data, not just by reading:** all **261 students in the dev database have zero `StudentFeeAssignment` rows**, and a student picked at random still returns a populated invoice — Admission Fee 5,000 from the grade structure. Fees already work at enrolment.
+>
+> The original note's own evidence pointed here and was misread: it observed that `StudentFeeOverride` is applied "completely independently at invoice-calculation time... takes whatever base amount is currently in effect (assignment **or structure**)". The structure branch is the normal one.
+>
+> **What remains true:** nothing. There is no gap to close. If a school wants a *student-specific* fee on top of the grade's, that is what the existing manual assignment screen is for, and it is correctly one-at-a-time because it is an exception by definition.
 **Where:** `backend/src/routes/admission.routes.ts:209` (`POST /admissions/:id/enroll`)
 
 **Checked, so this is precise rather than assumed:**
@@ -517,7 +531,18 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 ---
 
-### [ ] W3. Admin portal has duplicate screens for work that belongs to one role — declutter to one home per capability
+### [x] W3. Admin portal has duplicate screens for work that belongs to one role — declutter to one home per capability
+
+> **DONE 2026-08-15**, with two of its four premises corrected by the code.
+>
+> **Corrections found while doing the work:**
+>
+> 1. **`admin/observations` does no grading at all.** This entry says the two observation pages "differ by exactly one real capability" and that "entering/viewing observation grades — is duplicated". It isn't: the admin page has **zero** references to any grading endpoint or to `studentId`. It is already category setup and nothing else — which is to say **W3c was already built**, and there was no admin-side grading page to remove. The page stays, relabelled *Observation Setup* so the nav says what it is.
+> 2. **The grade sheet duplication is real**, and the two pages differ in scope rather than being copies: the admin one fetches `/grades` and can open any section, the teacher one only the caller's class-teacher sections. Removed the admin copy, as designed.
+>
+> **What was actually done:** `/admin/grade-sheet` deleted; `Fee Management` and `Admissions` repointed or removed from the admin nav; the backend class-teacher restriction added for grade sheets and observation grading.
+>
+> **One judgement call worth stating:** the backend restriction narrows **TEACHER** from "any teacher in the school" to "this section's class teacher", and leaves **ADMIN** authorised. W3b's wording is about closing the teacher hole ("*not any teacher in the school as today*"); removing the duplicate admin *screens* is a different thing from removing admin's authority over their own school's data, and an admin with no API access could not answer a parent's question about another section. Pinned by a test that asserts exactly this split.
 **Where:** confirmed by direct comparison, not assumed:
 
 - **Fees** — `frontend/src/app/accountant/fees/page.tsx` is one line: `export { default } from "@/app/admin/fees/page"`. It's not a second implementation, it's the *same component* mounted at a second URL. Since `accountant/layout.tsx` allows both `ACCOUNTANT` and `ADMIN` roles, an admin today can reach the identical full fee-management screen two different ways.
@@ -529,15 +554,19 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 **Design agreed:**
 
-- [ ] **W3a. Remove `/admin/fees` from the admin sidebar.** `/accountant/fees` (same component, already reachable by `ADMIN` too via that layout's allowed roles) becomes the one operational fee screen. Admin's oversight need is already met by `admin/students/[id]/page.tsx`, which already pulls the fee ledger (paid/unpaid), marks, attendance, and observations into one read-only per-student view (`page.tsx:81-91` — fetches `/fees/student-ledger/`, marks, daily attendance, observations together). Nothing new to build here, just stop linking to the duplicate.
+- [x] **W3a. Remove `/admin/fees` from the admin sidebar.** `/accountant/fees` (same component, already reachable by `ADMIN` too via that layout's allowed roles) becomes the one operational fee screen. Admin's oversight need is already met by `admin/students/[id]/page.tsx`, which already pulls the fee ledger (paid/unpaid), marks, attendance, and observations into one read-only per-student view (`page.tsx:81-91` — fetches `/fees/student-ledger/`, marks, daily attendance, observations together). Nothing new to build here, just stop linking to the duplicate.
 
-- [ ] **W3b. Remove `/admin/grade-sheet` and `/admin/observations` entirely — no admin-side page left for either.** Grade sheet and observation-entry live only in the teacher portal, and get restricted on the backend to the section's **class teacher specifically** (`TeacherAssignment.isClassTeacher`, which already exists), not any teacher in the school as today. Currently `gradeSheet.routes.ts:16,139` and `observation.routes.ts:174` all just check `authorize("ADMIN", "TEACHER")` with no assignment or class-teacher check at all — any teacher can pull up or grade any section. This closes that specifically for these two features (related to **S7**, which flagged the same gap more broadly).
+- [x] **W3b. Remove `/admin/grade-sheet` and `/admin/observations` entirely — no admin-side page left for either.** Grade sheet and observation-entry live only in the teacher portal, and get restricted on the backend to the section's **class teacher specifically** (`TeacherAssignment.isClassTeacher`, which already exists), not any teacher in the school as today. Currently `gradeSheet.routes.ts:16,139` and `observation.routes.ts:174` all just check `authorize("ADMIN", "TEACHER")` with no assignment or class-teacher check at all — any teacher can pull up or grade any section. This closes that specifically for these two features (related to **S7**, which flagged the same gap more broadly).
 
-- [ ] **W3c. Category setup stays admin-only, carved out on its own.** Confirmed 2026-08-14 — removing the whole `admin/observations` page can't take category management with it, since defining categories (`Punctuality`, `Discipline`, etc.) is legitimately admin's job and is already gated `authorize("ADMIN")` server-side. Needs its own small admin screen (or folds into an existing Setup section) — separate from grading, which moves to the class teacher.
+- [x] **W3c. Category setup stays admin-only, carved out on its own.** Confirmed 2026-08-14 — removing the whole `admin/observations` page can't take category management with it, since defining categories (`Punctuality`, `Discipline`, etc.) is legitimately admin's job and is already gated `authorize("ADMIN")` server-side. Needs its own small admin screen (or folds into an existing Setup section) — separate from grading, which moves to the class teacher.
 
-- [ ] **W3d. Remove `/admin/admissions` from the admin sidebar.** Same shape as W3a — `accountant/admissions` is the identical component at a second URL. Admissions is accountant's job; remove the duplicate nav entry.
+- [x] **W3d. Remove `/admin/admissions` from the admin sidebar.** Same shape as W3a — `accountant/admissions` is the identical component at a second URL. Admissions is accountant's job; remove the duplicate nav entry.
 
-- [ ] **W3e. Remove "+ Add Student" from the admin students page — not cosmetic, this one matters for W2.** `POST /students` (`student.routes.ts:263`) is a second, complete path to create a student that bypasses Admissions entirely — no PENDING → APPROVED step, straight to a live student. Telling detail: the handler already creates a retroactive `Admission` record afterward, `status: "ENROLLED"`, remarked **"Added directly by admin"** (`:302`) — purely for a paper trail, which is a sign this bypass was already understood to sit outside the intended process. The real reason to close it: **W2's auto-fee-assignment hooks into `/admissions/:id/enroll`.** A student created via this button never touches that endpoint, so they'd silently get no fees set up — some students auto-billed correctly, others not, with nothing distinguishing them until someone notices a student was never charged. Removing this button is what makes Admissions the only door a student can enter through, which is what makes W2 actually hold for every student, not most of them.
+- [-] **W3e. Remove "+ Add Student" from the admin students page — not cosmetic, this one matters for W2.**
+
+  > **NOT DONE 2026-08-15 — its stated reason evaporated with W2.** The argument here is entirely *"W2's auto-fee-assignment hooks into `/admissions/:id/enroll`, so a student created via this button would silently get no fees set up"*. W2 turned out to be a non-issue (see above): fees come from the grade's `FeeStructure` via the student's section, so a student created through this button **is billed identically** to one created through Admissions. There is no silent divergence to close.
+  >
+  > What is left is the process preference — that every student should enter through Admissions so there is a PENDING → APPROVED step. That is a real thing to want, but it is a **product decision with no defect behind it**, so it is not mine to take. Left open deliberately rather than marked done. Note the handler already writes a retroactive `Admission` record with remarks *"Added directly by admin"*, so the paper trail exists either way. `POST /students` (`student.routes.ts:263`) is a second, complete path to create a student that bypasses Admissions entirely — no PENDING → APPROVED step, straight to a live student. Telling detail: the handler already creates a retroactive `Admission` record afterward, `status: "ENROLLED"`, remarked **"Added directly by admin"** (`:302`) — purely for a paper trail, which is a sign this bypass was already understood to sit outside the intended process. The real reason to close it: **W2's auto-fee-assignment hooks into `/admissions/:id/enroll`.** A student created via this button never touches that endpoint, so they'd silently get no fees set up — some students auto-billed correctly, others not, with nothing distinguishing them until someone notices a student was never charged. Removing this button is what makes Admissions the only door a student can enter through, which is what makes W2 actually hold for every student, not most of them.
 
 - [ ] **W3f. `POST /students/bulk` is the same bypass shape, currently dormant — flagged, not urgent.** Checked: no frontend page calls this route today, so it's not an active bug. But it creates students + accounts directly, same as W3e, with no admission and no enrollment step. Not worth touching now — flagged so that if a bulk CSV-import feature gets built later, it's built by extending the Admissions/Enrollment pipeline to handle batches, rather than by reaching for this existing route and quietly reopening the exact gap W3e closes.
 
