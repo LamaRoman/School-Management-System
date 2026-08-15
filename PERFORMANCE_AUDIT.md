@@ -33,11 +33,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | #26 |
 | **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
 | **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
-| **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | *(uncommitted — see below)* |
+| **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | #29 |
 
 **Suggested next:** finish the **F4b** tail — `admin/fees`, `teacher/my-class`, `teacher/observations` are the three pages still on the `useLatestRequest` stopgap; then **F8 / F7 / F9 / F10**.
 
-**Handover note (2026-08-16, end of session):** the F2/F4b/F5 work described above is **in the working tree, not committed** — 31 modified files plus two new ones (`frontend/src/components/SwrProvider.tsx`, `frontend/src/hooks/useReferenceData.ts`) and a new `swr` dependency. `npx tsc --noEmit` is clean in both packages, `npm run build` succeeds, and eslint reports no new violations (the remaining 278 are the pre-existing `no-explicit-any` baseline). Verified in the running app as both a teacher and an admin — see the F2 entry for what was observed.
+**Handover note (2026-08-16, end of session):** the F2/F4b/F5 work is on `perf/f2-f4b-f5-swr-adoption`, pushed, open as **#29** and awaiting review — it adds a `swr` dependency, so a reviewer pulling the branch needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint reports no new violations (the remaining 278 are the pre-existing `no-explicit-any` baseline). Verified in the running app as both a teacher and an admin — see the F2 entry for what was observed. Nothing else is mid-flight.
 
 > **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
