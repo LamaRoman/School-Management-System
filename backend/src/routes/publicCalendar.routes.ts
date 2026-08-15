@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
+import { publicCache, publicSchoolFilter } from "../services/publicOrigins.service";
 
 const router = Router();
 
@@ -10,8 +11,17 @@ const PUBLIC_EVENT_TYPES = ["EVENT", "HOLIDAY"] as const;
 // GET /public/calendar/:schoolId — unauthenticated read for the public website.
 // Merges the school's own events with the super-admin's master calendar
 // (national holidays), same shape as the admin calendar endpoint.
-router.get("/:schoolId", async (req, res) => {
+router.get("/:schoolId", publicCache, async (req, res) => {
   const schoolId = req.params.schoolId;
+
+  // S6a — a suspended school, or one that never registered a website, is not
+  // served publicly. Checked once here rather than nested into both queries,
+  // because the master-calendar half has no school relation to filter on.
+  const school = await prisma.school.findFirst({
+    where: { id: schoolId, ...publicSchoolFilter },
+    select: { id: true },
+  });
+  if (!school) return res.json({ data: [] });
 
   const [schoolEvents, masterEvents] = await Promise.all([
     prisma.calendarEvent.findMany({

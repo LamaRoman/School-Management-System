@@ -123,10 +123,31 @@ if (process.env.NODE_ENV !== "test") {
     message: { error: "Too many requests. Please slow down." },
     standardHeaders: true,
     legacyHeaders: false,
+    // Mounting publicLimiter on /public is not enough on its own: this one is
+    // mounted on "/" and would still run afterwards, re-imposing the 500 cap it
+    // is meant to be exempt from.
+    skip: (req) => req.path.startsWith("/public/") || req.path === "/public",
+  });
+
+  // S6d — /public/* needs its own budget. The general limiter is 500 requests
+  // per 15 minutes *per IP*, and a school's server-rendered website makes every
+  // one of its visitors' requests arrive from a single server IP. Under quite
+  // modest traffic the site would rate-limit itself, presenting as an
+  // intermittently broken gallery that looks like a bug in the website.
+  //
+  // Still limited, just far higher, and these responses are cacheable
+  // (see publicCache) so a well-behaved site should rarely come near it.
+  const publicLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5_000,
+    message: { error: "Too many requests. Please slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
   });
 
   app.use("/auth/login", loginLimiter);
   app.use("/auth/change-password", passwordLimiter);
+  app.use("/public", publicLimiter);
   app.use("/", apiLimiter);
 }
 

@@ -163,7 +163,8 @@ async function loadTermReportBatch(
       where: { id: sectionId },
       include: { grade: true },
     }),
-    prisma.examType.findUniqueOrThrow({ where: { id: examTypeId } }),
+    // S5 — same scoping as the single-student builder below.
+    prisma.examType.findFirstOrThrow({ where: { id: examTypeId, academicYear: { schoolId } } }),
     prisma.school.findUnique({ where: { id: schoolId } }),
   ]);
 
@@ -245,10 +246,15 @@ async function buildTermReportData(
       include: { section: { include: { grade: true } } },
     }));
 
+  // S5 — scoped to the school rather than looked up by bare id. Not currently
+  // exploitable (the marks query is scoped by student, so a foreign exam type
+  // returns nothing and 404s), but it is an unguarded hole in a boundary this
+  // codebase is otherwise rigorous about, and it is one refactor away from
+  // mattering.
   const examType =
     batch?.examType ??
-    (await prisma.examType.findUniqueOrThrow({
-      where: { id: examTypeId },
+    (await prisma.examType.findFirstOrThrow({
+      where: { id: examTypeId, academicYear: { schoolId } },
     }));
 
   const academicYear =
