@@ -28,9 +28,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | #23 |
 | **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | #24 |
 | **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | #25 |
-| **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | *this branch* |
+| **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | #26 |
+| **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | *this branch* |
 
-**Suggested next:** **W4** (grade-sheet Excel export) — now unblocked, since W3b removed the admin copy so it only needs building once, against the teacher page. Needs a new dependency (no spreadsheet library exists in either `package.json`). Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
+**Suggested next:** **the W series is complete.** What's left is smaller and mostly optional: **S5–S8** (remaining security items, none destructive — S6 is the biggest and splits into five sub-items), **F2/F4b/F5** (the frontend caching and waterfall work, best done together by adopting SWR), **F8** (now trivially unblocked — W4 proved the dynamic-import pattern), and **P1b–d** (student-photo storage redesign). Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
 
 > **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
 
@@ -572,7 +573,19 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 ---
 
-### [ ] W4. Grade sheet Excel export
+### [x] W4. Grade sheet Excel export
+
+> **BUILT 2026-08-15.** `lib/gradeSheetExcel.ts` builds the workbook from the `rows`/`subjects` JSON already on the page, so no backend route was needed — the design note was right about that. An **Excel** button sits beside **Print** in the shared `GradeSheet` component, covering **both** the term and the annual sheet, since the component already handles both and the answer to "which one" is obviously both.
+>
+> **`exceljs`, not SheetJS.** npm's `xlsx` is frozen at **0.18.5** — SheetJS distributes current builds from their own CDN, so the npm copy is stale and carries known advisories. `exceljs@4.4.0` is the live release. It adds exactly **one moderate advisory** to the tree (a transitive `uuid` buffer-bounds issue reachable only when a caller passes `buf`, which exceljs never does); the other six `npm audit` findings in `frontend/` are pre-existing (`next`, `sharp`, `postcss`, `nanoid`, `brace-expansion`).
+>
+> **The point of the feature is that marks are written as numbers, not text.** A teacher can sort a column, average one, or paste a block into whatever the district asks for. `"72"` as a string would look identical on screen and be useless for all of it. `"Ab"` and `"—"` stay strings, deliberately — they are not quantities.
+>
+> **Verified by building a workbook from real dev data and reading it back**, rather than by eyeballing a download: I-A First Terminal, 10 students × 7 subjects → **63 numeric cells, 7 text ("Ab"), 0 mismatched** against the source JSON, frozen panes at D5, correct headers and full-marks row. The annual variant was checked separately and correctly writes the *weighted* percentage (89.1) rather than a raw mark.
+>
+> **One real bug caught by testing outside the browser:** `await import("exceljs")` returns the module in some runtimes and a namespace object with it under `.default` in others, so `new ExcelJS.Workbook()` threw *"not a constructor"*. Reaching for `.default ?? mod` fixes it. It would have worked in whichever configuration was tried first and failed in the other — the kind of thing a browser-only check finds late or not at all.
+>
+> **This is the frontend's first dynamic import**, which is what **F8** asks for — exceljs loads only when someone clicks Excel. Confirmed in the running app: the `node_modules_exceljs_*` and `src_lib_gradeSheetExcel_ts_*` chunks appear in the resource timeline on click and not before.
 **Where:** `frontend/src/components/ui/GradeSheet.tsx:74` — the only export today is `printGradeSheet(data)` (`lib/printUtils.ts`), a browser print-to-PDF, same mechanism used elsewhere in the app. **Checked both `package.json` files — no spreadsheet library (`xlsx`, `exceljs`, or similar) exists anywhere in the project today.** New dependency needed.
 
 **Requested:** grade sheets should also be downloadable as an Excel (`.xlsx`) file, not just printed.
@@ -1001,7 +1014,7 @@ Other pages do guard this (`admin/fees` and `teacher/attendance` both use `disab
 ### [ ] F8. Code-split the print/export helpers
 **Where:** `frontend/src/lib/printUtils.ts` (511 lines) and `feePrintUtils.ts` (297 lines)
 
-Statically imported into 6 pages (`admin/fees`, `admin/seating`, `admin/certificates`, `accountant/`, `teacher/exam-routine`, `student/exam-routine`). Large HTML template-string builders used **only** when the user clicks Print, but they ship in each route chunk and must download and parse before the page mounts. There are currently **zero** dynamic imports in the frontend.
+Statically imported into 6 pages (`admin/fees`, `admin/seating`, `admin/certificates`, `accountant/`, `teacher/exam-routine`, `student/exam-routine`). Large HTML template-string builders used **only** when the user clicks Print, but they ship in each route chunk and must download and parse before the page mounts. ~~There are currently **zero** dynamic imports in the frontend.~~ **W4 added the first one** (`lib/gradeSheetExcel.ts`, 2026-08-15) and it works — copy that shape for these.
 
 **Fix direction:** `await import()` inside the print handlers.
 
