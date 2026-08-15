@@ -35,10 +35,13 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
 | **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | #29 |
 | **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #31 |
+| **F7, F8, F9, F10** | Double-submit guard; print/export code-splitting; `alert()` → toast; shell renders before auth resolves | #33 |
 
-**Suggested next:** **F8** (code-split the print/export helpers — a copy-the-shape job now), then the small ones: **F7**, **F9**, **F10**.
+**Suggested next:** the remaining small ones — **X3** (request logging/error tracking), **X4** (unbounded auth caches), **X5** (parents can't download report card PDFs), **X6** (pagination, fee search indexing). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
 
-**Handover note (2026-08-16, end of session):** **#29 and #31 are merged to `main`** and deployed — Railway auto-deploys on push, and there is no migration in either, so the deploy is a plain restart. `main` is clean at the #31 merge. The frontend gained a `swr` dependency, so anyone pulling `main` needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems vs a 278 baseline — the four added are `no-explicit-any` on `useSWR<any[]>` calls in `admin/fees`, matching that file's existing `useState<any[]>` style). Verified in the running app as both a teacher and an admin — see F2 for the caching evidence and F4b for the four re-tested races. Nothing is mid-flight.
+**Handover note (2026-08-16, end of session):** **#29, #31, #33 are merged to `main`** and deployed — Railway auto-deploys on push, and there is no migration in any of them, so the deploy is a plain restart. `main` is clean at the #33 merge. The frontend gained a `swr` dependency (from #29), so anyone pulling `main` needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems, holding steady since #31). Verified in the running app: #33 was checked as all six roles (admin, super-admin, teacher, accountant, parent, student) for F10, and against a production build (`next start`, not dev mode — see F8) for the code-splitting claim. Nothing is mid-flight.
+
+**F9 left one `alert()` in place on purpose** — `lib/printUtils.ts:11`, inside a shared `lib/` helper rather than a page, and no `lib/` file currently imports the toast library. Recorded under F9 rather than silently fixed, since it's a small scope call someone should make on purpose.
 
 *(Bookkeeping: the F4b tail was first opened as **#30**, stacked on #29's branch. Merging #29 with `--delete-branch` removed that base branch, and GitHub auto-**closed** #30 rather than retargeting it — a closed PR cannot have its base changed or be reopened once its base is gone. The same commit was reopened against `main` as **#31** and merged. Nothing was lost; when stacking PRs again, retarget the child to `main` **before** merging the parent, or merge without `--delete-branch`.)*
 
@@ -76,10 +79,6 @@ entry says exactly what the choice is and what it costs.
 
 | | What | Notes |
 |---|---|---|
-| **F8** | Code-split the print/export helpers | Now a copy-the-shape job — **W4** added the frontend's first dynamic import and it works. |
-| **F7** | No double-submit protection on the student form | Small. |
-| **F9** | Native `alert()` in 7 places instead of the toast system | Small, cosmetic. |
-| **F10** | First-load auth gate blocks the whole UI | |
 | **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
 | **X3** | No request logging or error tracking | |
 | **X4** | Unbounded auth caches | |
@@ -1126,37 +1125,51 @@ Without `error.tsx`, an exception in any client page unmounts to a blank white s
 
 ---
 
-### [ ] F7. No double-submit protection on the student form
+### [x] F7. No double-submit protection on the student form
 **Where:** `frontend/src/app/admin/students/page.tsx:181` — the submit button has no `disabled` guard and the page has no `saving` state (zero `disabled={` occurrences in the file)
 
 A double-click creates duplicate students. `rollNo` is nullable and the constraint is `@@unique([rollNo, sectionId])` — Postgres treats NULLs as distinct, so duplicate rows with `rollNo: null` are **not** blocked by the database either.
 
 Other pages do guard this (`admin/fees` and `teacher/attendance` both use `disabled={`), so it's a gap rather than a pattern.
 
+> **FIXED 2026-08-16 (#33).** Added a `saving` state; `handleSubmit` returns early if already saving, and the submit button is `disabled={saving}` with a "Saving..." label.
+
 ---
 
-### [ ] F8. Code-split the print/export helpers
+### [x] F8. Code-split the print/export helpers
 **Where:** `frontend/src/lib/printUtils.ts` (511 lines) and `feePrintUtils.ts` (297 lines)
 
 Statically imported into 6 pages (`admin/fees`, `admin/seating`, `admin/certificates`, `accountant/`, `teacher/exam-routine`, `student/exam-routine`). Large HTML template-string builders used **only** when the user clicks Print, but they ship in each route chunk and must download and parse before the page mounts. ~~There are currently **zero** dynamic imports in the frontend.~~ **W4 added the first one** (`lib/gradeSheetExcel.ts`, 2026-08-15) and it works — copy that shape for these.
 
 **Fix direction:** `await import()` inside the print handlers.
 
+> **FIXED 2026-08-16 (#33).** 5 of the 6 pages fit the assumed shape exactly — `printReceipt`/`printInvoice`/`printBulkInvoices`/`printSeatingArrangement`/`printExamRoutine` are called only from a click handler, so each became `await import("@/lib/...").then(({ fn }) => fn(...))` at the call site.
+>
+> **`admin/certificates` didn't fit the shape, and forcing it would have broken the page.** `buildCertificateHtml` isn't print-only there — it drives a **live preview** re-rendered on every keystroke via `useMemo`, so gating it behind a click would mean no preview until the user had already clicked Print once. Fix: `CERTIFICATE_DESIGNS` and `CertificateData` (the small metadata the design-picker UI needs at mount) were split into a new `lib/certificateDesigns.ts`, kept as a static import; the heavy builders (`getSchoolInfo`, `buildCertificateHtml`, `printCertificate`, ~480 remaining lines) are dynamically imported once in a mount effect instead of per-click, so they're still out of the page's own bundle — just fetched slightly earlier than the other 5 pages. `printUtils.ts` re-exports the metadata so the other 5 pages' imports didn't need to change.
+>
+> **Verified against the production build, not dev mode** — Turbopack dev serves dynamic-import chunks differently, so checking there would have proven nothing. `npm run build` + `next start`, then loaded `/admin/seating` unauthenticated (chunk fetching happens per-route regardless of auth) and diffed the fetched chunk list against every chunk containing the real `printSeatingArrangement` implementation (found by grepping for a body-only string, since the page's own chunk legitimately contains the *destructured import reference* — `let{printSeatingArrangement:a}=await e.A(79288)` — which a naive string search can't distinguish from the real function). The three chunks holding the actual implementation were not among those fetched on load. Also verified live in the browser: `/admin/certificates`' preview updates correctly on typing and on design switch, confirming the mount-time dynamic import didn't break the one page that needed a different shape.
+
 ---
 
-### [ ] F9. Native `alert()` used in 7 places instead of the app's toast system
+### [x] F9. Native `alert()` used in 7 places instead of the app's toast system
 **Where:** `student/report/page.tsx:148`, `admin/exam-routine/page.tsx:224`, `admin/students/page.tsx:165`, `super-admin/schools/[id]/page.tsx:57,70,135,146`
 
 `react-hot-toast` is set up and used everywhere else. `student/report/page.tsx:148` uses a blocking `alert()` for a PDF failure — a real user-facing path.
 
+> **FIXED 2026-08-16 (#33).** All 7 converted to `toast.error(...)`; `super-admin/schools/[id]/page.tsx` and `student/report/page.tsx` needed the import added. **One `alert()` remains, found while doing F8 and out of scope for this pass:** `lib/printUtils.ts:11`, inside the shared `openPrintWindow` helper ("Please allow popups to print") — the same message the admin/exam-routine site had, but this is a different call site in a `lib/` module, not a page, and no `lib/` file currently imports `react-hot-toast`. Left alone rather than deciding unilaterally whether print-utility code should depend on the UI toast system; worth a one-line follow-up.
+
 ---
 
-### [ ] F10. First-load auth gate blocks the whole UI
+### [x] F10. First-load auth gate blocks the whole UI
 **Where:** `frontend/src/hooks/useAuth.tsx:36` + each role layout, e.g. `admin/layout.tsx:117`
 
 **Not a contributor to link-tap lag** — `/auth/me` runs once per session, and client-side nav between pages doesn't re-authenticate or remount the sidebar. But every hard load, refresh or deep link blocks the entire UI on one round trip (two, with **F1**) before rendering anything, including the fully static sidebar.
 
 **Fix direction:** low priority. Render the shell immediately, gate only the content area.
+
+> **FIXED 2026-08-16 (#33), all six role layouts** (`admin`, `super-admin`, `accountant`, `parent`, `student`, `teacher`). Each had the identical shape: one `if (loading || !user || <role check>) return <full-page spinner>` before the shell. Replaced with an `authorized` boolean computed the same way, used to gate only the content slot (`main`/`{children}`) — the sidebar or header/tabs now renders on first paint. User-derived text in the shell (`user.email`, `user.teacher?.name`) switched to optional chaining since `user` can be `null` while the shell is already visible.
+>
+> Verified live as all six roles (admin, super-admin, teacher, accountant, parent, student — credentials for parent/student pulled directly from the dev DB since the audit's seed-email guess was wrong): nav/header renders with full content in every case. Also verified the two behaviors this refactor could have silently broken: logged-out visits to `/admin` still redirect to `/login`, and a wrong-role visit (teacher hitting `/admin`) still redirects without any admin content ever rendering in the content slot — the `authorized` gate blocks `children` exactly as the old full-page check did, just scoped smaller.
 
 ---
 
@@ -1294,7 +1307,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | ~~X7 (enroll reports success on account failure)~~ | ✅ **done** | Repair shipped in #15; the silent failure behind it is now closed too |
 | P1b–P1d (photos → S3) + S8 | 1–2 days | |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
-| S5, F7–F10, X4, X5, X6 | as capacity allows | |
+| ~~S5, F7–F10~~ | ✅ **done** | S5 shipped in #28; F7/F8/F9/F10 shipped in #33 |
+| X4, X5, X6 | as capacity allows | |
 | **W1** (results-publish workflow) | 3–5 days | Design agreed, not scoped in detail. New feature, not a fix — plan separately from the bug-fix items above |
 | **W2** (enrollment → fee setup) | half day – 1 day | Decided: fully automatic, confirmed compatible with overrides. Ready to scope. |
 | **W3a + W3d** (remove duplicate admin fees + admissions pages) | ~1 hr | Both are one-line re-exports — just delete two nav links |

@@ -114,13 +114,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!loading && user && user.role !== "ADMIN") router.replace("/");
   }, [user, loading, router]);
 
-  if (loading || !user || user.role !== "ADMIN") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
-      </div>
-    );
-  }
+  // The sidebar is static — it needs nothing from `user` but the footer's
+  // email/role — so it renders on the first paint instead of waiting behind
+  // /auth/me. Only the content area is gated, and it gates on the same
+  // condition the old full-page check used, so a role mismatch still shows
+  // nothing real before the redirect effect fires.
+  const authorized = !loading && !!user && user.role === "ADMIN";
 
   return (
     <div className="min-h-screen flex bg-surface">
@@ -196,8 +195,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center justify-between">
             <div className="text-xs min-w-0">
-              <p className="text-white/90 font-medium truncate">{user.email}</p>
-              <p className="text-white/40 uppercase text-[10px]">{user.role}</p>
+              <p className="text-white/90 font-medium truncate">{user?.email}</p>
+              <p className="text-white/40 uppercase text-[10px]">{user?.role}</p>
             </div>
             <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password"><KeyRound size={16} className="text-white/60" /></button>
             <button
@@ -213,7 +212,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <main className="flex-1 overflow-auto min-w-0">
         <div className="max-w-6xl mx-auto p-6">
-          {children}
+          {authorized ? children : (
+            <div className="flex items-center justify-center py-24">
+              <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
+            </div>
+          )}
         </div>
       </main>
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}

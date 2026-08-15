@@ -29,13 +29,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     if (!loading && user && user.role !== "SUPER_ADMIN") router.replace("/");
   }, [user, loading, router]);
 
-  if (loading || !user || user.role !== "SUPER_ADMIN") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
-      </div>
-    );
-  }
+  const authorized = !loading && !!user && user.role === "SUPER_ADMIN";
 
   return (
     <div className="min-h-screen flex bg-surface">
@@ -75,7 +69,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center justify-between">
             <div className="text-xs min-w-0">
-              <p className="text-white/90 font-medium truncate">{user.email}</p>
+              <p className="text-white/90 font-medium truncate">{user?.email}</p>
               <p className="text-white/40 uppercase text-[10px]">Super Admin</p>
             </div>
             <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password">
@@ -89,7 +83,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       </aside>
 
       <main className="flex-1 overflow-auto min-w-0">
-        <div className="max-w-6xl mx-auto p-6">{children}</div>
+        <div className="max-w-6xl mx-auto p-6">
+          {authorized ? children : (
+            <div className="flex items-center justify-center py-24">
+              <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
+            </div>
+          )}
+        </div>
       </main>
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>

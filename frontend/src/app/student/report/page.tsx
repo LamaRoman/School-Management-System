@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
+import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
@@ -132,7 +133,7 @@ export default function StudentReportPage() {
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 5000);
       }
     } catch {
-      alert("Failed to generate PDF. Please try again.");
+      toast.error("Failed to generate PDF. Please try again.");
     } finally {
       setDownloading(false);
     }

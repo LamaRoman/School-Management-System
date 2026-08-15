@@ -4,7 +4,6 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
-import { printExamRoutine } from "@/lib/printUtils";
 import { useExamTypes } from "@/hooks/useReferenceData";
 
 interface RoutineEntry {
@@ -53,7 +52,7 @@ export default function StudentExamRoutinePage() {
             <p className="text-sm text-gray-500 mt-1">{gradeName}</p>
           </div>
           {entries.length > 0 && (
-            <button onClick={() => printExamRoutine(entries, selectedExamName, gradeName)} className="btn-outline text-xs">
+            <button onClick={() => import("@/lib/printUtils").then(({ printExamRoutine }) => printExamRoutine(entries, selectedExamName, gradeName))} className="btn-outline text-xs">
               <Printer size={14} /> Print
             </button>
           )}

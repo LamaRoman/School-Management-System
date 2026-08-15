@@ -3,13 +3,14 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import toast from "react-hot-toast";
 import { Printer, Plus, X, Award } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
-import {
-  getSchoolInfo,
-  buildCertificateHtml,
-  printCertificate,
-  CERTIFICATE_DESIGNS,
-  type CertificateData,
-} from "@/lib/printUtils";
+import { CERTIFICATE_DESIGNS, type CertificateData } from "@/lib/certificateDesigns";
+// printUtils.ts is ~500 lines of HTML template builders. This page needs
+// buildCertificateHtml continuously for the live preview (not just on
+// Print), so it's loaded once on mount rather than gated behind a click —
+// still out of the initial route chunk, just not deferred as long as the
+// other print pages. CERTIFICATE_DESIGNS above is the exception: the design
+// picker renders at mount, so its (tiny) metadata module stays static.
+import type * as PrintUtils from "@/lib/printUtils";
 
 type SchoolInfo = { name: string; nameNp: string; address: string; phone: string; logo?: string | null };
 
@@ -29,9 +30,13 @@ export default function CertificatesPage() {
   const [signatures, setSignatures] = useState<string[]>(["Class Teacher", "Principal"]);
   const [design, setDesign] = useState("classic");
   const [school, setSchool] = useState<SchoolInfo | null>(null);
+  const [printMod, setPrintMod] = useState<typeof PrintUtils | null>(null);
 
   useEffect(() => {
-    getSchoolInfo().then(setSchool).catch(() => setSchool({ name: "School", nameNp: "", address: "", phone: "", logo: null }));
+    import("@/lib/printUtils").then((mod) => {
+      setPrintMod(mod);
+      mod.getSchoolInfo().then(setSchool).catch(() => setSchool({ name: "School", nameNp: "", address: "", phone: "", logo: null }));
+    });
   }, []);
 
   const certData: CertificateData = {
@@ -46,9 +51,9 @@ export default function CertificatesPage() {
   };
 
   const previewHtml = useMemo(
-    () => (school ? buildCertificateHtml(certData, school) : ""),
+    () => (school && printMod ? printMod.buildCertificateHtml(certData, school) : ""),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [form, signatures, design, school],
+    [form, signatures, design, school, printMod],
   );
 
   // Scale the true-size certificate iframe down to fit the preview column.
@@ -75,7 +80,8 @@ export default function CertificatesPage() {
       return;
     }
     try {
-      await printCertificate(certData);
+      const mod = printMod ?? (await import("@/lib/printUtils"));
+      await mod.printCertificate(certData);
     } catch (err: any) {
       toast.error(err?.message || "Could not open print window");
     }
