@@ -331,7 +331,12 @@ describe("optional subjects are not scored against a student who does not take t
     });
     optionalSubjectId = optional.id;
 
-    // Hari takes it and did well. Ram and Shyam do not take it at all.
+    // Hari is enrolled in it and did well. Ram and Shyam are not enrolled at all.
+    // Enrollment — not the presence of a mark — is what decides whether the subject
+    // counts for a student.
+    await prisma.studentOptionalSubject.create({
+      data: { studentId: hari.id, subjectId: optional.id },
+    });
     await prisma.mark.create({
       data: {
         studentId: hari.id,
@@ -345,6 +350,7 @@ describe("optional subjects are not scored against a student who does not take t
   });
 
   afterAll(async () => {
+    await prisma.studentOptionalSubject.deleteMany({ where: { subjectId: optionalSubjectId } });
     await prisma.mark.deleteMany({ where: { subjectId: optionalSubjectId } });
     await prisma.subject.delete({ where: { id: optionalSubjectId } });
   });
@@ -378,5 +384,206 @@ describe("optional subjects are not scored against a student who does not take t
     const card = await termReport(shyam.id);
     expect(card.subjects.map((s: any) => s.subjectName).sort()).toEqual(["Maths", "Science"]);
     expect(card.overallPercentage).toBeCloseTo(37.5, 1);
+  });
+});
+
+/**
+ * The reason StudentOptionalSubject exists.
+ *
+ * Inferring "does not take this elective" from the absence of a mark row cannot tell
+ * a genuine non-enrollment apart from an elective whose mark is merely late. Under
+ * that heuristic a late mark silently dropped the subject out of the student's
+ * divisor, quietly raising their percentage — R6's inflation, scoped to electives.
+ * With explicit enrollment, an enrolled student with no mark yet scores 0 like any
+ * other subject, and only a genuine non-enrollment is excluded.
+ */
+describe("an enrolled elective with no mark yet still scores zero", () => {
+  let optionalSubjectId: string;
+
+  beforeAll(async () => {
+    const optional = await prisma.subject.create({
+      data: {
+        name: "Optional Art",
+        fullTheoryMarks: 100,
+        fullPracticalMarks: 0,
+        passMarks: 35,
+        displayOrder: 10,
+        isOptional: true,
+        gradeId: ctx.grade.id,
+      },
+    });
+    optionalSubjectId = optional.id;
+
+    // Ram is enrolled but his mark has not been entered. Nothing else changes.
+    await prisma.studentOptionalSubject.create({
+      data: { studentId: ram.id, subjectId: optional.id },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.studentOptionalSubject.deleteMany({ where: { subjectId: optionalSubjectId } });
+    await prisma.subject.delete({ where: { id: optionalSubjectId } });
+  });
+
+  it("counts it as zero rather than dropping it from the divisor", async () => {
+    const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
+
+    // (70 + 70 + 0) / 3 = 46.67. The old mark-presence heuristic would have excluded
+    // the unmarked elective and left him on 70 — better than the classmates he is
+    // actually tied with, for a paper nobody has marked.
+    expect(ranks.get(ram.id)!.avgPct).toBeCloseTo((70 + 70 + 0) / 3, 5);
+
+    // Hari is not enrolled in this one, so he is untouched at 70.
+    expect(ranks.get(hari.id)!.avgPct).toBeCloseTo(70, 5);
+  });
+
+  it("shows the enrolled-but-unmarked elective on the card as not entered", async () => {
+    const card = await termReport(ram.id);
+    const art = card.subjects.find((s: any) => s.subjectName === "Optional Art");
+    expect(art).toBeDefined();
+    expect(art.notEntered).toBe(true);
+    expect(art.isAbsent).toBe(false);
+
+    // And it is absent from the card of a student who does not take it.
+    const hariCard = await termReport(hari.id);
+    expect(hariCard.subjects.map((s: any) => s.subjectName)).not.toContain("Optional Art");
+  });
+});
+
+/**
+ * The enrollment API and the guards around it.
+ */
+describe("optional subject enrollment API", () => {
+  let optionalSubjectId: string;
+  let otherGradeSubjectId: string;
+
+  beforeAll(async () => {
+    const optional = await prisma.subject.create({
+      data: {
+        name: "Optional Computer",
+        fullTheoryMarks: 100,
+        fullPracticalMarks: 0,
+        passMarks: 35,
+        displayOrder: 11,
+        isOptional: true,
+        gradeId: ctx.grade.id,
+      },
+    });
+    optionalSubjectId = optional.id;
+
+    // An optional subject belonging to a DIFFERENT grade, to prove the guard.
+    const otherGrade = await prisma.grade.create({
+      data: { name: "Grade VI", displayOrder: 6, academicYearId: ctx.year.id },
+    });
+    const foreign = await prisma.subject.create({
+      data: {
+        name: "Foreign Optional",
+        fullTheoryMarks: 100,
+        fullPracticalMarks: 0,
+        passMarks: 35,
+        displayOrder: 1,
+        isOptional: true,
+        gradeId: otherGrade.id,
+      },
+    });
+    otherGradeSubjectId = foreign.id;
+  });
+
+  afterAll(async () => {
+    await prisma.studentOptionalSubject.deleteMany({ where: { subjectId: optionalSubjectId } });
+    await prisma.subject.delete({ where: { id: optionalSubjectId } });
+  });
+
+  const setOptional = (studentId: string, subjectIds: string[]) =>
+    request(app)
+      .put(`/students/${studentId}/optional-subjects`)
+      .set("Authorization", authHeader(adminToken))
+      .send({ subjectIds });
+
+  it("lists the grade's optional subjects with an enrolment flag", async () => {
+    const res = await request(app)
+      .get(`/students/${ram.id}/optional-subjects`)
+      .set("Authorization", authHeader(adminToken));
+    expect(res.status).toBe(200);
+
+    const names = res.body.data.map((s: any) => s.name);
+    expect(names).toContain("Optional Computer");
+    // Compulsory subjects are not choices and must not appear.
+    expect(names).not.toContain("Maths");
+    expect(res.body.data.find((s: any) => s.name === "Optional Computer").isEnrolled).toBe(false);
+  });
+
+  it("enrols and un-enrols, replacing the whole set", async () => {
+    expect((await setOptional(ram.id, [optionalSubjectId])).status).toBe(200);
+    expect(
+      await prisma.studentOptionalSubject.count({ where: { studentId: ram.id, subjectId: optionalSubjectId } })
+    ).toBe(1);
+
+    expect((await setOptional(ram.id, [])).status).toBe(200);
+    expect(await prisma.studentOptionalSubject.count({ where: { studentId: ram.id } })).toBe(0);
+  });
+
+  it("rejects a subject from another grade", async () => {
+    const res = await setOptional(ram.id, [otherGradeSubjectId]);
+    expect(res.status).toBe(400);
+    expect(await prisma.studentOptionalSubject.count({ where: { studentId: ram.id } })).toBe(0);
+  });
+
+  it("rejects a compulsory subject — enrolment is not a thing for those", async () => {
+    const res = await setOptional(ram.id, [subjects[0].id]);
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses marks for a student not enrolled in the optional subject", async () => {
+    const res = await request(app)
+      .post("/marks/bulk")
+      .set("Authorization", authHeader(adminToken))
+      .send({
+        subjectId: optionalSubjectId,
+        examTypeId,
+        academicYearId: ctx.year.id,
+        marks: [{ studentId: shyam.id, theoryMarks: 80, practicalMarks: 0, isAbsent: false }],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error || res.body.message).toMatch(/not enrolled/i);
+  });
+
+  it("accepts marks once the student is enrolled", async () => {
+    await setOptional(shyam.id, [optionalSubjectId]);
+    const res = await request(app)
+      .post("/marks/bulk")
+      .set("Authorization", authHeader(adminToken))
+      .send({
+        subjectId: optionalSubjectId,
+        examTypeId,
+        academicYearId: ctx.year.id,
+        marks: [{ studentId: shyam.id, theoryMarks: 80, practicalMarks: 0, isAbsent: false }],
+      });
+    expect(res.status).toBe(200);
+
+    await prisma.mark.deleteMany({ where: { subjectId: optionalSubjectId } });
+    await setOptional(shyam.id, []);
+  });
+
+  it("narrows the roster to enrolled students when a subjectId is given", async () => {
+    await setOptional(hari.id, [optionalSubjectId]);
+
+    const all = await request(app)
+      .get(`/students?sectionId=${ctx.section.id}`)
+      .set("Authorization", authHeader(adminToken));
+    const forOptional = await request(app)
+      .get(`/students?sectionId=${ctx.section.id}&subjectId=${optionalSubjectId}`)
+      .set("Authorization", authHeader(adminToken));
+
+    expect(all.body.data.length).toBe(4);
+    expect(forOptional.body.data.map((s: any) => s.id)).toEqual([hari.id]);
+
+    // A compulsory subject is taken by everyone, so the filter is a no-op there.
+    const forCompulsory = await request(app)
+      .get(`/students?sectionId=${ctx.section.id}&subjectId=${subjects[0].id}`)
+      .set("Authorization", authHeader(adminToken));
+    expect(forCompulsory.body.data.length).toBe(4);
+
+    await setOptional(hari.id, []);
   });
 });

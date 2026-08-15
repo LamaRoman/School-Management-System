@@ -84,6 +84,22 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     throw new AppError("One or more students do not belong to this subject's class", 400);
   }
 
+  // For an OPTIONAL subject, belonging to the grade is not enough — the student has to
+  // actually take it. A mark saved against a student who is not enrolled would be
+  // ignored by every results calculation (R7a), so it would sit in the database looking
+  // entered while never appearing on the report card. Reject it instead.
+  if (subject.isOptional) {
+    const enrolledCount = await prisma.studentOptionalSubject.count({
+      where: { subjectId, studentId: { in: uniqueStudentIds } },
+    });
+    if (enrolledCount !== uniqueStudentIds.length) {
+      throw new AppError(
+        "One or more students are not enrolled in this optional subject. Assign it to them first.",
+        400
+      );
+    }
+  }
+
   for (const m of marks) {
     if (m.theoryMarks != null && m.theoryMarks > subject.fullTheoryMarks) {
       throw new AppError(`Theory marks (${m.theoryMarks}) exceed full marks (${subject.fullTheoryMarks}) for student ${m.studentId}`);

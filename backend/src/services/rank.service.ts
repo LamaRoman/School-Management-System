@@ -24,15 +24,15 @@ import { calculatePercentage } from "./grading.service";
  * Marked-absent subjects need no special case: their marks are stored `null`, read as
  * 0, and count toward the average — the **R1** decision, already applied everywhere.
  *
- * **Optional subjects are the one exception** (**R7a**). For a subject with
- * `isOptional`, a missing mark row means the student does not take it, so it is left
- * out of their divisor entirely rather than scored 0. There is no per-student subject
- * enrollment in the schema, so absence-of-a-mark is the only signal available: the
- * consequence is that an optional subject a student *does* take, whose mark simply has
- * not been entered yet, is indistinguishable from one they never took and is excluded.
- * That is the smaller error of the two — penalising a child for an elective they never
- * sat is the one that reaches a parent. An explicit student-to-optional-subject link is
- * the real fix, and is worth adding before any school actually relies on this.
+ * **Optional subjects are the one exception** (**R7a**). A subject with `isOptional`
+ * counts only for the students enrolled in it via `StudentOptionalSubject`; for
+ * everyone else it is left out of the divisor entirely rather than scored 0.
+ *
+ * That enrollment table is what makes the two cases separable. The first cut of this
+ * inferred "does not take it" from the absence of a mark row, which could not tell a
+ * genuine non-enrollment apart from an elective whose mark was merely late — so a late
+ * mark silently dropped the subject instead of counting as a zero. With explicit
+ * enrollment, an enrolled student with no mark yet scores 0 like any other subject.
  *
  * ## Ties
  *
@@ -89,7 +89,7 @@ export async function computeSectionRanks(
     return { ranks: new Map(), totalStudents: 0 };
   }
 
-  const [subjects, allMarks] = await Promise.all([
+  const [subjects, allMarks, optionalEnrollments] = await Promise.all([
     prisma.subject.findMany({
       where: { gradeId: section.gradeId },
       select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true, isOptional: true },
@@ -107,7 +107,21 @@ export async function computeSectionRanks(
         practicalMarks: true,
       },
     }),
+    prisma.studentOptionalSubject.findMany({
+      where: { studentId: { in: students.map((s) => s.id) } },
+      select: { studentId: true, subjectId: true },
+    }),
   ]);
+
+  const optionalByStudent = new Map<string, Set<string>>();
+  for (const e of optionalEnrollments) {
+    let set = optionalByStudent.get(e.studentId);
+    if (!set) {
+      set = new Set();
+      optionalByStudent.set(e.studentId, set);
+    }
+    set.add(e.subjectId);
+  }
 
   // Index once — the previous implementations ran a linear `filter` per student and a
   // linear `find` per subject, which is what made this quadratic inside a batch.
@@ -123,17 +137,15 @@ export async function computeSectionRanks(
 
   const scored = students.map((student) => {
     const studentMarks = marksByStudent.get(student.id);
+    const takesOptional = optionalByStudent.get(student.id);
     let pctSum = 0;
     let counted = 0;
     for (const subject of subjects) {
+      // An optional subject only counts for the students actually enrolled in it.
+      // Everyone takes the compulsory ones, so those always count — a missing mark
+      // there means "not entered yet" and scores 0, which is the R7 decision.
+      if (subject.isOptional && !takesOptional?.has(subject.id)) continue;
       const mark = studentMarks?.get(subject.id);
-      // A missing mark means two different things depending on the subject:
-      //   required → the mark has not been entered yet, and scores 0
-      //   optional → this student does not take it, and it is not theirs to be
-      //              scored on at all
-      // Scoring an elective a student never sat as 0 would drag down their
-      // percentage, GPA and rank for a subject they were never enrolled in.
-      if (!mark && subject.isOptional) continue;
       const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
       pctSum += calculatePercentage(obtained, subject.fullTheoryMarks + subject.fullPracticalMarks);
       counted++;

@@ -163,14 +163,22 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   // Every subject in the grade, not only the ones with a mark row — see the same
   // reasoning in pdf.routes.ts. The portal and the printed card must agree.
   const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
+  const takesOptional = new Set(
+    (
+      await prisma.studentOptionalSubject.findMany({
+        where: { studentId },
+        select: { subjectId: true },
+      })
+    ).map((e) => e.subjectId)
+  );
   const gradeSubjects = (
     await prisma.subject.findMany({
       where: { gradeId: student.section.gradeId },
       orderBy: { displayOrder: "asc" },
     })
   ).filter(
-    // See pdf.routes.ts — optional-and-unmarked means "does not take it" (R7a).
-    (subject) => !(subject.isOptional && !markBySubjectId.has(subject.id))
+    // See pdf.routes.ts — an elective is on the card only for students enrolled in it (R7a).
+    (subject) => !subject.isOptional || takesOptional.has(subject.id)
   );
 
   const hasPracticalSubjects = gradeSubjects.some((s) => s.fullPracticalMarks > 0);

@@ -105,16 +105,24 @@ async function buildTermReportData(
   // printed rows do not add up to the printed percentage, which is precisely the
   // hand-checkability R4 was about.
   const markBySubjectId = new Map(marks.map((m) => [m.subjectId, m]));
+  const takesOptional = new Set(
+    (
+      await prisma.studentOptionalSubject.findMany({
+        where: { studentId },
+        select: { subjectId: true },
+      })
+    ).map((e) => e.subjectId)
+  );
   const gradeSubjects = (
     await prisma.subject.findMany({
       where: { gradeId: student.section.gradeId },
       orderBy: { displayOrder: "asc" },
     })
   ).filter(
-    // An optional subject with no mark row is one this student does not take, so it
-    // is not on their card and not in their divisor (R7a). A *required* subject with
-    // no mark row is an un-entered mark and stays, scored 0.
-    (subject) => !(subject.isOptional && !markBySubjectId.has(subject.id))
+    // An optional subject appears on this card only if the student is enrolled in it
+    // (R7a). Once it does appear it behaves like any other subject: a missing mark
+    // means "not entered yet" and scores 0, rather than quietly vanishing.
+    (subject) => !subject.isOptional || takesOptional.has(subject.id)
   );
 
   const school = await prisma.school.findUnique({ where: { id: schoolId } });

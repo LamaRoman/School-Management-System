@@ -51,7 +51,22 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     where: { id: String(examTypeId) },
   });
 
+  const optionalEnrollments = await prisma.studentOptionalSubject.findMany({
+    where: { studentId: { in: students.map((s) => s.id) } },
+    select: { studentId: true, subjectId: true },
+  });
+  const optionalByStudent = new Map<string, Set<string>>();
+  for (const e of optionalEnrollments) {
+    let set = optionalByStudent.get(e.studentId);
+    if (!set) {
+      set = new Set();
+      optionalByStudent.set(e.studentId, set);
+    }
+    set.add(e.subjectId);
+  }
+
   const rows = students.map((student) => {
+    const takesOptional = optionalByStudent.get(student.id);
     const subjectResults = subjects.map((subject) => {
       const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
       const mark = allMarks.find(
@@ -74,10 +89,10 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         gpa: gradeResult.gpa,
         passed: obtained >= subject.passMarks,
         isAbsent: mark?.isAbsent ?? false,
-        // Optional subject this student does not take (R7a). The column stays on the
-        // sheet — it is class-wide — but the cell is not theirs and must not be
+        // Optional subject this student is not enrolled in (R7a). The column stays on
+        // the sheet — it is class-wide — but the cell is not theirs and must not be
         // scored as a zero in their totals below.
-        notTaken: subject.isOptional && !mark,
+        notTaken: subject.isOptional && !takesOptional?.has(subject.id),
       };
     });
 
