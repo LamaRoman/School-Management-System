@@ -36,6 +36,8 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 
 **Suggested next:** **F2 / F4b / F5** — the frontend waterfall and caching work, best done as one move by adopting SWR, which subsumes all three and retires the `useLatestRequest` stopgap.
 
+**Handover note (2026-08-15, end of session):** working tree is clean, `main` is in sync with `origin/main` at `f2ca3f2`, backend suite is **266/266 passing**, both packages typecheck. Nothing is mid-flight — the next session can start straight in on F2/F4b/F5 (or any other row in [Everything still open](#everything-still-open-in-one-place)) with no setup beyond `npm install` if `node_modules` isn't already there.
+
 > **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
 > **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
@@ -111,7 +113,7 @@ The original assessment was mostly accurate, but four items were wrong in ways t
 
 **2.** ~~Absent subjects are silently dropped from report card averages~~ — **✅ FIXED 2026-08-14.** Policy decided as *"an absence counts as zero"*. R1, R2, R4 and R5 all resolved by the one change; R3 partially (see its note). → **R1–R5**
 
-**3.** ~~Three bulk-write endpoints accept student IDs from any school without checking membership (**S1–S3**), one of which can move another school's students into yours~~ — **✅ FIXED 2026-08-14.** All three now batch-verify membership before writing, and the promotion loop is transactional (**S1a**). The remaining tenancy items are **S4–S8**, none of which are destructive cross-school writes.
+**3.** ~~Three bulk-write endpoints accept student IDs from any school without checking membership (**S1–S3**), one of which can move another school's students into yours~~ — **✅ FIXED 2026-08-14.** All three now batch-verify membership before writing, and the promotion loop is transactional (**S1a**). *(Update 2026-08-15: S4, S5, S6a/c/d/e, S6b-i and S8 are now fixed too — see the done table above. Only S6b and S7 remain, and both are owner decisions, not defects — see [Everything still open](#everything-still-open-in-one-place).)*
 
 **Also added since:** a full results-publish workflow (**W1**), automatic fee setup on enrollment (**W2**), an admin-portal declutter — fee management, admissions, grade sheet, observations, and both student-creation bypass routes each move to (or are closed in favor of) the one role that should own them (**W3**) — and a grade-sheet Excel export (**W4**). All designed and agreed 2026-08-14; none built yet.
 
