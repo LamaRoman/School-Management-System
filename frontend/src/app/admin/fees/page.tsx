@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
 import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
@@ -32,26 +33,12 @@ export default function FeeManagementPage() {
   const { user } = useAuth();
   const readOnly = user?.role === "ACCOUNTANT";
   const [tab, setTab] = useState<Tab>("categories");
-  const [activeYear, setActiveYear] = useState<any>(null);
-  const [categories, setCategories] = useState<FeeCategory[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        setActiveYear(year);
-        const [cats, g, et] = await Promise.all([
-          api.get<FeeCategory[]>("/fees/categories"),
-          year ? api.get<Grade[]>(`/grades?academicYearId=${year.id}`) : Promise.resolve([]),
-          year ? api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`) : Promise.resolve([]),
-        ]);
-        setCategories(cats); setGrades(g); setExamTypes(et);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+  const { activeYear, grades, loading: loadingGrades } = useGrades();
+  const { examTypes, loading: loadingExamTypes } = useExamTypes();
+  const { data: categoriesData, isLoading: loadingCategories, mutate: reloadCategories } =
+    useSWR<FeeCategory[]>("/fees/categories");
+  const categories = categoriesData ?? [];
+  const loading = loadingGrades || loadingExamTypes || loadingCategories;
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
@@ -66,7 +53,7 @@ export default function FeeManagementPage() {
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>{t.label}</button>
         ))}
       </div>
-      {tab === "categories" && <CategoriesTab categories={categories} setCategories={setCategories} readOnly={readOnly} />}
+      {tab === "categories" && <CategoriesTab categories={categories} reloadCategories={reloadCategories} readOnly={readOnly} />}
       {tab === "structure" && activeYear && <StructureTab activeYear={activeYear} categories={categories} grades={grades} examTypes={examTypes} readOnly={readOnly} />}
       {tab === "individual" && activeYear && <IndividualFeesTab activeYear={activeYear} categories={categories} grades={grades} readOnly={readOnly} />}
       {tab === "discounts" && activeYear && <DiscountsTab activeYear={activeYear} categories={categories} grades={grades} readOnly={readOnly} />}
@@ -77,18 +64,17 @@ export default function FeeManagementPage() {
 
 // ─── CATEGORIES TAB ─────────────────────────────────────
 
-function CategoriesTab({ categories, setCategories, readOnly }: { categories: FeeCategory[]; setCategories: (c: FeeCategory[]) => void; readOnly?: boolean }) {
+function CategoriesTab({ categories, reloadCategories, readOnly }: { categories: FeeCategory[]; reloadCategories: () => Promise<unknown>; readOnly?: boolean }) {
   const showConfirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState(""); const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState(""); const [editDesc, setEditDesc] = useState("");
 
-  const fetchCategories = async () => { setCategories(await api.get<FeeCategory[]>("/fees/categories")); };
-  const handleAdd = async () => { if (!name.trim()) return; try { await api.post("/fees/categories", { name: name.trim(), description: description.trim() || undefined }); toast.success("Added"); setName(""); setDescription(""); setShowForm(false); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+  const handleAdd = async () => { if (!name.trim()) return; try { await api.post("/fees/categories", { name: name.trim(), description: description.trim() || undefined }); toast.success("Added"); setName(""); setDescription(""); setShowForm(false); await reloadCategories(); } catch (e: any) { toast.error(e.message); } };
   const handleStartEdit = (cat: FeeCategory) => { setEditingId(cat.id); setEditName(cat.name); setEditDesc(cat.description || ""); };
-  const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await api.put(`/fees/categories/${editingId}`, { name: editName.trim(), description: editDesc.trim() || undefined }); toast.success("Updated"); setEditingId(null); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
-  const handleDelete = async (id: string) => { if (!await showConfirm({ title: "Remove category", message: "This fee category will be removed.", confirmLabel: "Remove", variant: "danger" })) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await fetchCategories(); } catch (e: any) { toast.error(e.message); } };
+  const handleSaveEdit = async () => { if (!editingId || !editName.trim()) return; try { await api.put(`/fees/categories/${editingId}`, { name: editName.trim(), description: editDesc.trim() || undefined }); toast.success("Updated"); setEditingId(null); await reloadCategories(); } catch (e: any) { toast.error(e.message); } };
+  const handleDelete = async (id: string) => { if (!await showConfirm({ title: "Remove category", message: "This fee category will be removed.", confirmLabel: "Remove", variant: "danger" })) return; try { await api.delete(`/fees/categories/${id}`); toast.success("Removed"); await reloadCategories(); } catch (e: any) { toast.error(e.message); } };
 
   return (
     <div>
@@ -121,24 +107,32 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
   const [selectedGrade, setSelectedGrade] = useState("");
   const [entries, setEntries] = useState<{ feeCategoryId: string; amount: number; frequency: string; examTypeId?: string }[]>([]);
   const [saving, setSaving] = useState(false);
-  const [loadingEntries, setLoadingEntries] = useState(false);
-  const runStructure = useLatestRequest();
 
-  const handleGradeChange = async (gradeId: string) => {
-    setSelectedGrade(gradeId);
-    // Save writes `entries` against the *currently* selected grade, and Copy to All writes
-    // them to every grade in the year — a superseded response here misprices a whole school.
-    setEntries([]);
-    setLoadingEntries(true);
-    await runStructure(
-      () => api.get<FeeStructure[]>(`/fees/structure?academicYearId=${activeYear.id}&gradeId=${gradeId}`),
-      (data) => {
-        setEntries(data.length > 0 ? data.map((s) => ({ feeCategoryId: s.feeCategoryId, amount: s.amount, frequency: s.frequency, examTypeId: s.examTypeId || undefined })) : categories.map((c) => ({ feeCategoryId: c.id, amount: 0, frequency: "MONTHLY" })));
-        setLoadingEntries(false);
-      },
-      () => { setEntries([]); setLoadingEntries(false); }
+  // Save writes `entries` against the *currently* selected grade, and Copy to All
+  // writes them to every grade in the year — a superseded response here misprices
+  // a whole school. Keyed by grade, a response can only populate its own grade.
+  const structureKey = selectedGrade
+    ? `/fees/structure?academicYearId=${activeYear.id}&gradeId=${selectedGrade}`
+    : null;
+  const { data: structure, isLoading: loadingEntries } = useSWR<FeeStructure[]>(structureKey);
+
+  // The rows are edited in place, so they are local state seeded from the fetch —
+  // once per grade, so a background revalidation cannot wipe amounts already typed.
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (seededFor.current === structureKey) return;
+    if (!structure) {
+      seededFor.current = null;
+      setEntries([]);
+      return;
+    }
+    setEntries(
+      structure.length > 0
+        ? structure.map((s) => ({ feeCategoryId: s.feeCategoryId, amount: s.amount, frequency: s.frequency, examTypeId: s.examTypeId || undefined }))
+        : categories.map((c) => ({ feeCategoryId: c.id, amount: 0, frequency: "MONTHLY" }))
     );
-  };
+    seededFor.current = structureKey;
+  }, [structureKey, structure, categories]);
   const handleEntryChange = (i: number, f: string, v: any) => { setEntries((p) => { const u = [...p]; u[i] = { ...u[i], [f]: v }; if (f === "frequency" && v !== "PER_EXAM") u[i].examTypeId = undefined; return u; }); };
   const handleAddRow = () => { setEntries((p) => [...p, { feeCategoryId: "", amount: 0, frequency: "PER_EXAM", examTypeId: "" }]); };
   const handleRemoveRow = (i: number) => { setEntries((p) => p.filter((_, idx) => idx !== i)); };
@@ -149,7 +143,7 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
 
   return (
     <div>
-      <div className="mb-4"><label className="label">Grade</label><select className="input max-w-xs" value={selectedGrade} onChange={(e) => handleGradeChange(e.target.value)}><option value="">Select</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+      <div className="mb-4"><label className="label">Grade</label><select className="input max-w-xs" value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}><option value="">Select</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
       {selectedGrade && entries.length > 0 && (
         <div className="card overflow-hidden mb-4">
           <table className="w-full text-sm">
@@ -177,32 +171,32 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
 // ─── INDIVIDUAL FEES TAB (Hostel, Food, etc.) ──────────
 
 function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; readOnly?: boolean }) {
-  const [selectedGrade, setSelectedGrade] = useState(""); const [sections, setSections] = useState<any[]>([]);
-  const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState(""); const [assignments, setAssignments] = useState<any[]>([]);
-  const [gradeCategoryIds, setGradeCategoryIds] = useState<string[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState("");
   const [form, setForm] = useState({ feeCategoryId: "", amount: "", frequency: "MONTHLY" });
-  const runGrade = useLatestRequest(); const runStudents = useLatestRequest(); const runAssignments = useLatestRequest();
 
-  const handleGradeChange = async (id: string) => {
-    setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setAssignments([]); setGradeCategoryIds([]); setSections([]);
-    await runGrade(
-      async () => {
-        const all = await api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`);
-        const structures = id ? await api.get<FeeStructure[]>(`/fees/structure?gradeId=${id}&academicYearId=${activeYear.id}`) : [];
-        return { all, structures };
-      },
-      ({ all, structures }) => {
-        setSections(all.find((g) => g.id === id)?.sections || []);
-        setGradeCategoryIds(structures.map((s) => s.feeCategoryId));
-      },
-      () => setSections([])
-    );
-  };
-  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setAssignments([]); setStudents([]); await runStudents(() => api.get<any[]>(`/students?sectionId=${id}`), setStudents, () => setStudents([])); };
-  const handleStudentChange = async (id: string) => { setSelectedStudent(id); setAssignments([]); await runAssignments(() => api.get<any[]>(`/fees/assignments?studentId=${id}&academicYearId=${activeYear.id}`), setAssignments, () => setAssignments([])); };
-  const handleAssign = async () => { if (!selectedStudent || !form.feeCategoryId || !form.amount) return; try { await api.post("/fees/assignments", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, amount: parseFloat(form.amount) || 0, frequency: form.frequency }); toast.success("Fee assigned"); setForm({ feeCategoryId: "", amount: "", frequency: "MONTHLY" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
-  const handleRemove = async (id: string) => { try { await api.delete(`/fees/assignments/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
+  // The grade list already carries its sections, so picking a grade needs no
+  // fetch at all — this used to refetch every grade in the year to read one.
+  const sections = grades.find((g) => g.id === selectedGrade)?.sections ?? [];
+  const { data: gradeStructures } = useSWR<FeeStructure[]>(
+    selectedGrade ? `/fees/structure?gradeId=${selectedGrade}&academicYearId=${activeYear.id}` : null
+  );
+  const gradeCategoryIds = (gradeStructures ?? []).map((s) => s.feeCategoryId);
+  const { data: studentsData } = useSWR<any[]>(
+    selectedSection ? `/students?sectionId=${selectedSection}` : null
+  );
+  const students = studentsData ?? [];
+  const { data: assignmentsData, mutate: reloadAssignments } = useSWR<any[]>(
+    selectedStudent ? `/fees/assignments?studentId=${selectedStudent}&academicYearId=${activeYear.id}` : null
+  );
+  const assignments = assignmentsData ?? [];
+
+  const handleGradeChange = (id: string) => { setSelectedGrade(id); setSelectedSection(""); setSelectedStudent(""); };
+  const handleSectionChange = (id: string) => { setSelectedSection(id); setSelectedStudent(""); };
+  const handleStudentChange = (id: string) => { setSelectedStudent(id); };
+  const handleAssign = async () => { if (!selectedStudent || !form.feeCategoryId || !form.amount) return; try { await api.post("/fees/assignments", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, amount: parseFloat(form.amount) || 0, frequency: form.frequency }); toast.success("Fee assigned"); setForm({ feeCategoryId: "", amount: "", frequency: "MONTHLY" }); reloadAssignments(); } catch (e: any) { toast.error(e.message); } };
+  const handleRemove = async (id: string) => { try { await api.delete(`/fees/assignments/${id}`); toast.success("Removed"); reloadAssignments(); } catch (e: any) { toast.error(e.message); } };
 
   // Only show categories NOT already in grade-level structure and NOT already assigned
   const assignedCategoryIds = assignments.map((a: any) => a.feeCategoryId);
@@ -236,17 +230,28 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
 // ─── DISCOUNTS TAB ──────────────────────────────────────
 
 function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear: any; categories: FeeCategory[]; grades: Grade[]; readOnly?: boolean }) {
-  const [selectedGrade, setSelectedGrade] = useState(""); const [sections, setSections] = useState<any[]>([]);
-  const [selectedSection, setSelectedSection] = useState(""); const [students, setStudents] = useState<any[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState(""); const [overrides, setOverrides] = useState<any[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState("");
   const [form, setForm] = useState({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" });
-  const runGrade = useLatestRequest(); const runStudents = useLatestRequest(); const runOverrides = useLatestRequest();
 
-  const handleGradeChange = async (id: string) => { setSelectedGrade(id); setSelectedSection(""); setStudents([]); setSelectedStudent(""); setOverrides([]); setSections([]); await runGrade(() => api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`), (all) => setSections(all.find((g) => g.id === id)?.sections || []), () => setSections([])); };
-  const handleSectionChange = async (id: string) => { setSelectedSection(id); setSelectedStudent(""); setOverrides([]); setStudents([]); await runStudents(() => api.get<any[]>(`/students?sectionId=${id}`), setStudents, () => setStudents([])); };
-  const handleStudentChange = async (id: string) => { setSelectedStudent(id); setOverrides([]); await runOverrides(() => api.get<any[]>(`/fees/overrides?studentId=${id}&academicYearId=${activeYear.id}`), setOverrides, () => setOverrides([])); };
-  const handleAdd = async () => { if (!selectedStudent || !form.feeCategoryId) return; try { await api.post("/fees/overrides", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, discountType: form.discountType, overrideAmount: form.discountType === "FLAT" ? parseFloat(form.overrideAmount) || 0 : 0, discountPercent: form.discountType === "PERCENTAGE" ? parseFloat(form.discountPercent) || 0 : undefined, reason: form.reason || undefined }); toast.success("Applied"); setForm({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" }); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
-  const handleRemove = async (id: string) => { try { await api.delete(`/fees/overrides/${id}`); toast.success("Removed"); handleStudentChange(selectedStudent); } catch (e: any) { toast.error(e.message); } };
+  // Sections come from the grade list already in hand; students and overrides are
+  // keyed by the selection they belong to.
+  const sections = grades.find((g) => g.id === selectedGrade)?.sections ?? [];
+  const { data: studentsData } = useSWR<any[]>(
+    selectedSection ? `/students?sectionId=${selectedSection}` : null
+  );
+  const students = studentsData ?? [];
+  const { data: overridesData, mutate: reloadOverrides } = useSWR<any[]>(
+    selectedStudent ? `/fees/overrides?studentId=${selectedStudent}&academicYearId=${activeYear.id}` : null
+  );
+  const overrides = overridesData ?? [];
+
+  const handleGradeChange = (id: string) => { setSelectedGrade(id); setSelectedSection(""); setSelectedStudent(""); };
+  const handleSectionChange = (id: string) => { setSelectedSection(id); setSelectedStudent(""); };
+  const handleStudentChange = (id: string) => { setSelectedStudent(id); };
+  const handleAdd = async () => { if (!selectedStudent || !form.feeCategoryId) return; try { await api.post("/fees/overrides", { studentId: selectedStudent, feeCategoryId: form.feeCategoryId, academicYearId: activeYear.id, discountType: form.discountType, overrideAmount: form.discountType === "FLAT" ? parseFloat(form.overrideAmount) || 0 : 0, discountPercent: form.discountType === "PERCENTAGE" ? parseFloat(form.discountPercent) || 0 : undefined, reason: form.reason || undefined }); toast.success("Applied"); setForm({ feeCategoryId: "", discountType: "PERCENTAGE", discountPercent: "", overrideAmount: "", reason: "" }); reloadOverrides(); } catch (e: any) { toast.error(e.message); } };
+  const handleRemove = async (id: string) => { try { await api.delete(`/fees/overrides/${id}`); toast.success("Removed"); reloadOverrides(); } catch (e: any) { toast.error(e.message); } };
 
   return (
     <div>
@@ -276,15 +281,9 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
 // ─── COLLECTION TAB (Redesigned) ────────────────────────
 
 function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[] }) {
-  const [sections, setSections] = useState<any[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [currentMonth, setCurrentMonth] = useState(nepaliMonths[9]); // Magh default
-  const [overview, setOverview] = useState<StudentOverview[]>([]);
-  const [loadingOverview, setLoadingOverview] = useState(false);
-
-  // Student ledger view
-  const [ledger, setLedger] = useState<LedgerData | null>(null);
 
   // Payment
   const [payMonths, setPayMonths] = useState<string[]>([]);
@@ -293,56 +292,59 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [saving, setSaving] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
-  const [loadingLedger, setLoadingLedger] = useState(false);
-  const runSections = useLatestRequest();
-  // Section change and month change hit the same endpoint, so they are one stream and
-  // share one guard — switching month must be able to supersede an in-flight section load.
-  const runOverview = useLatestRequest();
-  const runLedger = useLatestRequest();
+  const [openStudentId, setOpenStudentId] = useState<string | null>(null);
 
-  const fetchOverview = (sectionId: string, month: string) => {
-    setLoadingOverview(true);
-    return runOverview(
-      () => api.get<any>(`/fees/section-overview?sectionId=${sectionId}&academicYearId=${activeYear.id}&currentMonth=${month}`),
-      (data) => { setOverview(data.students || []); setLoadingOverview(false); },
-      () => { setOverview([]); setLoadingOverview(false); }
-    );
+  // Sections come from the grade list already in hand — no fetch needed.
+  const sections = grades.find((g) => g.id === selectedGrade)?.sections ?? [];
+
+  // Section and month are both part of the overview's identity, so they are one
+  // key rather than two request streams that could supersede each other.
+  const { data: overviewData, isLoading: loadingOverview, mutate: reloadOverview } = useSWR<any>(
+    selectedSection
+      ? `/fees/section-overview?sectionId=${selectedSection}&academicYearId=${activeYear.id}&currentMonth=${currentMonth}`
+      : null
+  );
+  const overview: StudentOverview[] = overviewData?.students ?? [];
+
+  // Collect posts `ledger.student.id` with amounts read off `ledger.monthGrid`, so
+  // the ledger on screen must be the student whose row was clicked. Keying it by
+  // student closes the window where a payment could be taken against the student
+  // the operator had just navigated away from.
+  const { data: ledger, isLoading: loadingLedger, mutate: reloadLedger } = useSWR<LedgerData>(
+    openStudentId ? `/fees/student-ledger/${openStudentId}?academicYearId=${activeYear.id}` : null
+  );
+
+  // Payment date defaults from the ledger's month, seeded once per student so a
+  // revalidation doesn't overwrite a date the operator has already adjusted.
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (seededFor.current === openStudentId) return;
+    if (!ledger) {
+      seededFor.current = null;
+      setPayMonths([]); setPayFixed([]);
+      return;
+    }
+    setPayMonths([]); setPayFixed([]);
+    setPaymentDate(`${activeYear.yearBS}/${String(nepaliMonths.indexOf(currentMonth) + 1).padStart(2, "0")}/15`);
+    seededFor.current = openStudentId;
+  }, [openStudentId, ledger, activeYear.yearBS, currentMonth]);
+
+  const handleGradeChange = (id: string) => {
+    setSelectedGrade(id); setSelectedSection(""); setOpenStudentId(null); setReceipt(null);
   };
 
-  const handleGradeChange = async (id: string) => {
-    setSelectedGrade(id); setSelectedSection(""); setOverview([]); setLedger(null); setReceipt(null); setSections([]);
-    await runSections(() => api.get<Grade[]>(`/grades?academicYearId=${activeYear.id}`), (all) => setSections(all.find((g) => g.id === id)?.sections || []), () => setSections([]));
+  const handleSectionChange = (sectionId: string) => {
+    setSelectedSection(sectionId); setOpenStudentId(null); setReceipt(null);
   };
 
-  const handleSectionChange = async (sectionId: string) => {
-    setSelectedSection(sectionId); setLedger(null); setReceipt(null); setOverview([]);
-    await fetchOverview(sectionId, currentMonth);
-  };
+  const handleMonthChange = (month: string) => setCurrentMonth(month);
 
-  const handleMonthChange = (month: string) => {
-    setCurrentMonth(month);
-    if (selectedSection) fetchOverview(selectedSection, month);
-  };
-
-  const handleOpenLedger = async (studentId: string) => {
+  const handleOpenLedger = (studentId: string) => {
     setReceipt(null);
-    // Collect posts `ledger.student.id` with amounts read off `ledger.monthGrid`. Leaving the
-    // previous student's ledger on screen while the next one loads is a window where the
-    // operator can take a payment against the student they just navigated away from.
-    setLedger(null); setPayMonths([]); setPayFixed([]);
-    setLoadingLedger(true);
-    await runLedger(
-      () => api.get<LedgerData>(`/fees/student-ledger/${studentId}?academicYearId=${activeYear.id}`),
-      (data) => {
-        setLedger(data); setPayMonths([]); setPayFixed([]);
-        setPaymentDate(`${activeYear.yearBS}/${String(nepaliMonths.indexOf(currentMonth) + 1).padStart(2, "0")}/15`);
-        setLoadingLedger(false);
-      },
-      () => { setLedger(null); setLoadingLedger(false); }
-    );
+    setOpenStudentId(studentId);
   };
 
-  const handleCloseLedger = () => { setLedger(null); setReceipt(null); };
+  const handleCloseLedger = () => { setOpenStudentId(null); setReceipt(null); };
 
   const togglePayMonth = (month: string) => {
     setPayMonths((prev) => prev.includes(month) ? prev.filter((m) => m !== month) : [...prev, month]);
@@ -386,14 +388,11 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
       toast.success(`Receipt: ${result.receiptNumber}`);
       const receiptData = await api.get<any>(`/fees/receipt/${result.receiptNumber}`);
       setReceipt(receiptData);
-      // Refresh ledger — through the same guard, so it loses to a ledger the operator
-      // has already opened for the next student rather than overwriting it.
-      await runLedger(
-        () => api.get<LedgerData>(`/fees/student-ledger/${ledger.student.id}?academicYearId=${activeYear.id}`),
-        (newLedger) => { setLedger(newLedger); setPayMonths([]); setPayFixed([]); }
-      );
-      // Refresh overview
-      if (selectedSection) await fetchOverview(selectedSection, currentMonth);
+      // Refresh the ledger and the section overview. Both are keyed, so a refresh
+      // can only ever land on the row it belongs to.
+      setPayMonths([]); setPayFixed([]);
+      await reloadLedger();
+      await reloadOverview();
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
 

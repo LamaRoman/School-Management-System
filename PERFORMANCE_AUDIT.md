@@ -34,10 +34,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
 | **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
 | **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | #29 |
+| **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #30 |
 
-**Suggested next:** finish the **F4b** tail — `admin/fees`, `teacher/my-class`, `teacher/observations` are the three pages still on the `useLatestRequest` stopgap; then **F8 / F7 / F9 / F10**.
+**Suggested next:** **F8** (code-split the print/export helpers — a copy-the-shape job now), then the small ones: **F7**, **F9**, **F10**.
 
-**Handover note (2026-08-16, end of session):** the F2/F4b/F5 work is on `perf/f2-f4b-f5-swr-adoption`, pushed, open as **#29** and awaiting review — it adds a `swr` dependency, so a reviewer pulling the branch needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint reports no new violations (the remaining 278 are the pre-existing `no-explicit-any` baseline). Verified in the running app as both a teacher and an admin — see the F2 entry for what was observed. Nothing else is mid-flight.
+**Handover note (2026-08-16, end of session):** two PRs are open and awaiting review, and **#30 is stacked on #29** — review and merge #29 first, or #30's diff will read as containing both. #29 (`perf/f2-f4b-f5-swr-adoption`) adopts SWR; #30 (`perf/f4b-tail`) finishes F4b and deletes `useLatestRequest`. #29 adds a `swr` dependency, so a reviewer pulling either branch needs `npm install` in `frontend/`. Backend suite **266/266** on both, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems vs a 278 baseline — the four added are `no-explicit-any` on `useSWR<any[]>` calls in `admin/fees`, matching that file's existing `useState<any[]>` style). Verified in the running app as both a teacher and an admin — see F2 for the caching evidence and F4b for the four re-tested races. Nothing else is mid-flight.
 
 > **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
@@ -73,7 +74,6 @@ entry says exactly what the choice is and what it costs.
 
 | | What | Notes |
 |---|---|---|
-| **F4b tail** | Three pages still on the `useLatestRequest` stopgap: `admin/fees`, `teacher/my-class`, `teacher/observations` | F2 and F5 are **done** (2026-08-16). These three drive several dependent fetches from one handler, so each is a page restructure; `hooks/useLatestRequest.ts` gets deleted with the last of them. |
 | **F8** | Code-split the print/export helpers | Now a copy-the-shape job — **W4** added the frontend's first dynamic import and it works. |
 | **F7** | No double-submit protection on the student form | Small. |
 | **F9** | Native `alert()` in 7 places instead of the toast system | Small, cosmetic. |
@@ -997,9 +997,9 @@ They mount with empty arrays and render an empty table while fetching. Perceptua
 
 ---
 
-### [~] F4. No stale-response guards — the roster can show the wrong class
+### [x] F4. No stale-response guards — the roster can show the wrong class
 
-> **F4a done 2026-08-14; F4b mostly done 2026-08-16 — three pages remain, listed in F4b.**
+> **CLOSED 2026-08-16.** F4a landed the "latest wins" stopgap on the six write pages (2026-08-14); F4b replaced it everywhere with URL-keyed SWR (#29, #30) and **deleted the stopgap hook**. Four races were re-tested against the new code with delayed responses — see the table under F4b.
 **Where:** app-wide. **140 `useEffect`s, zero `AbortController`s, zero request-sequence guards.** The only 6 cleanup returns are for timers and event listeners, none for fetches.
 
 Every data-fetching effect is exposed to the out-of-order response race: select section A, quickly select B, and A's slower response can land *after* B's and overwrite state. The UI then shows section B selected while displaying section A's students.
@@ -1053,11 +1053,30 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
   >
   > One caveat on method: an attempt to tag the superseded *attendance* response with a recognisable fake payload did not render as intended, for a reason not chased down. The attendance comparison rests on the state change actually observed (roster 10 → 0 on old code, unchanged with the guard), not on that marker. The observations comparison above needed no such trick and is the stronger evidence.
 
-- [~] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
+- [x] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
 
-  > **MOSTLY DONE 2026-08-16.** Every page listed under **F2** now fetches through URL-keyed SWR, so on those pages the race is closed *by construction*: a response for section A can only be written into section A's cache entry. Three of F4a's six pages (`admin/students`, `admin/teacher-assignments`, and — via the shared assignments hook — the teacher pages) no longer need the guard at all.
+  > **FINISHED 2026-08-16 (#30).** `hooks/useLatestRequest.ts` is **deleted** — nothing imports it. Every data-fetching page in the app is now URL-keyed, so the "latest wins" ticket counter has nothing left to guard.
   >
-  > **Still on `useLatestRequest`, deliberately:** `admin/fees`, `teacher/my-class`, `teacher/observations`. All three drive several dependent fetches from one imperative handler (`handleSectionSelect` loads students *and* exam types *and* categories), so converting them is a genuine restructure of the page rather than a swap of the fetch call, and all three are pages where F4a's note records carefully-tuned behaviour — `admin/fees`' two deliberately-separate guards, `teacher/observations`' false-empty-state gating — that is worth converting attentively rather than in bulk. The stopgap stays until then; `hooks/useLatestRequest.ts` should be deleted with the last of them.
+  > **The list of remaining pages in the note below was wrong, and the correction is the useful part.** It named `admin/fees`, `teacher/my-class` and `teacher/observations`. In fact `teacher/my-class` **never used the stopgap at all**, and `teacher/attendance` and `teacher/students` — two of F4a's original six — still did. The list was written from memory of F4a's page list rather than from `grep`; the actual set was `admin/fees`, `teacher/observations`, `teacher/attendance`, `teacher/students`. All four are migrated.
+  >
+  > **Four races re-tested against the new code by delaying the relevant response ~4s**, since "keyed by URL, so it cannot happen" is a claim about structure that is still worth watching happen:
+  >
+  > | page | scenario | result |
+  > |---|---|---|
+  > | `teacher/observations` | switch First Terminal → Final while the first is in flight | grid stays empty, then fills with Final's own (blank) grades — never First Terminal's `A+`, which is exactly what F4a recorded the old code doing |
+  > | `teacher/attendance` | step to the previous day mid-load | roster clears to 0, Save stays disabled, repopulates at 10 when that day's data lands |
+  > | `admin/fees` → Structure | switch grade mid-load | amount fields empty for the whole window, then show that grade's own prices (`5000,300,300,300,1500` → `5000,500,500,500,2000`), never the outgoing grade's |
+  > | `admin/fees` → Collection | open a second student's ledger after viewing another | stays on the class list while loading; the previously-viewed ledger never reappears, so there is no window in which Collect could post against the wrong student |
+  >
+  > **A hazard the SWR migration introduces, and the fix for it.** Four of these pages hold *editable* state seeded from a fetch — observation grades, attendance marks, fee-structure amounts, grading-policy weightages. SWR hands back a fresh object on every background revalidation, so seeding from `data` directly means a revalidation (on reconnect, or after any `mutate`) **silently discards whatever the operator has typed but not yet saved**. Each of these now seeds once per *key*, tracked in a ref, rather than on every change of the data. Verified on `teacher/observations`: with a grade edited to `B+` and unsaved, firing the reconnect event triggers a real refetch of that key (confirmed in the network log) and the `B+` survives.
+  >
+  > **This applies to `admin/grading-policy`, which shipped in #29 with the naive version** — fixed here too. It is the reason to look at every page that seeds editable state from a fetch, not just the ones being converted.
+  >
+  > **Two fetches disappeared rather than being converted.** `admin/fees`' Individual Fees and Scholarships tabs each refetched *every grade in the year* on grade-change purely to read that grade's section list — which the already-loaded grade list carries. Both now read it from `useGrades()`.
+
+  > **Superseded note (2026-08-16, kept for the correction above):** Every page listed under **F2** now fetches through URL-keyed SWR, so on those pages the race is closed *by construction*: a response for section A can only be written into section A's cache entry. Three of F4a's six pages (`admin/students`, `admin/teacher-assignments`, and — via the shared assignments hook — the teacher pages) no longer need the guard at all.
+  >
+  > ~~**Still on `useLatestRequest`, deliberately:** `admin/fees`, `teacher/my-class`, `teacher/observations`.~~ Wrong on two counts — see the correction above. The reasoning still held for the pages that *were* left: each drives several dependent fetches from one imperative handler, so converting them is a genuine restructure rather than a swap of the fetch call, and each carries carefully-tuned behaviour from F4a — `admin/fees`' two deliberately-separate guards, `teacher/observations`' false-empty-state gating — worth converting attentively rather than in bulk.
   >
   > **A second stale-data window closed on the way, which no finding had named.** `admin/grading-policy` fetched its weightages in a bare effect keyed on the selected grade, and the weightages are *editable local state* — so while a new grade's policy was in flight the **outgoing grade's numbers stayed in the inputs**, and Save posts to the newly-selected grade. That is the F4 write hazard exactly, on a page F4a's list did not include. Reproduced and fixed: with the `/grading-policy` response delayed 4s, switching grade now empties the inputs (`0,0,0`) for the whole loading window and fills in only when that grade's own policy lands (`20,30,50`).
   >
