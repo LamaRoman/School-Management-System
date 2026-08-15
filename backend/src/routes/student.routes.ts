@@ -24,7 +24,17 @@ const studentSchema = z.object({
   guardianName: z.string().optional(),
   guardianPhone: z.string().optional(),
   address: z.string().optional(),
-  photo: z.string().optional(),
+  // S8 — the 500KB check existed only in the browser
+  // (`admin/students/page.tsx`), so the effective server-side cap was
+  // `express.json({ limit: "5mb" })` and a crafted request could store a ~5MB
+  // string per student. Base64 inflates by ~33%, so this ceiling corresponds to
+  // roughly the same 500KB image the UI allows, with headroom for the data-URI
+  // prefix and encoder differences.
+  //
+  // A ceiling on the column, not a replacement for **P1b** — photos belong in
+  // object storage via `upload.service.ts`, and this only stops the worst case
+  // until they get there.
+  photo: z.string().max(700_000, "Photo is too large — please use an image under 500KB").optional(),
   sectionId: z.string().min(1),
   isActive: z.boolean().default(true),
 });

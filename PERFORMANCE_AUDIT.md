@@ -29,9 +29,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | #24 |
 | **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | #25 |
 | **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | #26 |
-| **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | *this branch* |
+| **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
+| **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | *this branch* |
 
-**Suggested next:** **the W series is complete.** What's left is smaller and mostly optional: **S5–S8** (remaining security items, none destructive — S6 is the biggest and splits into five sub-items), **F2/F4b/F5** (the frontend caching and waterfall work, best done together by adopting SWR), **F8** (now trivially unblocked — W4 proved the dynamic-import pattern), and **P1b–d** (student-photo storage redesign). Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
+**Suggested next:** **F2 / F4b / F5** — the frontend waterfall and caching work, best done as one move by adopting SWR, which subsumes all three and retires the `useLatestRequest` stopgap. **F8** is now a copy-the-shape job (W4 proved the dynamic-import pattern). **P1b–d** is the student-photo storage redesign, and **S6b** is its natural companion since both are about moving identifiers and blobs to where they belong.
+
+> **Everything still open is either frontend polish, a storage redesign, or a decision.** The decisions waiting on the owner: **S6b** (public URLs keyed on `School.code`, which changes receipt numbering mid-series for any school already taking payments), **S7** (whether TEACHER keeps school-wide report access — W3b settled it for grade sheets and observations only), **W3e**, **R8a** and **P4b**. Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
 
 > **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
 
@@ -213,7 +216,11 @@ An admin who obtains a foreign `subjectId` gets that school's subject name back 
 
 ---
 
-### [ ] S5. `examTypeId` unscoped in PDF report builders
+### [x] S5. `examTypeId` unscoped in PDF report builders
+
+> **FIXED 2026-08-15.** Both lookups — the single-student builder and the class batch loader — now resolve the exam type through `academicYear: { schoolId }` instead of by bare id.
+>
+> **Making the test prove anything took a second pass.** The obvious assertion ("a foreign exam type 404s") **passes against the unfixed code too**, exactly as this entry predicts: the marks query is scoped by student, comes back empty, and the route 404s incidentally. The test now asserts the refusal is *not* the "No marks found for this student and exam" message — that is the difference between being refused at the lookup and being saved by a coincidence, and it is precisely the "one refactor away from mattering" this entry describes. Verified to fail against the old code.
 **Where:** `backend/src/routes/pdf.routes.ts:74`
 
 `examTypeId` goes from the URL straight into `findUniqueOrThrow` with no school scoping, though `verifyExamType` exists and is used elsewhere.
@@ -222,7 +229,9 @@ An admin who obtains a foreign `subjectId` gets that school's subject name back 
 
 ---
 
-### [ ] S6. Public endpoints serve any school by ID, including deactivated ones
+### [~] S6. Public endpoints serve any school by ID, including deactivated ones
+
+> **S6a, S6c, S6d, S6e and S6b-i fixed 2026-08-15. S6b — the identifier change — deliberately left open; see its entry for why it is a decision rather than a task.**
 **Where:** `backend/src/routes/publicGallery.routes.ts:7`, `publicCalendar.routes.ts:13`
 
 Neither checks `School.isActive`, nor that the school has registered a `websiteUrl` at all.
@@ -233,9 +242,13 @@ The exposed data is genuinely low-sensitivity (gallery photos, EVENT/HOLIDAY ent
 
 This is three separate problems wearing one coat:
 
-- [ ] **S6a. Gating.** `School` has both `galleryPhotos` and `calendarEvents` relations, so this is a where-clause addition, not an extra query — filter on `school: { isActive: true }`. Also require `websiteUrl != null`: it makes "has a public site" the explicit precondition for being publicly served, which is the actual business rule, and stops a school that never set up a website from quietly serving content.
+- [x] **S6a. Gating.** `School` has both `galleryPhotos` and `calendarEvents` relations, so this is a where-clause addition, not an extra query — filter on `school: { isActive: true }`. Also require `websiteUrl != null`: it makes "has a public site" the explicit precondition for being publicly served, which is the actual business rule, and stops a school that never set up a website from quietly serving content.
 
-- [ ] **S6b. The identifier — the more interesting one.** Public URLs currently carry the raw cuid `schoolId`: an internal primary key that ends up embedded in the school's public website HTML where anyone can read it. `School.code` already exists and is `@unique` (`schema.prisma:47`). Keying the public routes on `code` instead stops internal IDs leaking into public pages entirely. Catch: `code` is nullable, so it would need to become required for any school with a public site — worth doing as part of the same change rather than later.
+  > **DONE 2026-08-15** as `publicSchoolFilter`, one exported constant used by the gallery query, the calendar route and the CORS allowlist loader, so the three cannot drift. Gallery nests it under the relation (one query, as this note says); the calendar checks once up front because its master-calendar half has no school relation to filter on. Both return `[]` rather than 404 — a suspended school's site asking for its own gallery should render empty, not error.
+  >
+  > **Note for whoever tests this on dev:** both dev schools have `websiteUrl: null` and there are **zero** gallery photos and calendar events in the database, so a live probe cannot tell "correctly gated" from "empty anyway". The suite covers it properly — a suspended school *with* content, plus an assertion that the rows still exist, so it is visibly a serving decision and not a deletion.
+
+- [ ] **S6b. The identifier — the more interesting one.** ← *a decision, not a task: it changes receipt numbering mid-series. Left for the owner (2026-08-15).* Public URLs currently carry the raw cuid `schoolId`: an internal primary key that ends up embedded in the school's public website HTML where anyone can read it. `School.code` already exists and is `@unique` (`schema.prisma:47`). Keying the public routes on `code` instead stops internal IDs leaking into public pages entirely. Catch: `code` is nullable, so it would need to become required for any school with a public site — worth doing as part of the same change rather than later.
 
   > **Investigated 2026-08-14 — decided to leave as-is until S6b is actually built.** Checked how a school can end up with `code: null`, because the dev DB's main school has one:
   >
@@ -247,13 +260,17 @@ This is three separate problems wearing one coat:
   >
   > - [ ] **S6b-i. Minor, unrelated to the migration:** the School Code input on the create-school form (`super-admin/schools/page.tsx:71`) is labelled `*` but has no `required` attribute, unlike School Name and Admin Email beside it. Leaving it blank surfaces a raw zod `String must contain at least 2 character(s)` instead of "School Code is required." Two-character fix, not worth its own PR — fold into whatever touches that form next.
 
-- [ ] **S6c. The comment.** `publicOrigins.service.ts` is honest about returning `true` for no-Origin requests, but the surrounding code reads as though CORS were the gate. Whatever you implement, make the file say plainly that CORS here is browser convenience and the `isActive` filter is the actual boundary — otherwise the next person to touch it makes the same assumption.
+- [x] **S6c. The comment.** `publicOrigins.service.ts` is honest about returning `true` for no-Origin requests, but the surrounding code reads as though CORS were the gate. Whatever you implement, make the file say plainly that CORS here is browser convenience and the `isActive` filter is the actual boundary — otherwise the next person to touch it makes the same assumption.
 
 Two more worth doing in the same pass, both hitting the cost goal:
 
-- [ ] **S6d. `/public/*` can rate-limit the school's own website.** `app.use("/", apiLimiter)` at 500 req / 15 min **per IP** applies to `/public/*` too. If a school's site is server-rendered, every visitor's request arrives from a single server IP — **the site can rate-limit itself** under quite modest traffic, presenting as an intermittently broken gallery. `/public/*` needs its own limiter with different characteristics.
+- [x] **S6d. `/public/*` can rate-limit the school's own website.** `app.use("/", apiLimiter)` at 500 req / 15 min **per IP** applies to `/public/*` too. If a school's site is server-rendered, every visitor's request arrives from a single server IP — **the site can rate-limit itself** under quite modest traffic, presenting as an intermittently broken gallery. `/public/*` needs its own limiter with different characteristics.
 
-- [ ] **S6e. Add `Cache-Control` to `/public/*`.** These responses are public and change rarely, and `websiteRevalidate.service.ts` already gives you a revalidation webhook to invalidate on change. Caching them at the school's site and any CDN cuts DB load and Railway egress on what is likely your highest-volume unauthenticated traffic.
+  > **DONE 2026-08-15** — a 5,000 / 15 min limiter on `/public`.
+  >
+  > **Mounting it was not sufficient on its own**, which is the part worth remembering: `apiLimiter` is mounted on `"/"` and runs *after* the `/public` mount, so it would have re-imposed the 500 cap the new limiter exists to lift. It needed a `skip` on `apiLimiter` as well. Confirmed live by reading the `RateLimit-Limit` header: **5000** on `/public/*`, **500** on everything else.
+
+- [x] **S6e. Add `Cache-Control` to `/public/*`.** These responses are public and change rarely, and `websiteRevalidate.service.ts` already gives you a revalidation webhook to invalidate on change. Caching them at the school's site and any CDN cuts DB load and Railway egress on what is likely your highest-volume unauthenticated traffic.
 
 ---
 
@@ -268,7 +285,12 @@ This may well be intended for a small school. Flagging so it's a decision rather
 
 ---
 
-### [ ] S8. No server-side size limit on student photos
+### [x] S8. No server-side size limit on student photos
+
+> **FIXED 2026-08-15.** `photo: z.string().max(700_000)`. Base64 inflates by ~33%, so that ceiling corresponds to roughly the same 500KB image the UI already refuses, with headroom for the data-URI prefix and encoder differences. `POST /students/bulk` reuses `studentSchema`, so it is covered by the same change.
+>
+> A ceiling on the column, **not** a substitute for **P1b** — photos belong in object storage via `upload.service.ts`, and this only bounds the worst case until they get there.
+
 **Where:** `backend/src/routes/student.routes.ts:27` — `photo: z.string().optional()`
 
 No `.max()`. The 500KB check exists **only in the browser** (`frontend/src/app/admin/students/page.tsx:165`). The effective server-side cap is `express.json({ limit: "5mb" })`, so a crafted request stores a ~5MB string per student. See **P1** for the storage-design problem this sits on top of.

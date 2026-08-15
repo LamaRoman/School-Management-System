@@ -68,7 +68,8 @@ export default function SchoolsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input required placeholder="School Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
             <input placeholder="Name (Nepali)" value={form.nameNp} onChange={(e) => setForm({ ...form, nameNp: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
-            <input placeholder="School Code (e.g. GHS, SPS) — used in receipt numbers *" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} maxLength={6} className="border rounded-lg px-3 py-2 text-sm uppercase" />
+            {/* S6b-i — labelled * like School Name and Admin Email beside it, but had no `required`, so leaving it blank surfaced a raw zod "String must contain at least 2 character(s)" instead of the field saying it is needed. */}
+            <input required minLength={2} placeholder="School Code (e.g. GHS, SPS) — used in receipt numbers *" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} maxLength={6} className="border rounded-lg px-3 py-2 text-sm uppercase" />
             <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
             <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
             <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
