@@ -1,6 +1,6 @@
 # Audit — Zentara Shikshya
 
-Assessment date: 2026-08-14 · Last worked: 2026-08-14 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
+Assessment date: 2026-08-14 · Last worked: 2026-08-15 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do / not applicable
 
 > Findings are grouped by area and prefixed: **S** = security/tenancy, **R** = report correctness, **W** = workflow gaps (new capability, not a bug), **P** = performance, **F** = frontend, **X** = robustness/cost.
@@ -22,8 +22,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **X2, F3** | Health check ignored the DB; 3 pages had no loading state | #11 |
 | **F6** | No route error/loading boundaries — any thrown error was a blank white screen | #13 |
 | **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | *unmerged* |
+| **R7 + R7a/R7b** | Three rank implementations that disagreed; optional subjects ignored by every results calculation | #18, #19, #20 |
+| **P3, P6** | Bulk report cards were O(n²); Puppeteer had no concurrency cap | #21 |
+| **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | *this branch* |
 
-**Suggested next:** **P4 (+P4a)** — R7, P3 and P6 are done, so the PDF path is off the critical list and attendance is the remaining hot one. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
+**Suggested next:** **P5** — with R7, P3, P6 and P4 done, every hot path except the admin dashboard is off the critical list, and P5 is the first screen an admin sees after login. **R8** is a correctness bug in the same handler, so do them together. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -602,7 +605,38 @@ Worse, the rank block (`:200–231`) loads every student and every mark in the s
 
 ---
 
-### [ ] P4. Daily attendance totals degrade through the school year
+### [x] P4. Daily attendance totals degrade through the school year
+
+> **FIXED 2026-08-15, with P4a.** Both halves of the save are now single set-based statements inside one transaction: an `INSERT … ON CONFLICT` for the day's rows, and an `INSERT … SELECT … GROUP BY … ON CONFLICT` that recomputes the section's year-to-date totals entirely in Postgres.
+>
+> **Measured through the real route** (query events, `NODE_ENV=test`):
+>
+> | class size | queries before | queries after |
+> |---|---|---|
+> | 10 | 39 | 8 |
+> | 40 | 127 | 8 |
+>
+> **Query count was never the whole story, and pinning only that would have missed the actual finding.** The old recompute issued a *fixed* two queries per student, so its cost looked flat as the year went on — the growth was in rows, not queries: each of those queries loaded every daily row that student had for the whole year and counted them in JavaScript. A first version of the test asserted "query count doesn't change as history accumulates" and **passed against the old code**. The test that discriminates asserts there is no `SELECT` against `daily_attendances` in the request at all, which is what "counting happens in Postgres" actually means.
+>
+> **Confirmed live on the dev database**, where I-A already has 219 days of history — the Chaitra case this finding describes, not a synthetic one. Marking two students absent through the teacher portal moved every student 219 → 220 days with the two absences landing on the right rows; re-marking the same day as present corrected the totals rather than double-counting (220 days unchanged, present 192 → 193). Same request, timed five times against each version: **~30ms before, ~16ms after** — and that is on a local Postgres with no network latency, so it understates the gain on Railway, where the difference is 127 round trips versus 8.
+>
+> **Two behaviours deliberately preserved**, since neither is what this finding is about: an active student with nothing marked still gets a zeroed totals row (the `LEFT JOIN`), and the recompute still covers only students currently active in the section (**P4b**, still open).
+>
+> **The ids in these two tables are now mixed cuid and uuid — checked, and deliberately left that way.** A set-based `INSERT` never gets to run Prisma's client-side `cuid()`, so both statements generate ids with `gen_random_uuid()::text`; rows written from here on carry uuids while older rows keep cuids. Before accepting that, I checked the one way it could actually bite — something depending on id *shape* or *ordering*:
+>
+> - No `orderBy: { id: … }` anywhere in `backend/` or `frontend/`, so nothing relies on cuid's rough insertion-order sortability, which is the property uuid v4 loses.
+> - No cursor pagination anywhere.
+> - The three `id.slice(-6)` uses are on `Student.id` (generated login email, `student.routes.ts:115` and `admission.routes.ts:267`) and `School.id` (receipt prefix, `fee.routes.ts:648`). Neither table is touched by these inserts.
+>
+> Storage cost is ~11 extra bytes per row on `daily_attendances`, the highest-volume table in the app — about 630KB a year at current volumes.
+>
+> **Don't "fix" this by adding a cuid package.** None is installed, and `@paralleldrive/cuid2` generates a *different* format from the `cuid()` v1 Prisma uses, so it would leave three formats instead of two — and existing rows keep their cuids either way. The wart is cosmetic; the available fixes are worse than the wart.
+>
+> Pinned by 9 tests in `src/test/__tests__/attendanceTotals.test.ts`; 3 verified to fail against the old code (the transaction boundary, the flat cost across class sizes, and the no-read assertion). Suite 191 → **200**.
+>
+> **`utils/prisma.ts` gained event-based query logging under `NODE_ENV=test`** to make those cost assertions possible. Production and development behaviour are unchanged; only the `test` branch differs, and nothing subscribes unless a test asks, so the suite stays quiet. There is no way to do this from outside — a second client or a `$extends` wrapper is a *different* client, and the routes use the singleton, so it would measure nothing.
+>
+> **If you write another query-count test, reuse the shape in `attendanceTotals.test.ts`, don't copy the obvious one.** Prisma exposes `$on` but no `$off`, so subscribing per measurement leaks a listener each time and trips Node's max-listeners warning around the tenth — with no hint as to why. That file installs one listener for the whole file and points it at whichever buffer is open. (The emitter *is* a Node `EventEmitter` reachable at `client._engineConfig.logEmitter`, so `removeListener` is technically available — it's a private path and not worth taking.)
 **Where:** `backend/src/routes/dailyAttendance.routes.ts:119–135`
 
 ```
@@ -621,7 +655,10 @@ This is the highest-frequency write path in the app — every teacher, every sec
 
 **Fix direction:** single `groupBy` on `dailyAttendance` (by `studentId` + `status`), then batch the upserts. 2 queries instead of 80, constant cost, counting done in Postgres.
 
-- [ ] **P4a.** Move the recompute **inside** the `$transaction` at `:86`. Currently outside — a partial failure leaves attendance saved but totals stale and silently wrong on report cards.
+- [x] **P4a.** Move the recompute **inside** the `$transaction` at `:86`. Currently outside — a partial failure leaves attendance saved but totals stale and silently wrong on report cards.
+
+  > **FIXED 2026-08-15** in the same change. Pinned by asserting both `INSERT`s fall between the same `BEGIN`/`COMMIT` — a test that fails against the old code, where the totals rewrite is outside the transaction entirely.
+
 - [ ] **P4b.** Decide intended behaviour for transferred/inactive students — the recompute only covers students currently `isActive` in the section, so a student who leaves keeps whatever totals they had at that moment.
 
 ---
