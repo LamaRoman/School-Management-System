@@ -11,6 +11,11 @@ import {
   hasPassed,
 } from "../services/grading.service";
 import { computeSectionRanks } from "../services/rank.service";
+import {
+  isSectionPublished,
+  pendingTermsForAnnual,
+  isGatedRole,
+} from "../services/resultStatus.service";
 
 const router = Router();
 
@@ -142,6 +147,21 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   const examType = await prisma.examType.findUniqueOrThrow({
     where: { id: examTypeId },
   });
+
+  // W1e — a family sees an explicit pending state, not a live number computed
+  // from half-entered marks and not a bare error. 200 with a pending payload
+  // rather than 4xx: "not out yet" is a normal state of the world, and the
+  // portal should be able to say so without treating it as a failure.
+  if (isGatedRole(req.user!.role) && !(await isSectionPublished(student.sectionId, examTypeId))) {
+    return res.json({
+      data: {
+        pending: true,
+        examName: examType.name,
+        studentName: student.name,
+        message: `${examType.name} results have not been published yet.`,
+      },
+    });
+  }
 
   // Fetch the academic year to get yearBS label
   const academicYear = await prisma.academicYear.findUniqueOrThrow({
@@ -276,6 +296,26 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
   });
 
   const gradeId = student.section.grade.id;
+
+  // The annual result is the weighted combination of the terms, so it is
+  // gated by them rather than published separately: it becomes visible when
+  // every exam type carrying weight in this grade's policy is out. Naming the
+  // terms still pending is more use to a parent than "not yet".
+  if (isGatedRole(req.user!.role)) {
+    const pendingTerms = await pendingTermsForAnnual(student.sectionId, gradeId);
+    if (pendingTerms.length > 0) {
+      return res.json({
+        data: {
+          pending: true,
+          pendingTerms,
+          studentName: student.name,
+          message:
+            `The final result is published once every term is out. ` +
+            `Still pending: ${pendingTerms.join(", ")}.`,
+        },
+      });
+    }
+  }
 
   // Fetch the academic year to get yearBS label
   const academicYear = await prisma.academicYear.findUniqueOrThrow({

@@ -26,9 +26,12 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **P3, P6** | Bulk report cards were O(n²); Puppeteer had no concurrency cap | #21 |
 | **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | #22 |
 | **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | #23 |
-| **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | *this branch* |
+| **S4, S4a, S4b** | Four endpoints took a `subjectId` on trust; exam routines could be edited across schools; table-driven FK isolation test | #24 |
+| **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | *this branch* |
 
-**Suggested next:** **W1** — the performance findings and the tenancy/invariant class are both closed, so the biggest remaining item is a product gap rather than a defect: parents and students currently see live, half-entered results with nothing marking them as provisional. It is fully designed (W1a–g) and unbuilt. If you'd rather keep to smaller pieces first, **S5–S8** are the remaining security items (none destructive), **R8a** is an open question worth deciding, and **P1b–d** is the student-photo storage redesign.
+**Suggested next:** **W2** (auto-assign fees on enrolment) and **W3** (admin-portal declutter) — both fully designed, and **W3e** is a precondition for W2 actually holding for every student rather than most. **W4** (grade-sheet Excel export) is the smallest of the W items and is best done after W3b so it isn't built twice. Otherwise: **S5–S8** are the remaining security items (none destructive), **R8a** and **P4b** are open questions worth deciding, and **P1b–d** is the student-photo storage redesign.
+
+> **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
 
 > **Bookkeeping fixed 2026-08-15:** R3 and R6 were closed by R7 on 2026-08-14 but their status boxes still read `[~]` and `[ ]`, so the list overstated what was outstanding. Both now marked done with a pointer to R7.
 
@@ -457,26 +460,43 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 > These aren't defects in existing code — they're capabilities the system doesn't have yet. Grouped separately from R/S/P because "fix" isn't the right verb; "build" is. Designed 2026-08-14, not yet built.
 
-### [ ] W1. No results-publish workflow — parents/students see live, possibly-wrong numbers the moment marks entry starts
+### [x] W1. No results-publish workflow — parents/students see live, possibly-wrong numbers the moment marks entry starts
+
+> **BUILT 2026-08-15.** New `ExamResultStatus` model, one row per (exam type × section) — the unit a class teacher owns — moving `DRAFT → READY → PUBLISHED`. Only `PUBLISHED` is visible to `PARENT` and `STUDENT`; teachers and admins are untouched (**W1g**).
+>
+> **The gate covers the PDF too.** `pdf.routes.ts` allows `STUDENT` on `/pdf/term` and `/pdf/final`, so gating only the portal would have left the pending state one URL away from useless. Same roles, same condition, pinned by its own test.
+>
+> **Two decisions taken with the owner rather than assumed:**
+>
+> 1. **The annual result is derived, not separately published.** It is the weighted combination of the terms, so it appears exactly when every exam type carrying weight in the grade's policy is published for that section — no extra state, no extra button, and it cannot get stuck unpublished by an oversight. The portal names which terms are still pending rather than saying "not yet". A term weighted 0 holds nothing back.
+> 2. **Existing exams were backfilled as `PUBLISHED`.** Without that, the migration would have taken away, on deploy, every result a family could see the day before, until an admin went and published each one. Only pairs that already have a mark are seeded — a pair with no marks 404s in the portal today anyway, so leaving it absent (= DRAFT) changes nothing observable and starts it in the right state. `published_by_id`/`published_at` are deliberately left NULL: nobody published these, and recording a fictional publisher would be worse than recording none.
+>
+> **Verified end to end on the dev database**, which had 26 (exam × section) pairs backfilled: a real student saw their First Terminal report (backfill preserved access), an admin unpublished Grade I through the UI, the student's portal switched to the pending panel and their PDF 403'd while the admin's view was unchanged, and republishing restored both. Grade I's *Final* stayed visible throughout — the gate is per exam, not global. Dev left exactly as found, all 79 rows PUBLISHED.
+>
+> **The live check also demonstrated the problem this exists to solve, on real data:** Grade I-A's Final is published and visible to families, and the new completeness view shows it is **0 of 7 subjects fully entered, 42 marks missing**. Every family looking at that report is reading a percentage computed from a part-entered exam. That is the pre-existing state, not something this change caused — it is what **W1e** was describing.
+>
+> Pinned by 22 tests in `src/test/__tests__/resultsPublish.test.ts`. Suite 232 → **254**.
+>
+> **One correction worth recording:** the first version of the "pending" test asserted `percentage` and `gpa` were absent from the payload. Those field names do not exist — the real ones are `overallPercentage` and `overallGpa` — so both assertions passed against *any* response and proved nothing. Caught only because the same wrong name failed in the published-state test, where the value was expected to be present.
 **Where:** confirmed by code inspection — `ExamType` has no `isPublished`/`isLocked`/`isFinalized` field (only `Notice.isPublished` exists, and that's unrelated). The only gate on `report.routes.ts:166` (the endpoint the parent/student portal calls) is `if (marks.length === 0) return null` — the instant a single subject has one mark saved, a computed percentage/GPA/rank is returned as if final.
 
 **Why this matters:** marks are entered subject-by-subject over days, so "partially entered" isn't an edge case — it's the normal state of every exam for however long entry takes. A parent can open the portal on day one of entry and see a live, silently-shifting number that has nothing to do with the eventual result, with nothing on screen distinguishing it from a finished one. Unlike a printed PDF (a deliberate act an admin chooses to take, and would likely notice a blank subject before handing out), the portal has no human in the loop at all — it's the one surface a wrong number can reach a family completely unsupervised.
 
 **Design agreed with the school owner, not yet built:**
 
-- [ ] **W1a. Class teacher marks a section's exam "complete."** Uses the `isClassTeacher` role that already exists on `TeacherAssignment` — no new permission concept needed. This is a deliberate human action, not something inferred from whether every mark row happens to exist (a heuristic that breaks on `Subject.isOptional` and on students who transferred in mid-year and legitimately have no earlier mark).
+- [x] **W1a. Class teacher marks a section's exam "complete."** Uses the `isClassTeacher` role that already exists on `TeacherAssignment` — no new permission concept needed. This is a deliberate human action, not something inferred from whether every mark row happens to exist (a heuristic that breaks on `Subject.isOptional` and on students who transferred in mid-year and legitimately have no earlier mark).
 
-- [ ] **W1b. The completeness check is a soft gate, not a hard block and not silence.** Neither extreme is right: silence reintroduces exactly the failure mode this exists to prevent (a forgotten cell in a 30-student × 8-subject grid going unnoticed); a hard block breaks on legitimate gaps (optional subjects, mid-year transfers) and eventually grows an override anyway, which is more complexity than just doing the soft version first. Instead: when the class teacher goes to mark complete, the system names exactly what's missing — *"3 students have no mark for Science"*, *"Ramesh Shrestha — no mark for Health & Population"* — and lets them proceed anyway if the gap is legitimate. Same pattern the codebase already uses elsewhere (`student.routes.ts`'s membership checks report specifically what failed rather than a generic rejection). Ideally surfaced as a running indicator *during* entry ("6 of 8 subjects entered"), not only as a warning at the moment of clicking complete.
+- [x] **W1b. The completeness check is a soft gate, not a hard block and not silence.** Neither extreme is right: silence reintroduces exactly the failure mode this exists to prevent (a forgotten cell in a 30-student × 8-subject grid going unnoticed); a hard block breaks on legitimate gaps (optional subjects, mid-year transfers) and eventually grows an override anyway, which is more complexity than just doing the soft version first. Instead: when the class teacher goes to mark complete, the system names exactly what's missing — *"3 students have no mark for Science"*, *"Ramesh Shrestha — no mark for Health & Population"* — and lets them proceed anyway if the gap is legitimate. Same pattern the codebase already uses elsewhere (`student.routes.ts`'s membership checks report specifically what failed rather than a generic rejection). Ideally surfaced as a running indicator *during* entry ("6 of 8 subjects entered"), not only as a warning at the moment of clicking complete.
 
-- [ ] **W1c. Admin dashboard shows completion status across the whole school** — which grades/sections have been marked complete by their class teacher and which haven't, at a glance, rather than the admin having to check each one individually.
+- [x] **W1c. Admin dashboard shows completion status across the whole school** — which grades/sections have been marked complete by their class teacher and which haven't, at a glance, rather than the admin having to check each one individually.
 
-- [ ] **W1d. Publishing is a separate, deliberate admin action from "marked complete."** Two modes: publish everything at once (once every grade is ready), or publish class-wise/grade-wise so a ready grade doesn't have to wait on a slower one.
+- [x] **W1d. Publishing is a separate, deliberate admin action from "marked complete."** Two modes: publish everything at once (once every grade is ready), or publish class-wise/grade-wise so a ready grade doesn't have to wait on a slower one.
 
-- [ ] **W1e. Before publish, parents/students see an explicit "Pending" state** — not a computed-but-wrong number, not a blank error.
+- [x] **W1e. Before publish, parents/students see an explicit "Pending" state** — not a computed-but-wrong number, not a blank error.
 
-- [ ] **W1f. Publishing triggers a notice.** `Notice` already has `isPublished`, `targetAudience`, and a `gradeId` field — this is close to built for exactly this ("First Terminal results are out"), just not wired to exam completion yet.
+- [x] **W1f. Publishing triggers a notice.** `Notice` already has `isPublished`, `targetAudience`, and a `gradeId` field — this is close to built for exactly this ("First Terminal results are out"), just not wired to exam completion yet.
 
-- [ ] **W1g. Teachers are unaffected** — they already have full report visibility today regardless of any of this (see **S7**), and that stays as-is; the gate is specifically for `PARENT`/`STUDENT` roles.
+- [x] **W1g. Teachers are unaffected** — they already have full report visibility today regardless of any of this (see **S7**), and that stays as-is; the gate is specifically for `PARENT`/`STUDENT` roles.
 
 **Modeling note:** this needs a status concept distinct from two fields that already exist and mean something else — `ExamType.isFinal` is about weighting in the annual result, not publish status, and `Notice.isPublished` is about the announcement, not the underlying result data. Likely a new per-(examType, section) status (something like DRAFT → READY → PUBLISHED), tracking who marked it complete and when, separate from whether it's been published — not designed in detail yet.
 

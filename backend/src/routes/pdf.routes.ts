@@ -4,6 +4,11 @@ import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyStudent, verifySection } from "../utils/schoolScope";
 import {
+  isSectionPublished,
+  pendingTermsForAnnual,
+  isGatedRole,
+} from "../services/resultStatus.service";
+import {
   getGradeFromPercentage,
   calculatePercentage,
   calculateWeightedPercentage,
@@ -703,6 +708,19 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
     if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
   }
 
+  // The portal's pending state (W1e) would be worth nothing if the PDF for the
+  // same exam were one URL away. Gated for the same roles and on the same
+  // condition as report.routes.ts.
+  if (isGatedRole(req.user!.role)) {
+    const student = await prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      select: { sectionId: true },
+    });
+    if (!(await isSectionPublished(student.sectionId, examTypeId))) {
+      throw new AppError("These results have not been published yet", 403);
+    }
+  }
+
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const reportData = await buildTermReportData(studentId, examTypeId, schoolId);
@@ -733,6 +751,20 @@ router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN",
   if (req.user!.role === "STUDENT") {
     const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { studentId: true } });
     if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
+  }
+
+  if (isGatedRole(req.user!.role)) {
+    const student = await prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      select: { sectionId: true, section: { select: { gradeId: true } } },
+    });
+    const pendingTerms = await pendingTermsForAnnual(student.sectionId, student.section.gradeId);
+    if (pendingTerms.length > 0) {
+      throw new AppError(
+        `The final result is published once every term is out. Still pending: ${pendingTerms.join(", ")}.`,
+        403
+      );
+    }
   }
 
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";

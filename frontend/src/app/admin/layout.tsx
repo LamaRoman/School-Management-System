@@ -28,6 +28,7 @@ import {
   Eye,
   Award,
   Image,
+  Send,
 } from "lucide-react";
 
 interface NavItem { href: string; label: string; icon: any }
@@ -61,6 +62,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Results",
     items: [
+      { href: "/admin/results", label: "Publish Results", icon: Send },
       { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
       { href: "/admin/observations", label: "Observations", icon: Eye },
       { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },

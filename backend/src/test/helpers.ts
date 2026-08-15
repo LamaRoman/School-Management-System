@@ -80,6 +80,7 @@ export async function cleanDatabase(): Promise<void> {
     prisma.admission.deleteMany(),
     prisma.notice.deleteMany(),
     prisma.gradingPolicy.deleteMany(),
+    prisma.examResultStatus.deleteMany(),
     prisma.teacherAssignment.deleteMany(),
 
     // Core entities (must come after their dependents)
