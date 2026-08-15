@@ -10,6 +10,7 @@ import {
   calculateOverallGpa,
 } from "../services/grading.service";
 import { computeSectionRanks } from "../services/rank.service";
+import { assertSectionOwnership } from "../services/resultStatus.service";
 
 const router = Router();
 
@@ -21,6 +22,9 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     throw new AppError("sectionId, examTypeId, and academicYearId are required");
   }
   await verifySection(String(sectionId), schoolId);
+  // W3b — a section's mark sheet belongs to its class teacher, not to every
+  // teacher in the building.
+  await assertSectionOwnership(req.user!.userId, req.user!.role, String(sectionId), "view this mark sheet");
 
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: String(sectionId) },
@@ -165,6 +169,9 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     throw new AppError("sectionId and academicYearId are required");
   }
   await verifySection(String(sectionId), schoolId);
+  // W3b — a section's mark sheet belongs to its class teacher, not to every
+  // teacher in the building.
+  await assertSectionOwnership(req.user!.userId, req.user!.role, String(sectionId), "view this mark sheet");
 
   const section = await prisma.section.findUniqueOrThrow({
     where: { id: String(sectionId) },

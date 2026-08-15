@@ -15,6 +15,7 @@
  */
 
 import prisma from "../utils/prisma";
+import { AppError } from "../middleware/errorHandler";
 
 /** A section's exam is pending unless a row says otherwise. */
 export async function isSectionPublished(
@@ -161,4 +162,27 @@ export async function isClassTeacherOf(teacherId: string, sectionId: string): Pr
     select: { id: true },
   });
   return assignment !== null;
+}
+
+/**
+ * Gate a section-scoped teacher action on being *that section's* class teacher
+ * (W3b). ADMIN passes through — the declutter removes admin's duplicate
+ * screens, not admin's authority over their own school's data.
+ *
+ * Before this, `authorize("ADMIN", "TEACHER")` was the whole check on grade
+ * sheets and observation grading, so any teacher in the building could pull up
+ * or grade any section's marks. That is the narrower half of **S7**.
+ */
+export async function assertSectionOwnership(
+  userId: string,
+  role: string,
+  sectionId: string,
+  what: string
+): Promise<void> {
+  if (role !== "TEACHER") return;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { teacherId: true } });
+  if (!user?.teacherId) throw new AppError("Teacher record not found", 403);
+  if (!(await isClassTeacherOf(user.teacherId, sectionId))) {
+    throw new AppError(`Only this section's class teacher can ${what}`, 403);
+  }
 }

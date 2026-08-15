@@ -5,6 +5,7 @@ import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { Prisma } from "@prisma/client";
 import { verifyGrade, verifyExamType, verifySection, verifyStudent, verifyAcademicYear } from "../utils/schoolScope";
+import { assertSectionOwnership } from "../services/resultStatus.service";
 
 const router = Router();
 
@@ -205,6 +206,22 @@ router.post("/results/bulk", authenticate, authorize("ADMIN", "TEACHER"), async 
   });
   if (validStudentCount !== uniqueStudentIds.length) {
     throw new AppError("One or more students do not belong to this school", 400);
+  }
+
+  // W3b — grading observations belongs to the section's class teacher, not to
+  // any teacher in the school. This endpoint takes students rather than a
+  // section, so the sections are derived from the batch; in practice a teacher
+  // grades one section at a time, and a batch spanning several must satisfy the
+  // check for every one of them.
+  if (req.user!.role === "TEACHER") {
+    const sections = await prisma.student.findMany({
+      where: { id: { in: uniqueStudentIds } },
+      select: { sectionId: true },
+      distinct: ["sectionId"],
+    });
+    for (const { sectionId } of sections) {
+      await assertSectionOwnership(req.user!.userId, req.user!.role, sectionId, "grade this section");
+    }
   }
 
   const uniqueCategoryIds = [...new Set(entries.map((e) => e.categoryId))];

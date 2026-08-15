@@ -46,7 +46,6 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin/students", label: "Students", icon: Users },
       { href: "/admin/staff", label: "Staff Accounts", icon: KeyRound },
-      { href: "/admin/admissions", label: "Admissions", icon: UserPlus },
       { href: "/admin/parents", label: "Parents", icon: Users2 },
     ],
   },
@@ -63,8 +62,7 @@ const navGroups: NavGroup[] = [
     label: "Results",
     items: [
       { href: "/admin/results", label: "Publish Results", icon: Send },
-      { href: "/admin/grade-sheet", label: "Grade Sheet", icon: Table },
-      { href: "/admin/observations", label: "Observations", icon: Eye },
+      { href: "/admin/observations", label: "Observation Setup", icon: Eye },
       { href: "/admin/promotion", label: "Promotion", icon: GraduationCap },
       { href: "/admin/certificates", label: "Certificates", icon: Award },
     ],
@@ -72,7 +70,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Finance",
     items: [
-      { href: "/admin/fees", label: "Fee Management", icon: Receipt },
+      { href: "/accountant/fees", label: "Fee Management", icon: Receipt },
       { href: "/admin/notices", label: "Notice Board", icon: Megaphone },
     ],
   },

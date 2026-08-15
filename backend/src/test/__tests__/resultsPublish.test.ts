@@ -414,3 +414,58 @@ describe("admin overview (W1c) and the publish notice (W1f)", () => {
     await prisma.academicYear.delete({ where: { id: otherYear.id } });
   });
 });
+
+// ─── W3b: section-scoped teacher access ─────────────────────────────────────
+
+describe("grade sheets and observation grading belong to the class teacher (W3b)", () => {
+  const gradeSheet = (token: string, sid = sectionId) =>
+    request(app)
+      .get(`/grade-sheet/term?sectionId=${sid}&examTypeId=${firstTermId}&academicYearId=${yearId}`)
+      .set("Authorization", authHeader(token));
+
+  it("lets the section's own class teacher pull its mark sheet", async () => {
+    await gradeSheet(classTeacherToken).expect(200);
+  });
+
+  it("refuses a teacher who is class teacher of a different section", async () => {
+    // Before W3b this was `authorize("ADMIN", "TEACHER")` and nothing else, so
+    // any teacher in the building could read any section's marks.
+    await gradeSheet(otherTeacherToken).expect(403);
+  });
+
+  it("leaves admins able to pull any section — the page moved, not the authority", async () => {
+    await gradeSheet(adminToken).expect(200);
+  });
+
+  it("refuses observation grading for a section the teacher does not own", async () => {
+    const category = await prisma.observationCategory.create({
+      data: { name: "Punctuality", gradeId },
+    });
+
+    await request(app)
+      .post("/observations/results/bulk")
+      .set("Authorization", authHeader(otherTeacherToken))
+      .send({
+        examTypeId: firstTermId,
+        academicYearId: yearId,
+        entries: [{ studentId, categoryId: category.id, grade: "A" }],
+      })
+      .expect(403);
+
+    expect(await prisma.observationResult.count({ where: { studentId } })).toBe(0);
+
+    // ...and still allows the section's own class teacher.
+    await request(app)
+      .post("/observations/results/bulk")
+      .set("Authorization", authHeader(classTeacherToken))
+      .send({
+        examTypeId: firstTermId,
+        academicYearId: yearId,
+        entries: [{ studentId, categoryId: category.id, grade: "A" }],
+      })
+      .expect(200);
+
+    await prisma.observationResult.deleteMany({ where: { categoryId: category.id } });
+    await prisma.observationCategory.delete({ where: { id: category.id } });
+  });
+});
