@@ -31,6 +31,7 @@ export default function StudentsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const editIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // Nothing is selected until the grade list arrives, so the first grade and
   // its first section are the default rather than something an effect writes
@@ -56,6 +57,8 @@ export default function StudentsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       const payload = { ...form, sectionId: selectedSection, rollNo: form.rollNo || undefined };
       if (editId) {
@@ -73,7 +76,7 @@ export default function StudentsPage() {
       }
       setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
       reloadStudents();
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
 
   const startEdit = async (s: Student) => {
@@ -170,7 +173,7 @@ export default function StudentsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      if (file.size > 500 * 1024) { alert("Photo must be under 500KB"); return; }
+                      if (file.size > 500 * 1024) { toast.error("Photo must be under 500KB"); return; }
                       const reader = new FileReader();
                       reader.onload = (ev) => setForm({ ...form, photo: ev.target?.result as string });
                       reader.readAsDataURL(file);
@@ -186,7 +189,7 @@ export default function StudentsPage() {
                 </div>
               </div>
             </div>
-            <div className="col-span-full flex justify-end"><button type="submit" className="btn-primary"><Save size={16} /> {editId ? "Update" : "Save"}</button></div>
+            <div className="col-span-full flex justify-end"><button type="submit" disabled={saving} className="btn-primary"><Save size={16} /> {saving ? "Saving..." : editId ? "Update" : "Save"}</button></div>
           </form>
         </div>
       )}

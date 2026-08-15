@@ -203,7 +203,7 @@ export default function ExamRoutinePage() {
 </body></html>`;
 
     const win = window.open("", "_blank");
-    if (!win) { alert("Please allow popups to print."); return; }
+    if (!win) { toast.error("Please allow popups to print."); return; }
     win.document.write(html);
     win.document.close();
     win.onload = () => win.print();

@@ -4,7 +4,6 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Shuffle, X } from "lucide-react";
-import { printSeatingArrangement } from "@/lib/printUtils";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 
@@ -141,7 +140,8 @@ export default function SeatingPage() {
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    const { printSeatingArrangement } = await import("@/lib/printUtils");
     printSeatingArrangement(allocations, selectedExamName);
   };
 

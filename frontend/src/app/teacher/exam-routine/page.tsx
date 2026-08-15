@@ -4,7 +4,6 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import { Printer } from "lucide-react";
-import { printExamRoutine } from "@/lib/printUtils";
 import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 
 interface ExamType { id: string; name: string }
@@ -62,7 +61,7 @@ export default function TeacherExamRoutinePage() {
           <p className="text-sm text-gray-500 mt-1">View exam schedule for your class</p>
         </div>
         {entries.length > 0 && (
-          <button onClick={() => printExamRoutine(entries, selectedExamName, selectedSection?.gradeName || "")} className="btn-outline text-xs">
+          <button onClick={() => import("@/lib/printUtils").then(({ printExamRoutine }) => printExamRoutine(entries, selectedExamName, selectedSection?.gradeName || ""))} className="btn-outline text-xs">
             <Printer size={14} /> Print
           </button>
         )}

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { Receipt, Users, AlertTriangle, TrendingUp, Search, FileText } from "lucide-react";
 import { getTodayBS, formatBSDateLong, getCurrentBSMonthName } from "@/lib/bsDate";
-import { printReceipt } from "@/lib/feePrintUtils";
 import toast from "react-hot-toast";
 
 interface ReceiptGroup {
@@ -140,7 +139,10 @@ export default function AccountantDashboardPage() {
 
   const handlePrintReceipt = async (receiptNumber: string) => {
     try {
-      const data = await api.get<any>(`/fees/receipt/${receiptNumber}`);
+      const [data, { printReceipt }] = await Promise.all([
+        api.get<any>(`/fees/receipt/${receiptNumber}`),
+        import("@/lib/feePrintUtils"),
+      ]);
       printReceipt(data);
     } catch (err: any) {
       toast.error(err.message || "Failed to print receipt");

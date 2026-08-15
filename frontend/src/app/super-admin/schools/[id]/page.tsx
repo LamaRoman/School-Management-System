@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { ArrowLeft, Plus, UserCheck, Upload, Copy, Check } from "lucide-react";
 import Link from "next/link";
@@ -54,7 +55,7 @@ export default function SchoolDetailPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("Logo must be under 2MB"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Logo must be under 2MB"); return; }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -67,7 +68,7 @@ export default function SchoolDetailPage() {
       if (!res.ok) throw new Error("Upload failed");
       fetchData();
     } catch (err: any) {
-      alert(err.message || "Upload failed");
+      toast.error(err.message || "Upload failed");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -132,7 +133,7 @@ export default function SchoolDetailPage() {
       }
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -143,7 +144,7 @@ export default function SchoolDetailPage() {
       setEditing(false);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }

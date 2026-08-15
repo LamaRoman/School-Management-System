@@ -38,13 +38,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
     if (!loading && user && !allowedRoles.includes(user.role)) router.replace("/");
   }, [user, loading, router]);
 
-  if (loading || !user || !allowedRoles.includes(user.role)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
-      </div>
-    );
-  }
+  const authorized = !loading && !!user && allowedRoles.includes(user.role);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -56,7 +50,7 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
             <span className="text-xs bg-amber-400/30 px-2 py-0.5 rounded">Accountant</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-white/70">{user.email}</span>
+            <span className="text-sm text-white/70">{user?.email}</span>
             <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password"><KeyRound size={16} className="text-white/60" /></button>
             <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg">
               <LogOut size={16} />
@@ -86,7 +80,11 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
           </div>
         </div>
       </header>
-      {children}
+      {authorized ? children : (
+        <div className="flex items-center justify-center py-24">
+          <div className="animate-pulse text-primary font-display text-xl">Loading...</div>
+        </div>
+      )}
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
   );

@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Plus, Save, Trash2, Printer, X, Receipt, Edit2, ArrowLeft, ChevronRight, FileText } from "lucide-react";
-import { printReceipt, printInvoice, printBulkInvoices } from "@/lib/feePrintUtils";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
@@ -414,7 +413,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => printReceipt(receipt)} className="btn-primary text-xs"><Printer size={14} /> Print Receipt</button>
+              <button onClick={() => import("@/lib/feePrintUtils").then(({ printReceipt }) => printReceipt(receipt))} className="btn-primary text-xs"><Printer size={14} /> Print Receipt</button>
               <button onClick={() => setReceipt(null)} className="btn-ghost text-xs"><X size={14} /></button>
             </div>
           </div>
@@ -426,7 +425,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
         <div>
           <div className="flex items-center justify-between mb-4">
             <button onClick={handleCloseLedger} className="flex items-center gap-1 text-sm text-primary hover:underline"><ArrowLeft size={16} /> Back to class list</button>
-            <button onClick={async () => { try { const inv = await api.get<any>(`/fees/invoice/${ledger.student.id}?academicYearId=${activeYear.id}&month=${currentMonth}`); printInvoice(inv); } catch (e: any) { toast.error(e.message); } }} className="btn-outline text-xs"><FileText size={14} /> Print Invoice ({currentMonth})</button>
+            <button onClick={async () => { try { const [inv, { printInvoice }] = await Promise.all([api.get<any>(`/fees/invoice/${ledger.student.id}?academicYearId=${activeYear.id}&month=${currentMonth}`), import("@/lib/feePrintUtils")]); printInvoice(inv); } catch (e: any) { toast.error(e.message); } }} className="btn-outline text-xs"><FileText size={14} /> Print Invoice ({currentMonth})</button>
           </div>
 
           <div className="card p-4 mb-4">
@@ -509,8 +508,8 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
               <div className="card p-3 flex-1 text-center"><p className="text-xs text-gray-500">Collected</p><p className="text-lg font-bold text-emerald-600">Rs {totalCollected.toLocaleString()}</p></div>
               <div className="card p-3 flex-1 text-center"><p className="text-xs text-gray-500">Pending (up to {currentMonth})</p><p className="text-lg font-bold text-red-600">Rs {totalPending.toLocaleString()}</p></div>
               <div className="card p-3 flex-none flex items-center gap-2">
-                <button onClick={async () => { try { toast.loading("Generating..."); const data = await api.get<any[]>(`/fees/invoices-bulk?sectionId=${selectedSection}&academicYearId=${activeYear.id}&month=${currentMonth}`); toast.dismiss(); if (data.length > 0) { printBulkInvoices(data, "compact"); } else { toast.error("No invoices"); } } catch (e: any) { toast.dismiss(); toast.error(e.message); } }} className="btn-outline text-xs whitespace-nowrap"><Printer size={14} /> 4 per Page</button>
-                <button onClick={async () => { try { toast.loading("Generating..."); const data = await api.get<any[]>(`/fees/invoices-bulk?sectionId=${selectedSection}&academicYearId=${activeYear.id}&month=${currentMonth}`); toast.dismiss(); if (data.length > 0) { printBulkInvoices(data, "individual"); } else { toast.error("No invoices"); } } catch (e: any) { toast.dismiss(); toast.error(e.message); } }} className="btn-ghost text-xs whitespace-nowrap"><Printer size={14} /> Individual</button>
+                <button onClick={async () => { try { toast.loading("Generating..."); const [data, { printBulkInvoices }] = await Promise.all([api.get<any[]>(`/fees/invoices-bulk?sectionId=${selectedSection}&academicYearId=${activeYear.id}&month=${currentMonth}`), import("@/lib/feePrintUtils")]); toast.dismiss(); if (data.length > 0) { printBulkInvoices(data, "compact"); } else { toast.error("No invoices"); } } catch (e: any) { toast.dismiss(); toast.error(e.message); } }} className="btn-outline text-xs whitespace-nowrap"><Printer size={14} /> 4 per Page</button>
+                <button onClick={async () => { try { toast.loading("Generating..."); const [data, { printBulkInvoices }] = await Promise.all([api.get<any[]>(`/fees/invoices-bulk?sectionId=${selectedSection}&academicYearId=${activeYear.id}&month=${currentMonth}`), import("@/lib/feePrintUtils")]); toast.dismiss(); if (data.length > 0) { printBulkInvoices(data, "individual"); } else { toast.error("No invoices"); } } catch (e: any) { toast.dismiss(); toast.error(e.message); } }} className="btn-ghost text-xs whitespace-nowrap"><Printer size={14} /> Individual</button>
               </div>
             </div>
           )}
