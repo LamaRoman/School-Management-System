@@ -7,9 +7,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 
 ---
 
-## Start here — current state (2026-08-14)
+## Start here — current state (2026-08-15)
 
-**Week 1 is complete.** All work below is merged to `main` and deployed (Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the P2 index migration applied on boot — deploy reported success). F6 is the exception to "deployed" — it is done and verified locally but not yet merged; see its entry.
+**Everything in the table below is merged to `main` and deployed.** Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the migrations for P2 (indexes) and W1 (`exam_result_statuses`, including its published-state backfill) apply on boot, and the deploy fails closed if they don't.
+
+*(Corrected 2026-08-15: this used to say F6 was "done but not yet merged" — it merged as #13, and F4a as #14. Both were stale.)*
 
 | Done | What it was | PR |
 |---|---|---|
@@ -21,7 +23,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F1, X1** | CORS preflight on every GET; no gzip | #10 |
 | **X2, F3** | Health check ignored the DB; 3 pages had no loading state | #11 |
 | **F6** | No route error/loading boundaries — any thrown error was a blank white screen | #13 |
-| **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | *unmerged* |
+| **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | #14 |
 | **R7 + R7a/R7b** | Three rank implementations that disagreed; optional subjects ignored by every results calculation | #18, #19, #20 |
 | **P3, P6** | Bulk report cards were O(n²); Puppeteer had no concurrency cap | #21 |
 | **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | #22 |
@@ -30,15 +32,57 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **W1 (a–g)** | Results publish workflow — families saw live, half-entered numbers as if final | #25 |
 | **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | #26 |
 | **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
-| **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | *this branch* |
+| **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
 
-**Suggested next:** **F2 / F4b / F5** — the frontend waterfall and caching work, best done as one move by adopting SWR, which subsumes all three and retires the `useLatestRequest` stopgap. **F8** is now a copy-the-shape job (W4 proved the dynamic-import pattern). **P1b–d** is the student-photo storage redesign, and **S6b** is its natural companion since both are about moving identifiers and blobs to where they belong.
+**Suggested next:** **F2 / F4b / F5** — the frontend waterfall and caching work, best done as one move by adopting SWR, which subsumes all three and retires the `useLatestRequest` stopgap.
 
-> **Everything still open is either frontend polish, a storage redesign, or a decision.** The decisions waiting on the owner: **S6b** (public URLs keyed on `School.code`, which changes receipt numbering mid-series for any school already taking payments), **S7** (whether TEACHER keeps school-wide report access — W3b settled it for grade sheets and observations only), **W3e**, **R8a** and **P4b**. Otherwise: **S5–S8** are the remaining security items (none destructive); **R8a**, **P4b** and **W3e** are decisions rather than defects and want your call; and **P1b–d** is the student-photo storage redesign.
+> **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
 > **Worth acting on before more building:** the W1 work found, on real dev data, that Grade I-A's *Final* is published to families and **0 of 7 subjects are fully entered** — 42 missing marks. The new teacher Results screen surfaces this per section now, but the existing published exams were backfilled as-is and nobody has looked at them through it.
 
 > **Bookkeeping fixed 2026-08-15:** R3 and R6 were closed by R7 on 2026-08-14 but their status boxes still read `[~]` and `[ ]`, so the list overstated what was outstanding. Both now marked done with a pointer to R7.
+
+---
+
+## Everything still open, in one place
+
+Nothing below is blocked by anything above it. Items marked **decision** cannot be
+finished by whoever picks them up — they need the school owner to choose, and the
+entry says exactly what the choice is and what it costs.
+
+### Decisions the owner needs to make
+
+| | What has to be decided | Why it can't just be done | Full entry |
+|---|---|---|---|
+| **S6b** | Should public URLs be keyed on `School.code` instead of the raw cuid `schoolId`? | Requires backfilling a `code` onto existing schools, and the receipt prefix is read fresh on every payment — so a school already taking payments would see its receipt series jump mid-stream (`RCP-A1B2C3-000046` → `RCP-SHS-000047`). Nothing errors and nothing duplicates, but it is a visible discontinuity on the document accountants reconcile and parents keep. | **S6b** |
+| **S7** | Should a TEACHER keep read access to *every* student's reports, or be scoped to their sections? | The codebase is currently inconsistent on purpose: `student.routes.ts` scopes teachers to assigned sections, `report.routes.ts:18` does not. W3b settled it for grade sheets and observation grading only. May well be right for a small school — it needs to be a decision rather than an accident. | **S7** |
+| **W3e** | Should "+ Add Student" be removed so Admissions is the only way in? | Its original justification was W2, which turned out not to exist (see below) — students created either way are billed identically. What is left is a process preference with no defect behind it. | **W3e** |
+| **R8a** | Should the dashboard's pass/fail panel report the *final* exam or the *most recently completed* one? | A final is partly entered for most of the year — 728 marks against First Terminal's 1,820 in dev — so the panel shows pass rates over a fraction of the cohort. Less pressing now that the panel names its exam. | **R8a** |
+| **P4b** | What should attendance totals do for a student who transfers out mid-year? | The recompute covers only students currently `isActive` in the section, so a leaver keeps whatever totals they had at that moment. Defensible; just undecided. | **P4b** |
+
+### Closed as won't-do, with evidence
+
+| | Why not | Full entry |
+|---|---|---|
+| **W2** | The premise is wrong and building it would have caused a **billing bug**. `buildInvoice` bills from the grade's `FeeStructure` via the student's section, so fees already apply at enrolment; `StudentFeeAssignment` is the exception mechanism; `POST /fees/assignments` already refuses grade-level categories; and `buildInvoice` sums structures and assignments with no dedupe — so copying one into the other would double-bill every new student. All 261 dev students have zero assignment rows and invoice correctly. | **W2** |
+
+### Ready to pick up — no blocker, no decision needed
+
+| | What | Notes |
+|---|---|---|
+| **F2, F4b, F5** | Mount-time waterfalls, no client-side cache, SWR adoption | Best done as **one** move: SWR subsumes all three and retires the `useLatestRequest` stopgap F4a added. |
+| **F8** | Code-split the print/export helpers | Now a copy-the-shape job — **W4** added the frontend's first dynamic import and it works. |
+| **F7** | No double-submit protection on the student form | Small. |
+| **F9** | Native `alert()` in 7 places instead of the toast system | Small, cosmetic. |
+| **F10** | First-load auth gate blocks the whole UI | |
+| **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
+| **X3** | No request logging or error tracking | |
+| **X4** | Unbounded auth caches | |
+| **X5** | Parents can't download report card PDFs | Note `pdf.routes.ts` allows STUDENT but not PARENT; **W1** gates both identically once it is added. |
+| **W3f** | `POST /students/bulk` bypasses Admissions | Dormant — no frontend calls it. Recorded so a future CSV import extends the Admissions pipeline instead of reaching for this route. |
+| **X6** | Pagination, fee search indexing, and a self-contradictory sentence in `CLAUDE.md` | The `CLAUDE.md` wording is a two-minute fix and it is the rule people read the docs for. |
+
+---
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -658,7 +702,9 @@ Cost impact too: DB storage, backup size, and Railway egress all scale with it �
   > - The edit dialog read `photo` off the list row, so with the field gone a save would have **wiped the stored photo**. It now lazy-fetches the single student on edit, and `photo` stays `undefined` until that lands — `PUT /students/:id` parses `.partial()`, so an omitted field leaves the column untouched. Guarded against the **F4** stale-response race with an id check.
 - [ ] **P1b.** Route student photos through the existing `upload.service.ts` S3 path; store a URL in `photo` instead of a data URI.
 - [ ] **P1c.** Backfill/migrate existing base64 rows to S3, then reclaim the space.
-- [ ] **P1d.** Add server-side `.max()` validation on the `photo` field (**S8**).
+- [x] **P1d.** Add server-side `.max()` validation on the `photo` field (**S8**).
+
+  > **DONE 2026-08-15 as part of S8** — `photo: z.string().max(700_000)`. Bounds the worst case; P1b/P1c are still the real fix.
 
 ---
 
@@ -929,7 +975,7 @@ They mount with empty arrays and render an empty table while fetching. Perceptua
 
 ---
 
-### [ ] F4. No stale-response guards — the roster can show the wrong class
+### [~] F4. No stale-response guards — the roster can show the wrong class
 **Where:** app-wide. **140 `useEffect`s, zero `AbortController`s, zero request-sequence guards.** The only 6 cleanup returns are for timers and event listeners, none for fetches.
 
 Every data-fetching effect is exposed to the out-of-order response race: select section A, quickly select B, and A's slower response can land *after* B's and overwrite state. The UI then shows section B selected while displaying section A's students.
