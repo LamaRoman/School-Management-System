@@ -24,9 +24,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F4a** | Stale-response races on the six pages where a wrong render becomes a wrong *write* | *unmerged* |
 | **R7 + R7a/R7b** | Three rank implementations that disagreed; optional subjects ignored by every results calculation | #18, #19, #20 |
 | **P3, P6** | Bulk report cards were O(n²); Puppeteer had no concurrency cap | #21 |
-| **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | *this branch* |
+| **P4 + P4a** | Attendance totals recomputed per student, growing all year, outside the transaction | #22 |
+| **P5, R8** | Admin landing page recomputed everything per grade and per exam, on every load; pass/fail panel pointed at whichever exam sorted last | *this branch* |
 
-**Suggested next:** **P5** — with R7, P3, P6 and P4 done, every hot path except the admin dashboard is off the critical list, and P5 is the first screen an admin sees after login. **R8** is a correctness bug in the same handler, so do them together. Consider **S4** sooner than its Week 3+ slot — F4a's work on `admin/teacher-assignments` showed the missing subject/grade check is the server-side backstop that page needs.
+**Suggested next:** **S4 (+S4a, S4b)** — the performance findings are done (P1b–d aside, which is a design fix rather than a speed one), so the remaining backend risk is the tenancy/invariant gap. F4a's work on `admin/teacher-assignments` showed S4 is the server-side backstop that page needs, and **S4b**'s table-driven regression test is worth more than the four patches, since this bug got in four separate times. **W1** (results publish workflow) is the biggest *product* gap and is fully designed but unbuilt.
 
 ### Corrections found while doing the work — read these before trusting a finding below
 
@@ -397,10 +398,23 @@ May be the intended forgiving reading — confirm and document either way.
 
 ---
 
-### [ ] R8. "Last exam" is inferred from array position, not `isFinal`
+### [x] R8. "Last exam" is inferred from array position, not `isFinal`
+
+> **FIXED 2026-08-15, with P5.** The panel now picks the exam type flagged `isFinal` (the highest `displayOrder` among them, if a school flags more than one).
+>
+> **The stated fix on its own would have broken the panel, and only checking the data showed it.** `isFinal` is opt-in and defaults to false, and **no exam type in the dev database has it set** — First Terminal, Second Terminal and Final are all `false`. Switching to `isFinal` alone would have turned a populated panel into an empty one for every school that never ticked the box, which is most of them. So it falls back to display order when nothing is flagged, and reports which way it resolved.
+>
+> **The fallback means the original bug still exists for un-flagged schools, so the real remedy is the other half:** the response now carries the exam's name and whether it was inferred, and the dashboard prints it under the panel heading — *"Final · latest exam (none marked final)"*. This finding's sting was *"no error — just wrong dashboard numbers"*; a panel that says which exam it is about cannot be silently wrong any more, whichever way the exam was chosen.
+>
+> **Verified live**, since a cached endpoint is a good place for a fix to look like it works when it doesn't. On the dev database, flagging Second Terminal as final moved the panel to it and the pass rates changed with it (Nursery English 75% → 77.8%), and the "(none marked final)" note disappeared. Reverted afterwards; the dev database is as it was, all three exam types `isFinal=false`.
+>
+> Pinned by 3 tests, including one that adds a makeup exam after the final — the exact scenario below — and asserts the panel stays on the final. All 3 fail against the old code.
+
 **Where:** `backend/src/routes/analytics.routes.ts:92` — `const lastExam = examTypes[examTypes.length - 1];`
 
 Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering exam types silently points the subject-wise pass/fail panel at the wrong exam. No error — just wrong dashboard numbers. The `isFinal` flag already exists on `ExamType`.
+
+- [ ] **R8a. Open question found while fixing R8, deliberately not decided:** should this panel report on the *final* exam or on the *most recently completed* one? It is about the final either way now, and a final exam is partially entered for most of the year — in the dev database it has 728 marks against First Terminal's 1,820, so the panel is reporting pass rates over a fraction of the cohort while presenting them like whole-class figures. That is a product decision about what the panel is for, not a bug to quietly fix, and it is much less urgent now that the panel names the exam it is using. Related to **W1**, which is the same question about half-entered results reaching people who read them as final.
 
 ---
 
@@ -663,7 +677,32 @@ This is the highest-frequency write path in the app — every teacher, every sec
 
 ---
 
-### [ ] P5. Admin dashboard is the slowest page, and it's the landing page
+### [x] P5. Admin dashboard is the slowest page, and it's the landing page
+
+> **FIXED 2026-08-15, with R8.** The two loops over grades and the loop over exam types are gone; the handler now issues a fixed set of queries in two small `Promise.all` batches and does the grouping in memory. A 5-minute in-process cache sits on top.
+>
+> **Measured through the real route:**
+>
+> | | queries before | queries after |
+> |---|---|---|
+> | 2 grades, 2 exam types | 20 | **15** |
+> | 3 grades, 3 exam types | 23 | **15** |
+> | repeat load (warm cache) | 23 | **3** |
+>
+> **On the dev database** (13 grades, 3 exam types, 260 students): every load was **104–144ms**; it is now **93ms cold and ~2ms warm**. In normal use almost every load is warm.
+>
+> **The payload is byte-identical apart from the new field.** Compared old against new field by field on real data: `classAverages`, `topPerformers`, `subjectStats`, `attendanceOverview` and `termComparison` all match exactly, and `summary` differs only in JSON key order. The test that pins the numbers against hand-computed expectations **passes against the old code** — which is the point of it.
+>
+> **Two batches of three rather than one of six**, because the pool is 5 connections (`utils/prisma.ts`): the landing page should not be able to hold all of them while two admins log in together.
+>
+> **Today's present/absent counts are deliberately outside the cache.** They are the one figure on the page that moves minute to minute, and an admin watching attendance arrive should see it arrive. They cost one grouped count, so a warm load is still 3 queries rather than 15. Pinned by a test that marks a student absent *after* the cache is warm and asserts the count moves.
+>
+> **The cache is keyed by school and year, and the test that matters is the isolation one** — a cache on a multi-tenant endpoint is exactly where a leak would be worst. The school half of the key is redundant today (a year id belongs to one school and is verified before use), but it makes the boundary visible at the call site.
+>
+> Two smaller things fixed in passing: per-grade attendance matched on grade *name*, now on `gradeId`; and `termComparison` fetched marks with `include: { subject: true }`, joining a full subject row onto every mark for data already loaded with the grades.
+>
+> Pinned by 7 tests in `src/test/__tests__/analyticsDashboard.test.ts`; 6 verified to fail against the old code. Suite 200 → **207**.
+
 **Where:** `backend/src/routes/analytics.routes.ts:46` and `:89`
 
 Two sequential loops over grades, one query each — ~12 grades × 2 = **~24 sequential round trips**, plus a full load of every mark for the latest exam across the school, recomputed on **every** dashboard load with no caching, for numbers that change a few times a term.

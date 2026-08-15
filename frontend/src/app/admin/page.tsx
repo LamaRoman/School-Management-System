@@ -23,6 +23,9 @@ interface Analytics {
   classAverages: { gradeName: string; avgGpa: number; avgPct: number; studentCount: number }[];
   topPerformers: { rank: number; studentName: string; gradeName: string; sectionName: string; gpa: number; percentage: number }[];
   subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[];
+  // Which exam the subjectStats panel is about. `inferred` means no exam type
+  // is flagged isFinal, so the last one by display order was used.
+  subjectStatsExam: { name: string; inferred: boolean } | null;
   attendanceOverview: { overallRate: number; gradeWise: { gradeName: string; rate: number }[] };
   termComparison: { examName: string; avgPercentage: number; studentCount: number }[];
 }
@@ -495,9 +498,18 @@ export default function AdminDashboard() {
             {/* Subjects Needing Attention */}
             {lowPassSubjects.length > 0 && (
               <div className="card p-5">
-                <h3 className="font-display font-bold text-primary text-sm mb-3 flex items-center gap-2">
+                <h3 className="font-display font-bold text-primary text-sm mb-1 flex items-center gap-2">
                   <AlertTriangle size={15} /> Subjects Needing Attention
                 </h3>
+                {/* Name the exam these pass rates come from. Without it a
+                    dashboard pointing at the wrong exam looks identical to one
+                    pointing at the right exam. */}
+                {analytics.subjectStatsExam && (
+                  <p className="text-[10px] text-gray-400 mb-3">
+                    {analytics.subjectStatsExam.name}
+                    {analytics.subjectStatsExam.inferred && " · latest exam (none marked final)"}
+                  </p>
+                )}
                 <div className="space-y-3">
                   <CollapsibleList limit={3}>
                     {lowPassSubjects.map((ss, i) => (
