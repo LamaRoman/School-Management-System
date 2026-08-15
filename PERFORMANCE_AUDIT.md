@@ -1,13 +1,13 @@
 # Audit — Zentara Shikshya
 
-Assessment date: 2026-08-14 · Last worked: 2026-08-15 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
+Assessment date: 2026-08-14 · Last worked: 2026-08-16 · Scope: `backend/` and `frontend/` only (mobile apps excluded by request)
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do / not applicable
 
 > Findings are grouped by area and prefixed: **S** = security/tenancy, **R** = report correctness, **W** = workflow gaps (new capability, not a bug), **P** = performance, **F** = frontend, **X** = robustness/cost.
 
 ---
 
-## Start here — current state (2026-08-15)
+## Start here — current state (2026-08-16)
 
 **Everything in the table below is merged to `main` and deployed.** Railway auto-deploys on push; `startCommand` is `migrate:prod && node dist/server.js`, so the migrations for P2 (indexes) and W1 (`exam_result_statuses`, including its published-state backfill) apply on boot, and the deploy fails closed if they don't.
 
@@ -33,10 +33,11 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **W3 (a–d)** | Admin-portal declutter; grade sheets and observation grading narrowed to the class teacher | #26 |
 | **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
 | **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
+| **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | *(uncommitted — see below)* |
 
-**Suggested next:** **F2 / F4b / F5** — the frontend waterfall and caching work, best done as one move by adopting SWR, which subsumes all three and retires the `useLatestRequest` stopgap.
+**Suggested next:** finish the **F4b** tail — `admin/fees`, `teacher/my-class`, `teacher/observations` are the three pages still on the `useLatestRequest` stopgap; then **F8 / F7 / F9 / F10**.
 
-**Handover note (2026-08-15, end of session):** working tree is clean, `main` is in sync with `origin/main` at `f2ca3f2`, backend suite is **266/266 passing**, both packages typecheck. Nothing is mid-flight — the next session can start straight in on F2/F4b/F5 (or any other row in [Everything still open](#everything-still-open-in-one-place)) with no setup beyond `npm install` if `node_modules` isn't already there.
+**Handover note (2026-08-16, end of session):** the F2/F4b/F5 work described above is **in the working tree, not committed** — 31 modified files plus two new ones (`frontend/src/components/SwrProvider.tsx`, `frontend/src/hooks/useReferenceData.ts`) and a new `swr` dependency. `npx tsc --noEmit` is clean in both packages, `npm run build` succeeds, and eslint reports no new violations (the remaining 278 are the pre-existing `no-explicit-any` baseline). Verified in the running app as both a teacher and an admin — see the F2 entry for what was observed.
 
 > **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
@@ -72,7 +73,7 @@ entry says exactly what the choice is and what it costs.
 
 | | What | Notes |
 |---|---|---|
-| **F2, F4b, F5** | Mount-time waterfalls, no client-side cache, SWR adoption | Best done as **one** move: SWR subsumes all three and retires the `useLatestRequest` stopgap F4a added. |
+| **F4b tail** | Three pages still on the `useLatestRequest` stopgap: `admin/fees`, `teacher/my-class`, `teacher/observations` | F2 and F5 are **done** (2026-08-16). These three drive several dependent fetches from one handler, so each is a page restructure; `hooks/useLatestRequest.ts` gets deleted with the last of them. |
 | **F8** | Code-split the print/export helpers | Now a copy-the-shape job — **W4** added the frontend's first dynamic import and it works. |
 | **F7** | No double-submit protection on the student form | Small. |
 | **F9** | Native `alert()` in 7 places instead of the toast system | Small, cosmetic. |
@@ -930,7 +931,26 @@ Six round trips where three would do — on every page in the app.
 
 ---
 
-### [ ] F2. Mount-time request waterfalls
+### [x] F2. Mount-time request waterfalls
+
+> **FIXED 2026-08-16, together with F5 and most of F4b — SWR, as this entry and F4/F5 all recommended.**
+>
+> **The shared provider this entry asks for turned out not to need a provider.** SWR caches by key globally, so `useActiveYear()` / `useGrades()` / `useExamTypes()` / `useMyAssignments()` in `hooks/useReferenceData.ts` are ordinary hooks that every page calls independently and that all resolve to the same cache entry. One `SWRConfig` in the root layout supplies the fetcher (`api.get`, so the silent 401-refresh-and-retry still applies) and two defaults that are deliberate rather than incidental:
+> - `revalidateOnFocus: false` — attendance, marks and observations are half-filled forms rendered beside their roster; a refetch triggered by tabbing away and back would swap that roster out mid-entry.
+> - `shouldRetryOnError: false` — the api client already replays the only retryable failure (an expired session). What is left is 403/404/validation, and retrying triples the load of a page that is already broken.
+>
+> **The waterfall itself is unchanged and that is correct.** Grades still cannot be fetched until the active year's id is known. What changed is that the pair is fetched **once per session** instead of once per page visit — which is what made it expensive.
+>
+> **Verified in the running app, since a cache is exactly the kind of fix that looks right in the source and does nothing.** Logged in as `admin@school.edu.np` and read the network log across a session: `/admin/students` issued one `/academic-years/active` and one `/grades?…`; switching section fetched only the new section's roster; **navigating on to `/admin/subjects` issued only `/subjects?gradeId=…`** — no second year or grades call, where before this change that page refetched both. Returning to a section already visited served it from cache and revalidated in the background.
+>
+> **The same holds for the teacher portal, where the duplication was worse.** `/teacher-assignments/my` was fetched by the layout *and* again by each page, so every teacher page load made two identical calls; it is now one, and client-side navigation between teacher pages (Results → My Students) issued **zero** further API requests.
+>
+> **Pages migrated (18):** admin — students, students/[id], subjects, grades, grading-policy, exam-types, exam-routine, observations, notices, parents, seating, teacher-assignments, admissions, results; accountant — students, reports; teacher — layout, dashboard, attendance, students, homework, marks, results, grade-sheet, exam-routine; student — report, exam-routine; parent — dashboard. Not migrated: `admin/fees`, `teacher/my-class`, `teacher/observations` (see **F4b**), and `admin/page.tsx`.
+>
+> **Worth knowing about `admin/page.tsx`:** it is unmigrated and the network log shows it firing `/school`, `/analytics/dashboard` and `/calendar-events` **twice each** on load — React's dev-mode double-invoke, which SWR's deduping would collapse. Dev-only, but it is the landing page and it is the one **P5** already singled out as the slowest.
+>
+> **One incidental find, not a regression:** on `admin/admissions` the status-tab counts (`All (260)`, `Pending (0)`, …) are computed from the *currently filtered* list, so filtering to Pending makes every count read 0. That predates this change — the old code also replaced the array with the filtered fetch — and it is left alone here rather than folded into a caching change.
+
 **Where:** representative case `frontend/src/app/admin/students/page.tsx:32–48`
 
 ```
@@ -978,6 +998,8 @@ They mount with empty arrays and render an empty table while fetching. Perceptua
 ---
 
 ### [~] F4. No stale-response guards — the roster can show the wrong class
+
+> **F4a done 2026-08-14; F4b mostly done 2026-08-16 — three pages remain, listed in F4b.**
 **Where:** app-wide. **140 `useEffect`s, zero `AbortController`s, zero request-sequence guards.** The only 6 cleanup returns are for timers and event listeners, none for fetches.
 
 Every data-fetching effect is exposed to the out-of-order response race: select section A, quickly select B, and A's slower response can land *after* B's and overwrite state. The UI then shows section B selected while displaying section A's students.
@@ -990,7 +1012,7 @@ Every data-fetching effect is exposed to the out-of-order response race: select 
 |---|---|
 | `AbortController` per effect | Correct, but 140 sites, and missing one leaves the bug intact with no signal. Low leverage. |
 | "Latest wins" sequence guard (a hook wrapping a ref counter) | Minimal disruption to existing code shape. Fine as a stopgap. |
-| **SWR / React Query** | Keyed by URL, so out-of-order responses can't cross-contaminate **by construction**. Also subsumes **F3** (loading states), **F5** (caching/dedup) and part of **F6**. |
+| **SWR / React Query** | Keyed by URL, so out-of-order responses can't cross-contaminate **by construction**. Also subsumes **F3** (loading states), **F5** (caching/dedup) and part of **F6**. ← **taken, 2026-08-16; see F4b.** |
 
 Note `api.ts` **cannot** fix this on its own — the race is about which `setState` wins, not about the fetch. It could grow an optional `signal` parameter to support whichever approach you pick, but it isn't the fix.
 
@@ -1031,7 +1053,15 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
   >
   > One caveat on method: an attempt to tag the superseded *attendance* response with a recognisable fake payload did not render as intended, for a reason not chased down. The attendance comparison rests on the state change actually observed (roster 10 → 0 on old code, unchanged with the guard), not on that marker. The observations comparison above needed no such trick and is the stronger evidence.
 
-- [ ] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
+- [~] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
+
+  > **MOSTLY DONE 2026-08-16.** Every page listed under **F2** now fetches through URL-keyed SWR, so on those pages the race is closed *by construction*: a response for section A can only be written into section A's cache entry. Three of F4a's six pages (`admin/students`, `admin/teacher-assignments`, and — via the shared assignments hook — the teacher pages) no longer need the guard at all.
+  >
+  > **Still on `useLatestRequest`, deliberately:** `admin/fees`, `teacher/my-class`, `teacher/observations`. All three drive several dependent fetches from one imperative handler (`handleSectionSelect` loads students *and* exam types *and* categories), so converting them is a genuine restructure of the page rather than a swap of the fetch call, and all three are pages where F4a's note records carefully-tuned behaviour — `admin/fees`' two deliberately-separate guards, `teacher/observations`' false-empty-state gating — that is worth converting attentively rather than in bulk. The stopgap stays until then; `hooks/useLatestRequest.ts` should be deleted with the last of them.
+  >
+  > **A second stale-data window closed on the way, which no finding had named.** `admin/grading-policy` fetched its weightages in a bare effect keyed on the selected grade, and the weightages are *editable local state* — so while a new grade's policy was in flight the **outgoing grade's numbers stayed in the inputs**, and Save posts to the newly-selected grade. That is the F4 write hazard exactly, on a page F4a's list did not include. Reproduced and fixed: with the `/grading-policy` response delayed 4s, switching grade now empties the inputs (`0,0,0`) for the whole loading window and fills in only when that grade's own policy lands (`20,30,50`).
+  >
+  > **A pattern worth copying rather than the effects it replaced.** The "seed the first grade/section into state from an effect" shape that most of these pages used is now a derived default — `const selectedGrade = pickedGrade || grades[0]?.id || ""` — which removes a render pass, removes the flash of an unselected selector, and satisfies React's `set-state-in-effect` lint rule that the effect version trips.
 
 > **Land S2 first — it's the backstop for this bug.**
 > The server currently trusts the client's section context: attendance takes `sectionId` plus a `records[]` array and never checks those students are in that section (**S2**). So when the UI races and a teacher saves against the wrong roster, the backend writes it without complaint. **Fixing S2 turns this race from silent data corruption into a clean 400.** That makes S2 the safety net for a class of frontend bug you can't fully eliminate, so it should land *before* the frontend work, not after.
@@ -1040,7 +1070,10 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
 
 ---
 
-### [ ] F5. No client-side cache
+### [x] F5. No client-side cache
+
+> **FIXED 2026-08-16 with F2** — `swr@2.5.1`, configured in `components/SwrProvider.tsx`. Reference data (active year, grades, exam types, a teacher's own assignments) carries a 5-minute `dedupingInterval`; everything else uses the default. Returning to a page visited earlier in the session now renders from cache and revalidates behind the render instead of blocking on a refetch — see the F2 entry for the request-by-request evidence.
+
 **Where:** app-wide — no React Query / SWR; `useMemo`/`useCallback` appear in exactly **1** file of 58
 
 Every navigation refetches from scratch, with no deduplication and no stale-while-revalidate. Returning to a page you were just on is exactly as slow as the first visit — a large part of why navigation *feels* laggy rather than merely being slow once.

@@ -1,17 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import { Printer } from "lucide-react";
 import { printExamRoutine } from "@/lib/printUtils";
-
-interface ClassTeacherSection {
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 
 interface ExamType { id: string; name: string }
 interface RoutineEntry {
@@ -25,30 +19,20 @@ interface RoutineEntry {
 }
 
 export default function TeacherExamRoutinePage() {
-  const [sections, setSections] = useState<ClassTeacherSection[]>([]);
+  const { classTeacherSections: sections, loading } = useMyAssignments();
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [selectedExam, setSelectedExam] = useState("");
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        setSections(data.classTeacherSections || []);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+  const { data: examTypesData } = useSWR<ExamType[]>(
+    selectedSection ? `/exam-types?academicYearId=${selectedSection.academicYearId}` : null
+  );
+  const examTypes = examTypesData ?? [];
 
-  const handleSectionSelect = async (section: ClassTeacherSection) => {
+  const handleSectionSelect = (section: ClassTeacherSection) => {
     setSelectedSection(section);
     setSelectedExam("");
     setEntries([]);
-    try {
-      const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${section.academicYearId}`);
-      setExamTypes(et);
-    } catch { setExamTypes([]); }
   };
 
   const handleExamSelect = async (examTypeId: string) => {

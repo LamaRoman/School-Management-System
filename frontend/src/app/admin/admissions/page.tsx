@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Check, X, UserPlus, Trash2 } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades } from "@/hooks/useReferenceData";
 
-interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
 interface Admission {
   id: string;
   studentName: string;
@@ -37,11 +38,14 @@ const statusColors: Record<string, string> = {
 
 export default function AdmissionPage() {
   const confirm = useConfirm();
-  const [admissions, setAdmissions] = useState<Admission[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [activeYear, setActiveYear] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { activeYear, grades, loading } = useGrades();
   const [filterStatus, setFilterStatus] = useState("");
+  const { data: admissionsData, mutate: reloadAdmissions } = useSWR<Admission[]>(
+    activeYear
+      ? `/admissions?academicYearId=${activeYear.id}${filterStatus ? `&status=${filterStatus}` : ""}`
+      : null
+  );
+  const admissions = admissionsData ?? [];
   const [showForm, setShowForm] = useState(false);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [enrollSectionId, setEnrollSectionId] = useState("");
@@ -53,33 +57,7 @@ export default function AdmissionPage() {
     address: "", previousSchool: "", applyingForGradeId: "", appliedDate: "", remarks: "",
   });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        setActiveYear(year);
-        if (year) {
-          const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-          setGrades(g);
-          await fetchAdmissions(year.id, "");
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
-
-  const fetchAdmissions = async (yearId: string, status: string) => {
-    try {
-      let url = `/admissions?academicYearId=${yearId}`;
-      if (status) url += `&status=${status}`;
-      const data = await api.get<Admission[]>(url);
-      setAdmissions(data);
-    } catch { setAdmissions([]); }
-  };
-
-  const handleFilterChange = (status: string) => {
-    setFilterStatus(status);
-    if (activeYear) fetchAdmissions(activeYear.id, status);
-  };
+  const handleFilterChange = (status: string) => setFilterStatus(status);
 
   const resetForm = () => {
     setForm({
@@ -114,7 +92,7 @@ export default function AdmissionPage() {
       });
       toast.success("Admission application created");
       resetForm();
-      await fetchAdmissions(activeYear.id, filterStatus);
+      reloadAdmissions();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -124,7 +102,7 @@ export default function AdmissionPage() {
         reviewedDate: new Date().toISOString().split("T")[0],
       });
       toast.success("Admission approved");
-      if (activeYear) await fetchAdmissions(activeYear.id, filterStatus);
+      reloadAdmissions();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -144,7 +122,7 @@ export default function AdmissionPage() {
         remarks: remarks || undefined,
       });
       toast.success("Admission rejected");
-      if (activeYear) await fetchAdmissions(activeYear.id, filterStatus);
+      reloadAdmissions();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -152,12 +130,6 @@ export default function AdmissionPage() {
     setEnrollingId(admission.id);
     setEnrollGradeId(admission.applyingForGrade.id);
     setEnrollSectionId("");
-    // Fetch sections for the grade
-    const grade = grades.find((g) => g.id === admission.applyingForGrade.id);
-    if (!grade?.sections) {
-      // Fetch fresh grade data with sections
-      api.get<Grade[]>(`/grades?academicYearId=${activeYear?.id}`).then((g) => setGrades(g));
-    }
   };
 
   const handleEnroll = async () => {
@@ -182,7 +154,7 @@ export default function AdmissionPage() {
       }
       setEnrollingId(null);
       setEnrollSectionId("");
-      if (activeYear) await fetchAdmissions(activeYear.id, filterStatus);
+      reloadAdmissions();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -191,7 +163,7 @@ export default function AdmissionPage() {
     try {
       await api.delete(`/admissions/${id}`);
       toast.success("Deleted");
-      if (activeYear) await fetchAdmissions(activeYear.id, filterStatus);
+      reloadAdmissions();
     } catch (err: any) { toast.error(err.message); }
   };
 

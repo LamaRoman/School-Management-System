@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { BS_MONTH_NAMES, formatBSDateLong } from "@/lib/bsDate";
+import { useExamTypes } from "@/hooks/useReferenceData";
 import {
   ArrowLeft, User, CalendarCheck, GraduationCap, Receipt, Eye, Phone, MapPin, ChevronDown, ChevronRight, BookOpen,
 } from "lucide-react";
@@ -22,7 +23,6 @@ interface StudentDetail {
   section: { name: string; grade: { name: string } };
   marks: Mark[]; attendances: AttendanceRow[]; results: ResultRow[];
 }
-interface ExamType { id: string; name: string; isFinal: boolean; displayOrder: number }
 interface LedgerMonth { month: string; totalDue: number; totalPaid: number; status: string }
 interface FixedFee { categoryName: string; frequency: string; amount: number; paid: number; status: string }
 interface Payment { id: string; category: string; amount: number; paidMonth: string | null; paymentDate: string; receiptNumber: string | null; paymentMethod: string | null }
@@ -48,10 +48,15 @@ export default function StudentProfilePage() {
   const params = useParams();
   const studentId = params.id as string;
 
+  const { activeYear, examTypes: unsortedExamTypes } = useExamTypes();
+  const yearBS = activeYear?.yearBS ?? "";
+  const examTypes = useMemo(
+    () => [...unsortedExamTypes].sort((a, b) => a.displayOrder - b.displayOrder),
+    [unsortedExamTypes]
+  );
+
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState<StudentDetail | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [yearBS, setYearBS] = useState<string>("");
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [observations, setObservations] = useState<{ examTypeId: string; items: Observation[] }[]>([]);
   const [monthlyAttendance, setMonthlyAttendance] = useState<MonthAttendance[]>([]);
@@ -60,17 +65,11 @@ export default function StudentProfilePage() {
   const [savingOptional, setSavingOptional] = useState(false);
 
   useEffect(() => {
+    const yearId = activeYear?.id;
     (async () => {
       setLoading(true);
       try {
-        const year = await api.get<any>("/academic-years/active");
-        setYearBS(year?.yearBS || "");
-        const yearId = year?.id as string | undefined;
-
-        const [s, ets] = await Promise.all([
-          api.get<StudentDetail>(`/students/${studentId}`),
-          yearId ? api.get<ExamType[]>(`/exam-types?academicYearId=${yearId}`) : Promise.resolve([]),
-        ]);
+        const s = await api.get<StudentDetail>(`/students/${studentId}`);
 
         // Keep only the active year's records so multi-year data doesn't pile up.
         if (yearId) {
@@ -79,24 +78,15 @@ export default function StudentProfilePage() {
           s.results = s.results.filter((r) => r.academicYearId === yearId);
         }
         setStudent(s);
-        const sortedEts = [...ets].sort((a, b) => a.displayOrder - b.displayOrder);
-        setExamTypes(sortedEts);
 
-        // Fees + monthly attendance + observations are best-effort; a failure in
-        // one shouldn't blank the page.
+        // Fees and monthly attendance are best-effort; a failure in one
+        // shouldn't blank the page.
         if (yearId) {
           api.get<Ledger>(`/fees/student-ledger/${studentId}?academicYearId=${yearId}`)
             .then(setLedger).catch(() => setLedger(null));
           api.get<MonthAttendance[]>(`/daily-attendance/student/${studentId}?academicYearId=${yearId}`)
             .then(setMonthlyAttendance).catch(() => setMonthlyAttendance([]));
         }
-        Promise.all(
-          sortedEts.map((et) =>
-            api.get<Observation[] | null>(`/observations/student/${studentId}/${et.id}`)
-              .then((items) => ({ examTypeId: et.id, items: items || [] }))
-              .catch(() => ({ examTypeId: et.id, items: [] as Observation[] }))
-          )
-        ).then(setObservations).catch(() => setObservations([]));
 
         api.get<OptionalSubject[]>(`/students/${studentId}/optional-subjects`)
           .then(setOptionalSubjects).catch(() => setOptionalSubjects([]));
@@ -107,7 +97,17 @@ export default function StudentProfilePage() {
         setLoading(false);
       }
     })();
-  }, [studentId]);
+  }, [studentId, activeYear]);
+
+  useEffect(() => {
+    Promise.all(
+      examTypes.map((et) =>
+        api.get<Observation[] | null>(`/observations/student/${studentId}/${et.id}`)
+          .then((items) => ({ examTypeId: et.id, items: items || [] }))
+          .catch(() => ({ examTypeId: et.id, items: [] as Observation[] }))
+      )
+    ).then(setObservations).catch(() => setObservations([]));
+  }, [studentId, examTypes]);
 
   const handleSaveOptional = async () => {
     setSavingOptional(true);

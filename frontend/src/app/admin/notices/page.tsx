@@ -1,12 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Pin, Trash2, Edit2, X, Megaphone } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades } from "@/hooks/useReferenceData";
 
-interface Grade { id: string; name: string }
 interface Notice {
   id: string;
   title: string;
@@ -44,9 +45,10 @@ const priorityColors: Record<string, string> = {
 
 export default function NoticeBoardPage() {
   const confirm = useConfirm();
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { grades, loading: loadingGrades } = useGrades();
+  const { data: noticesData, isLoading: loadingNotices, mutate: fetchNotices } = useSWR<Notice[]>("/notices");
+  const notices = noticesData ?? [];
+  const loading = loadingGrades || loadingNotices;
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -55,27 +57,6 @@ export default function NoticeBoardPage() {
     targetAudience: "ALL", gradeId: "", publishDate: "", expiryDate: "",
     isPublished: true, isPinned: false,
   });
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [n, year] = await Promise.all([
-          api.get<Notice[]>("/notices"),
-          api.get<any>("/academic-years/active"),
-        ]);
-        setNotices(n);
-        if (year) {
-          const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-          setGrades(g);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
-
-  const fetchNotices = async () => {
-    const data = await api.get<Notice[]>("/notices");
-    setNotices(data);
-  };
 
   const resetForm = () => {
     setForm({

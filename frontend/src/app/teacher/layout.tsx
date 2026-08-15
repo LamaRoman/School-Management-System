@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { api } from "@/lib/api";
+import { useMyAssignments } from "@/hooks/useReferenceData";
 import { LogOut, GraduationCap, ClipboardList, CalendarCheck,
   ClipboardCheck, Users, CalendarDays, BookOpen, Megaphone, KeyRound, LayoutDashboard } from "lucide-react";
 
@@ -15,22 +15,13 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isClassTeacher, setIsClassTeacher] = useState(false);
+  const { classTeacherSections } = useMyAssignments();
+  const isClassTeacher = classTeacherSections.length > 0;
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
     if (!loading && user && !allowedRoles.includes(user.role)) router.replace("/");
   }, [user, loading, router]);
-
-  useEffect(() => {
-    if (user && allowedRoles.includes(user.role)) {
-      api.get<any>("/teacher-assignments/my")
-        .then((data) => {
-          setIsClassTeacher(data.classTeacherSections?.length > 0);
-        })
-        .catch(() => {});
-    }
-  }, [user]);
 
   if (loading || !user || !allowedRoles.includes(user.role)) {
     return (

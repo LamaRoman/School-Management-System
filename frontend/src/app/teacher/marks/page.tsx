@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyAssignments } from "@/hooks/useReferenceData";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
@@ -26,8 +28,12 @@ interface MarkEntry { studentId: string; theoryMarks: number | null; practicalMa
 
 export default function MarksEntryPage() {
   const { loading: authLoading } = useAuth();
-  const [myAssignments, setMyAssignments] = useState<SubjectAssignment[]>([]);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const { subjectAssignments, loading } = useMyAssignments();
+  const myAssignments = subjectAssignments as SubjectAssignment[];
+  const { data: examTypesData } = useSWR<ExamType[]>(
+    myAssignments.length ? `/exam-types?academicYearId=${myAssignments[0].academicYearId}` : null
+  );
+  const examTypes = examTypesData ?? [];
   const [students, setStudents] = useState<Student[]>([]);
 
   const [selectedAssignment, setSelectedAssignment] = useState("");
@@ -35,23 +41,6 @@ export default function MarksEntryPage() {
 
   const [marks, setMarks] = useState<Record<string, MarkEntry>>({});
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        setMyAssignments(data.subjectAssignments || []);
-
-        if (data.subjectAssignments?.length > 0) {
-          const yearId = data.subjectAssignments[0].academicYearId;
-          const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${yearId}`);
-          setExamTypes(et);
-        }
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    })();
-  }, []);
 
   const currentAssignment = myAssignments.find((a) => a.assignmentId === selectedAssignment);
 

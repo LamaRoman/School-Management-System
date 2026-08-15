@@ -1,6 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
+import { useGrades } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -11,48 +13,27 @@ interface Subject {
   isOptional: boolean; displayOrder: number;
   grade: { name: string };
 }
-interface Grade { id: string; name: string; displayOrder: number }
 
 const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, creditHour: 4, isOptional: false, displayOrder: 0, gradeId: "" };
 
 export default function SubjectsPage() {
   const confirm = useConfirm();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [selectedGrade, setSelectedGrade] = useState("");
+  const { grades, loading: loadingGrades } = useGrades();
+  const [pickedGrade, setPickedGrade] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
 
-  // Without these the table renders "No subjects for this grade" while the
-  // fetch is still in flight, which reads as a grade with nothing set up.
-  const [loadingGrades, setLoadingGrades] = useState(true);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const selectedGrade = pickedGrade || grades[0]?.id || "";
 
-  const fetchGrades = async () => {
-    try {
-      const year = await api.get<any>("/academic-years/active");
-      if (year) {
-        const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-        setGrades(g);
-        if (g.length > 0 && !selectedGrade) setSelectedGrade(g[0].id);
-      }
-    } finally {
-      setLoadingGrades(false);
-    }
-  };
-
-  const fetchSubjects = () => {
-    if (!selectedGrade) return;
-    setLoadingSubjects(true);
-    api.get<Subject[]>(`/subjects?gradeId=${selectedGrade}`)
-      .then(setSubjects)
-      .catch(() => {})
-      .finally(() => setLoadingSubjects(false));
-  };
-
-  useEffect(() => { fetchGrades(); }, []);
-  useEffect(() => { fetchSubjects(); }, [selectedGrade]);
+  // `loadingSubjects` keeps the table from rendering "No subjects for this grade"
+  // while the fetch is still in flight, which reads as a grade with nothing set up.
+  const {
+    data: subjectsData,
+    isLoading: loadingSubjects,
+    mutate: fetchSubjects,
+  } = useSWR<Subject[]>(selectedGrade ? `/subjects?gradeId=${selectedGrade}` : null);
+  const subjects = subjectsData ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +78,7 @@ export default function SubjectsPage() {
       {/* Grade selector */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {grades.map((g) => (
-          <button key={g.id} onClick={() => setSelectedGrade(g.id)}
+          <button key={g.id} onClick={() => setPickedGrade(g.id)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedGrade === g.id ? "bg-primary text-white shadow-sm" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
             {g.name}
           </button>

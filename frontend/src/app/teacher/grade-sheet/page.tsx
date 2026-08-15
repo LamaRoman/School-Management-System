@@ -1,47 +1,21 @@
 "use client";
-import { useState, useEffect } from "react";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import useSWR from "swr";
 import { formatGradeSection } from "@/lib/bsDate";
 import GradeSheet from "@/components/ui/GradeSheet";
-
-interface ClassTeacherSection {
-  assignmentId: string;
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 
 interface ExamType { id: string; name: string; isFinal: boolean }
 
 export default function TeacherGradeSheetPage() {
-  const [mySections, setMySections] = useState<ClassTeacherSection[]>([]);
-  const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { classTeacherSections: mySections, loading } = useMyAssignments();
+  const [pickedSection, setPickedSection] = useState<ClassTeacherSection | null>(null);
+  const selectedSection = pickedSection ?? mySections[0] ?? null;
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        const sections = data.classTeacherSections || [];
-        setMySections(sections);
-        if (sections.length > 0) {
-          setSelectedSection(sections[0]);
-        }
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (selectedSection) {
-      api.get<ExamType[]>(`/exam-types?academicYearId=${selectedSection.academicYearId}`)
-        .then(setExamTypes)
-        .catch(() => setExamTypes([]));
-    }
-  }, [selectedSection]);
+  const { data: examTypesData } = useSWR<ExamType[]>(
+    selectedSection ? `/exam-types?academicYearId=${selectedSection.academicYearId}` : null
+  );
+  const examTypes = examTypesData ?? [];
 
   if (loading) {
     return (
@@ -79,7 +53,7 @@ export default function TeacherGradeSheetPage() {
             value={selectedSection?.assignmentId || ""}
             onChange={(e) => {
               const sec = mySections.find((s) => s.assignmentId === e.target.value);
-              if (sec) setSelectedSection(sec);
+              if (sec) setPickedSection(sec);
             }}
           >
             {mySections.map((s) => (

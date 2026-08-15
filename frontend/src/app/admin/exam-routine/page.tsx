@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Copy, Save } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
+import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 
-interface Grade { id: string; name: string; displayOrder: number }
-interface ExamType { id: string; name: string }
 interface Subject { id: string; name: string; nameNp?: string }
 interface RoutineEntry {
   id?: string;
@@ -21,35 +21,17 @@ interface RoutineEntry {
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function ExamRoutinePage() {
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const { grades, loading: loadingGrades } = useGrades();
+  const { examTypes, loading: loadingExamTypes } = useExamTypes();
+  const { data: school } = useSWR<any>("/school");
+  const loading = loadingGrades || loadingExamTypes;
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedExam, setSelectedExam] = useState("");
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCopy, setShowCopy] = useState(false);
   const [copyTargetGrade, setCopyTargetGrade] = useState("");
-  const [school, setSchool] = useState<any>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        const schoolData = await api.get<any>("/school").catch(() => null);
-        setSchool(schoolData);
-        if (year) {
-          const [g, et] = await Promise.all([
-            api.get<Grade[]>(`/grades?academicYearId=${year.id}`),
-            api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`),
-          ]);
-          setGrades(g);
-          setExamTypes(et);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   const handleGradeChange = async (gradeId: string) => {
     setSelectedGrade(gradeId);

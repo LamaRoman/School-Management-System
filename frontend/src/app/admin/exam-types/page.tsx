@@ -1,32 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-
-interface ExamType { id: string; name: string; isFinal: boolean; displayOrder: number; paperSize: string; showRank: boolean }
+import { useExamTypes } from "@/hooks/useReferenceData";
 
 export default function ExamTypesPage() {
   const confirm = useConfirm();
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [activeYear, setActiveYear] = useState<any>(null);
+  // The writer of the exam-type list the rest of the app reads.
+  const { activeYear, examTypes, loading, mutate: fetchData } = useExamTypes();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", isFinal: false, displayOrder: 0, paperSize: "A5", showRank: true });
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      const year = await api.get<any>("/academic-years/active");
-      setActiveYear(year);
-      if (year) {
-        const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
-        setExamTypes(et);
-      }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchData(); }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

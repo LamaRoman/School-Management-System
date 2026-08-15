@@ -1,8 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades } from "@/hooks/useReferenceData";
 import { Plus, X, UserPlus, Link2, Unlink, Search, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
 
 interface Student {
@@ -10,12 +12,6 @@ interface Student {
   name: string;
   rollNo?: number;
   section: { name: string; grade: { name: string } };
-}
-
-interface Grade {
-  id: string;
-  name: string;
-  sections: { id: string; name: string }[];
 }
 
 interface ParentLink {
@@ -39,9 +35,10 @@ const RELATIONSHIPS = ["Father", "Mother", "Guardian", "Other"];
 
 export default function AdminParentsPage() {
   const confirm = useConfirm();
-  const [parents, setParents] = useState<Parent[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { grades, loading: loadingGrades } = useGrades();
+  const { data: parentsData, isLoading: loadingParents, mutate: fetchAll } = useSWR<Parent[]>("/parents");
+  const parents = parentsData ?? [];
+  const loading = loadingGrades || loadingParents;
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -61,49 +58,18 @@ export default function AdminParentsPage() {
   const [linkStudentId, setLinkStudentId] = useState("");
   const [linkRelationship, setLinkRelationship] = useState("Father");
   const [linkGradeId, setLinkGradeId] = useState("");
-  const [linkSectionStudents, setLinkSectionStudents] = useState<Student[]>([]);
+  const { data: linkGradeStudents } = useSWR<Student[]>(
+    linkGradeId ? `/students?gradeId=${linkGradeId}` : null
+  );
+  const linkSectionStudents = linkGradeStudents ?? [];
 
   // Student picker for create form
   const [pickerGradeId, setPickerGradeId] = useState("");
   const [pickerSectionId, setPickerSectionId] = useState("");
-  const [pickerStudents, setPickerStudents] = useState<Student[]>([]);
-
-  useEffect(() => {
-    fetchAll();
-  }, []);
-
-  const fetchAll = async () => {
-    try {
-      const [p, year] = await Promise.all([
-        api.get<Parent[]>("/parents"),
-        api.get<any>("/academic-years/active"),
-      ]);
-      setParents(p);
-      if (year) {
-        const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-        setGrades(g);
-      }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
-
-  // Load students when picker grade/section changes (create form)
-  useEffect(() => {
-    if (!pickerSectionId) { setPickerStudents([]); return; }
-    api.get<Student[]>(`/students?sectionId=${pickerSectionId}`)
-      .then(setPickerStudents)
-      .catch(() => setPickerStudents([]));
-  }, [pickerSectionId]);
-
-  // Load students when link section changes
-  useEffect(() => {
-    if (!linkGradeId) { setLinkSectionStudents([]); setLinkStudentId(""); return; }
-    const grade = grades.find(g => g.id === linkGradeId);
-    if (grade?.sections?.[0]) {
-      api.get<Student[]>(`/students?gradeId=${linkGradeId}`)
-        .then(setLinkSectionStudents)
-        .catch(() => setLinkSectionStudents([]));
-    }
-  }, [linkGradeId]);
+  const { data: pickerSectionStudents } = useSWR<Student[]>(
+    pickerSectionId ? `/students?sectionId=${pickerSectionId}` : null
+  );
+  const pickerStudents = pickerSectionStudents ?? [];
 
   const pickerGrade = grades.find(g => g.id === pickerGradeId);
   const pickerSections = pickerGrade?.sections || [];
@@ -130,7 +96,7 @@ export default function AdminParentsPage() {
       });
       toast.success("Parent account created");
       setForm({ email: "", password: "", relationship: "Father", studentIds: [] });
-      setPickerGradeId(""); setPickerSectionId(""); setPickerStudents([]);
+      setPickerGradeId(""); setPickerSectionId("");
       setShowForm(false);
       fetchAll();
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
@@ -146,7 +112,7 @@ export default function AdminParentsPage() {
       });
       toast.success("Student linked");
       setLinkingParentId(null);
-      setLinkStudentId(""); setLinkGradeId(""); setLinkSectionStudents([]);
+      setLinkStudentId(""); setLinkGradeId("");
       fetchAll();
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -241,7 +207,7 @@ export default function AdminParentsPage() {
           <div className="mb-4">
             <label className="label mb-2">Link to Student(s) *</label>
             <div className="flex gap-3 mb-3">
-              <select className="input flex-1" value={pickerGradeId} onChange={e => { setPickerGradeId(e.target.value); setPickerSectionId(""); setPickerStudents([]); }}>
+              <select className="input flex-1" value={pickerGradeId} onChange={e => { setPickerGradeId(e.target.value); setPickerSectionId(""); }}>
                 <option value="">Select Grade</option>
                 {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
@@ -405,7 +371,7 @@ export default function AdminParentsPage() {
                         className="btn-primary text-xs py-1.5">
                         <Link2 size={12} /> Link
                       </button>
-                      <button onClick={() => { setLinkingParentId(null); setLinkGradeId(""); setLinkStudentId(""); setLinkSectionStudents([]); }}
+                      <button onClick={() => { setLinkingParentId(null); setLinkGradeId(""); setLinkStudentId(""); }}
                         className="btn-ghost text-xs py-1.5">
                         Cancel
                       </button>

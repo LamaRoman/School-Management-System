@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, X, Eye, EyeOff } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades } from "@/hooks/useReferenceData";
 
-interface Grade { id: string; name: string; displayOrder: number }
 interface Category { id: string; name: string; nameNp?: string; displayOrder: number; isActive: boolean }
 
 const defaultCategories = [
@@ -15,27 +15,14 @@ const defaultCategories = [
 
 export default function ObservationsPage() {
   const confirm = useConfirm();
-  const [grades, setGrades] = useState<Grade[]>([]);
+  const { grades, loading } = useGrades();
   const [selectedGrade, setSelectedGrade] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNameNp, setNewNameNp] = useState("");
   const [showBulk, setShowBulk] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<string[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        if (year) {
-          const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-          setGrades(g);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   const fetchCategories = async (gradeId: string) => {
     try {
