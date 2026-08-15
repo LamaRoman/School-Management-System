@@ -34,11 +34,13 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **W4** | Grade sheet downloadable as .xlsx, marks as real numbers | #27 |
 | **S5, S6a/c/d/e, S6b-i, S8** | Unscoped exam type in PDFs; public endpoints served suspended schools, self-rate-limited and uncacheable; photo size cap | #28 |
 | **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | #29 |
-| **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #30 |
+| **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #31 |
 
 **Suggested next:** **F8** (code-split the print/export helpers — a copy-the-shape job now), then the small ones: **F7**, **F9**, **F10**.
 
-**Handover note (2026-08-16, end of session):** two PRs are open and awaiting review, and **#30 is stacked on #29** — review and merge #29 first, or #30's diff will read as containing both. #29 (`perf/f2-f4b-f5-swr-adoption`) adopts SWR; #30 (`perf/f4b-tail`) finishes F4b and deletes `useLatestRequest`. #29 adds a `swr` dependency, so a reviewer pulling either branch needs `npm install` in `frontend/`. Backend suite **266/266** on both, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems vs a 278 baseline — the four added are `no-explicit-any` on `useSWR<any[]>` calls in `admin/fees`, matching that file's existing `useState<any[]>` style). Verified in the running app as both a teacher and an admin — see F2 for the caching evidence and F4b for the four re-tested races. Nothing else is mid-flight.
+**Handover note (2026-08-16, end of session):** **#29 and #31 are merged to `main`** and deployed — Railway auto-deploys on push, and there is no migration in either, so the deploy is a plain restart. `main` is clean at the #31 merge. The frontend gained a `swr` dependency, so anyone pulling `main` needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems vs a 278 baseline — the four added are `no-explicit-any` on `useSWR<any[]>` calls in `admin/fees`, matching that file's existing `useState<any[]>` style). Verified in the running app as both a teacher and an admin — see F2 for the caching evidence and F4b for the four re-tested races. Nothing is mid-flight.
+
+*(Bookkeeping: the F4b tail was first opened as **#30**, stacked on #29's branch. Merging #29 with `--delete-branch` removed that base branch, and GitHub auto-**closed** #30 rather than retargeting it — a closed PR cannot have its base changed or be reopened once its base is gone. The same commit was reopened against `main` as **#31** and merged. Nothing was lost; when stacking PRs again, retarget the child to `main` **before** merging the parent, or merge without `--delete-branch`.)*
 
 > **Everything that is still open — including everything deliberately *not* done and why — is listed together under [Everything still open, in one place](#everything-still-open-in-one-place) below.** Nothing is only discoverable by reading the whole document.
 
@@ -999,7 +1001,7 @@ They mount with empty arrays and render an empty table while fetching. Perceptua
 
 ### [x] F4. No stale-response guards — the roster can show the wrong class
 
-> **CLOSED 2026-08-16.** F4a landed the "latest wins" stopgap on the six write pages (2026-08-14); F4b replaced it everywhere with URL-keyed SWR (#29, #30) and **deleted the stopgap hook**. Four races were re-tested against the new code with delayed responses — see the table under F4b.
+> **CLOSED 2026-08-16.** F4a landed the "latest wins" stopgap on the six write pages (2026-08-14); F4b replaced it everywhere with URL-keyed SWR (#29, #31) and **deleted the stopgap hook**. Four races were re-tested against the new code with delayed responses — see the table under F4b.
 **Where:** app-wide. **140 `useEffect`s, zero `AbortController`s, zero request-sequence guards.** The only 6 cleanup returns are for timers and event listeners, none for fetches.
 
 Every data-fetching effect is exposed to the out-of-order response race: select section A, quickly select B, and A's slower response can land *after* B's and overwrite state. The UI then shows section B selected while displaying section A's students.
@@ -1055,7 +1057,7 @@ Note `api.ts` **cannot** fix this on its own — the race is about which `setSta
 
 - [x] **F4b. Phase 2** — adopt SWR as the default for new and touched pages, migrate the rest opportunistically.
 
-  > **FINISHED 2026-08-16 (#30).** `hooks/useLatestRequest.ts` is **deleted** — nothing imports it. Every data-fetching page in the app is now URL-keyed, so the "latest wins" ticket counter has nothing left to guard.
+  > **FINISHED 2026-08-16 (#31).** `hooks/useLatestRequest.ts` is **deleted** — nothing imports it. Every data-fetching page in the app is now URL-keyed, so the "latest wins" ticket counter has nothing left to guard.
   >
   > **The list of remaining pages in the note below was wrong, and the correction is the useful part.** It named `admin/fees`, `teacher/my-class` and `teacher/observations`. In fact `teacher/my-class` **never used the stopgap at all**, and `teacher/attendance` and `teacher/students` — two of F4a's original six — still did. The list was written from memory of F4a's page list rather than from `grep`; the actual set was `admin/fees`, `teacher/observations`, `teacher/attendance`, `teacher/students`. All four are migrated.
   >
