@@ -1,10 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
 import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
 import ResultsPending from "@/components/ui/ResultsPending";
+import { useExamTypes } from "@/hooks/useReferenceData";
 
 interface ColumnSettings {
   showPassMarks: boolean;
@@ -48,30 +50,12 @@ export default function StudentReportPage() {
   const { user } = useAuth();
   const [reportData, setReportData] = useState<any>(null);
   const [mode, setMode] = useState<"color" | "bw">("color");
-  const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
-  const [examTypes, setExamTypes] = useState<any[]>([]);
+  const { activeYear, examTypes, loading } = useExamTypes();
   const [selectedExam, setSelectedExam] = useState("");
-  const [activeYear, setActiveYear] = useState<any>(null);
-  const [cols, setCols] = useState<ColumnSettings>(defaultSettings);
+  const { data: settings } = useSWR<ColumnSettings>("/report-card-settings");
+  const cols = settings ?? defaultSettings;
   const [observations, setObservations] = useState<any[] | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [year, settings] = await Promise.all([
-          api.get<any>("/academic-years/active"),
-          api.get<ColumnSettings>("/report-card-settings").catch(() => defaultSettings),
-        ]);
-        setActiveYear(year);
-        if (settings) setCols(settings);
-        if (year) {
-          const et = await api.get<any[]>(`/exam-types?academicYearId=${year.id}`);
-          setExamTypes(et);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   const loadReport = async (examTypeId: string) => {
     if (!user?.student?.id) return;
@@ -81,6 +65,7 @@ export default function StudentReportPage() {
     try {
       let data: any;
       if (et?.isFinal) {
+        if (!activeYear) return;
         data = await api.get(`/reports/final/${user.student.id}/${activeYear.id}`);
       } else {
         data = await api.get(`/reports/term/${user.student.id}/${examTypeId}`);
@@ -108,6 +93,7 @@ export default function StudentReportPage() {
 
       const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
       if (et?.isFinal) {
+        if (!activeYear) return;
         url = `${API_BASE}/pdf/final/${user.student.id}/${activeYear.id}?mode=${pdfMode}`;
       } else {
         url = `${API_BASE}/pdf/term/${user.student.id}/${selectedExam}?mode=${pdfMode}`;

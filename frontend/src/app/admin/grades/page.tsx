@@ -1,35 +1,20 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Users, Layers, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-
-interface Section { id: string; name: string; _count: { students: number } }
-interface Grade { id: string; name: string; displayOrder: number; gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED"; sections: Section[]; _count: { subjects: number; sections: number } }
+import { useGrades } from "@/hooks/useReferenceData";
 
 export default function GradesPage() {
   const confirm = useConfirm();
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [activeYear, setActiveYear] = useState<any>(null);
+  // This page is the writer of the grade/section tree every other page reads,
+  // so it edits the shared cache rather than a local copy of it.
+  const { activeYear, grades, loading, mutate: fetchData } = useGrades();
   const [showGradeForm, setShowGradeForm] = useState(false);
   const [gradeForm, setGradeForm] = useState<{ name: string; displayOrder: number; gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED" }>({ name: "", displayOrder: 0, gradingStyle: "MARKS_BASED" });
   const [addingSectionFor, setAddingSectionFor] = useState<string | null>(null);
   const [sectionName, setSectionName] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  const fetchData = async () => {
-    try {
-      const year = await api.get<any>("/academic-years/active");
-      setActiveYear(year);
-      if (year) {
-        const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-        setGrades(g);
-      }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchData(); }, []);
 
   const addGrade = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +43,7 @@ export default function GradesPage() {
     try {
       await api.put(`/grades/${id}`, { gradingStyle });
       toast.success("Report style updated");
-      setGrades((prev) => prev.map((g) => (g.id === id ? { ...g, gradingStyle } : g)));
+      fetchData((prev) => prev?.map((g) => (g.id === id ? { ...g, gradingStyle } : g)), { revalidate: false });
     } catch (err: any) { toast.error(err.message); }
   };
 

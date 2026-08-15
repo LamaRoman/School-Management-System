@@ -1,49 +1,45 @@
 "use client";
 import { useState, useEffect } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Save } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { GRADING_SCALE } from "@/lib/gradingScale";
+import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 
-interface ExamType { id: string; name: string; displayOrder: number }
-interface Grade { id: string; name: string; displayOrder: number }
 interface Policy { id: string; examTypeId: string; weightagePercent: number; examType: { name: string } }
 
 export default function GradingPolicyPage() {
   const confirm = useConfirm();
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [selectedGrade, setSelectedGrade] = useState("");
+  const { grades, loading: loadingGrades } = useGrades();
+  const { examTypes, loading: loadingExamTypes } = useExamTypes();
+  const loading = loadingGrades || loadingExamTypes;
+  const [pickedGrade, setPickedGrade] = useState("");
   const [policies, setPolicies] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        if (year) {
-          const [g, et] = await Promise.all([
-            api.get<Grade[]>(`/grades?academicYearId=${year.id}`),
-            api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`),
-          ]);
-          setGrades(g);
-          setExamTypes(et);
-          if (g.length > 0) setSelectedGrade(g[0].id);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+  const selectedGrade = pickedGrade || grades[0]?.id || "";
 
+  const { data: savedPolicies } = useSWR<Policy[]>(
+    selectedGrade ? `/grading-policy?gradeId=${selectedGrade}` : null
+  );
+
+  // The weightages are edited in place, so they are held as local state seeded
+  // from the fetch. Switching grade empties them until that grade's own policy
+  // arrives — previously the outgoing grade's numbers stayed on screen, and a
+  // Save during that window wrote them to the grade now selected.
   useEffect(() => {
-    if (!selectedGrade) return;
-    api.get<Policy[]>(`/grading-policy?gradeId=${selectedGrade}`).then((p) => {
-      const map: Record<string, number> = {};
-      p.forEach((pol) => { map[pol.examTypeId] = pol.weightagePercent; });
-      setPolicies(map);
-    }).catch(() => {});
-  }, [selectedGrade]);
+    const map: Record<string, number> = {};
+    (savedPolicies ?? []).forEach((p) => { map[p.examTypeId] = p.weightagePercent; });
+    setPolicies(map);
+  }, [savedPolicies]);
+
+  // Both save paths can write policies for grades other than the selected one,
+  // so they drop every cached grading policy rather than just this grade's.
+  const { mutate: mutateCache } = useSWRConfig();
+  const invalidatePolicies = () =>
+    mutateCache((key) => typeof key === "string" && key.startsWith("/grading-policy"));
 
   const total = Object.values(policies).reduce((a, b) => a + b, 0);
 
@@ -56,6 +52,7 @@ export default function GradingPolicyPage() {
         policies: Object.entries(policies).map(([examTypeId, weightagePercent]) => ({ examTypeId, weightagePercent })),
       });
       toast.success("Grading policy saved");
+      invalidatePolicies();
     } catch (err: any) { toast.error(err.message); }
     finally { setSaving(false); }
   };
@@ -71,6 +68,7 @@ export default function GradingPolicyPage() {
         });
       }
       toast.success("Applied to all grades");
+      invalidatePolicies();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -86,7 +84,7 @@ export default function GradingPolicyPage() {
       {/* Grade selector */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {grades.map((g) => (
-          <button key={g.id} onClick={() => setSelectedGrade(g.id)}
+          <button key={g.id} onClick={() => setPickedGrade(g.id)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedGrade === g.id ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
             {g.name}
           </button>

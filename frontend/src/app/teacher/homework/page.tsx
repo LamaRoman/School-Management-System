@@ -1,10 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useMyAssignments } from "@/hooks/useReferenceData";
 
 interface Assignment {
   sectionId: string;
@@ -28,9 +30,11 @@ interface Homework {
 
 export default function TeacherHomeworkPage() {
   const confirm = useConfirm();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [homework, setHomework] = useState<Homework[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { subjectAssignments, loading: loadingAssignments } = useMyAssignments();
+  const assignments = subjectAssignments as Assignment[];
+  const { data: homeworkData, isLoading: loadingHomework, mutate: fetchHomework } = useSWR<Homework[]>("/homework");
+  const homework = homeworkData ?? [];
+  const loading = loadingAssignments || loadingHomework;
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -38,22 +42,6 @@ export default function TeacherHomeworkPage() {
     title: "", description: "", sectionId: "", subjectId: "",
     academicYearId: "", assignedDate: "", dueDate: "",
   });
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        setAssignments(data.subjectAssignments || []);
-        const hw = await api.get<Homework[]>("/homework");
-        setHomework(hw);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
-
-  const fetchHomework = async () => {
-    const hw = await api.get<Homework[]>("/homework");
-    setHomework(hw);
-  };
 
   const resetForm = () => {
     setForm({ title: "", description: "", sectionId: "", subjectId: "", academicYearId: "", assignedDate: "", dueDate: "" });

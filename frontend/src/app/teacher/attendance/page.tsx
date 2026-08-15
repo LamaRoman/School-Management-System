@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import {
@@ -14,15 +15,6 @@ import {
   formatGradeSection,
 } from "@/lib/bsDate";
 
-interface ClassTeacherSection {
-  assignmentId: string;
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
-
 interface AttendanceRecord {
   studentId: string;
   studentName: string;
@@ -33,29 +25,16 @@ interface AttendanceRecord {
 }
 
 export default function AttendancePage() {
-  const [mySections, setMySections] = useState<ClassTeacherSection[]>([]);
-  const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
+  const { classTeacherSections: mySections, loading } = useMyAssignments();
+  const [pickedSection, setPickedSection] = useState<ClassTeacherSection | null>(null);
   const [date, setDate] = useState(getTodayBS());
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const runAttendance = useLatestRequest();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        const sections = data.classTeacherSections || [];
-        setMySections(sections);
-        if (sections.length > 0) {
-          setSelectedSection(sections[0]);
-        }
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    })();
-  }, []);
+  const selectedSection = pickedSection ?? mySections[0] ?? null;
 
   const fetchAttendance = async () => {
     if (!selectedSection || !date) return;
@@ -181,7 +160,7 @@ export default function AttendancePage() {
           value={selectedSection?.assignmentId || ""}
           onChange={(e) => {
             const sec = mySections.find((s) => s.assignmentId === e.target.value);
-            if (sec) setSelectedSection(sec);
+            if (sec) setPickedSection(sec);
           }}
         >
           {mySections.map((s) => (

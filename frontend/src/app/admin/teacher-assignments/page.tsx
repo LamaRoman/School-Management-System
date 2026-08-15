@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Clock, Shield, BookOpen, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades } from "@/hooks/useReferenceData";
 
 interface Teacher { id: string; name: string; nameNp?: string; email?: string; phone?: string }
-interface Grade { id: string; name: string; displayOrder: number; sections: { id: string; name: string }[] }
 interface Subject { id: string; name: string }
 interface Assignment {
     id: string;
@@ -21,16 +21,12 @@ interface Assignment {
 
 export default function TeacherAssignmentsPage() {
   const confirm = useConfirm();
-    const [assignments, setAssignments] = useState<Assignment[]>([]);
-    const [teachers, setTeachers] = useState<Teacher[]>([]);
-    const [grades, setGrades] = useState<Grade[]>([]);
-    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const { grades, loading: loadingGrades } = useGrades();
+    const { data: teachersData } = useSWR<Teacher[]>("/teachers");
+    const teachers = teachersData ?? [];
     const [selectedGrade, setSelectedGrade] = useState("");
     const [selectedSection, setSelectedSection] = useState("");
     const [showForm, setShowForm] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const runAssignments = useLatestRequest();
-    const runSubjects = useLatestRequest();
 
     const [form, setForm] = useState({
         teacherId: "",
@@ -41,64 +37,31 @@ export default function TeacherAssignmentsPage() {
         expiresAt: "",
     });
 
-    const fetchAssignments = async () => {
-        const params = selectedSection
-            ? `?sectionId=${selectedSection}`
-            : selectedGrade
-                ? `?gradeId=${selectedGrade}`
-                : "";
-        await runAssignments(
-            () => api.get<Assignment[]>(`/teacher-assignments${params}`),
-            setAssignments
-        );
-    };
+    const assignmentParams = selectedSection
+        ? `?sectionId=${selectedSection}`
+        : selectedGrade
+            ? `?gradeId=${selectedGrade}`
+            : "";
+    const {
+        data: assignmentsData,
+        isLoading: loadingAssignments,
+        mutate: fetchAssignments,
+    } = useSWR<Assignment[]>(`/teacher-assignments${assignmentParams}`);
+    const assignments = assignmentsData ?? [];
+    const loading = loadingGrades || loadingAssignments;
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const year = await api.get<any>("/academic-years/active");
-                if (year) {
-                    const [g, t, allAssignments] = await Promise.all([
-                        api.get<Grade[]>(`/grades?academicYearId=${year.id}`),
-                        api.get<Teacher[]>("/teachers"),
-                        api.get<Assignment[]>("/teacher-assignments"),
-                    ]);
-                    setGrades(g);
-                    setTeachers(t);
-                    setAssignments(allAssignments);
-                }
-            } catch { } finally {
-                setLoading(false);
-            }
-        })();
-    }, []);
-
-    useEffect(() => {
-        if (selectedGrade || selectedSection) fetchAssignments();
-    }, [selectedGrade, selectedSection]);
-
-    useEffect(() => {
-        const gradeId = selectedGrade || getGradeIdFromSection(form.sectionId);
-        if (gradeId) {
-            // A superseded subject list is not just a confusing dropdown: the form posts
-            // whichever subjectId is picked from it, and the server does not yet check that
-            // the subject belongs to the section's grade (S4), so a stale list is a route to
-            // a cross-grade assignment — which then gates who may enter marks for what.
-            setSubjects([]);
-            runSubjects(
-                () => api.get<Subject[]>(`/subjects?gradeId=${gradeId}`),
-                setSubjects,
-                () => setSubjects([])
-            );
-        }
-    }, [selectedGrade, form.sectionId]);
-
-    const getGradeIdFromSection = (sectionId: string): string => {
-        for (const g of grades) {
-            if (g.sections?.some((s: any) => s.id === sectionId)) return g.id;
-        }
-        return "";
-    };
+    // A superseded subject list is not just a confusing dropdown: the form posts
+    // whichever subjectId is picked from it, so a stale list is a route to a
+    // cross-grade assignment — which then gates who may enter marks for what.
+    // (The server refuses one since S4; this keeps it from being offered.)
+    const subjectsGradeId =
+        selectedGrade ||
+        grades.find((g) => g.sections.some((s) => s.id === form.sectionId))?.id ||
+        "";
+    const { data: subjectsData } = useSWR<Subject[]>(
+        subjectsGradeId ? `/subjects?gradeId=${subjectsGradeId}` : null
+    );
+    const subjects = subjectsData ?? [];
 
     const currentGrade = grades.find((g) => g.id === selectedGrade);
     const sections = currentGrade?.sections || [];

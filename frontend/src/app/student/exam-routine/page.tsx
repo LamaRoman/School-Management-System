@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer } from "lucide-react";
 import { printExamRoutine } from "@/lib/printUtils";
+import { useExamTypes } from "@/hooks/useReferenceData";
 
-interface ExamType { id: string; name: string }
 interface RoutineEntry {
   id: string;
   examDate: string;
@@ -18,34 +19,15 @@ interface RoutineEntry {
 
 export default function StudentExamRoutinePage() {
   const { user } = useAuth();
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const { examTypes, loading: loadingExamTypes } = useExamTypes();
   const [selectedExam, setSelectedExam] = useState("");
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
-  const [gradeId, setGradeId] = useState("");
-  const [gradeName, setGradeName] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        // Get student's grade info from their report data or section
-        const year = await api.get<any>("/academic-years/active");
-        if (year) {
-          const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
-          setExamTypes(et);
-        }
-
-        // Get student's section and grade
-        if (user?.student?.id) {
-          const student = await api.get<any>(`/students/${user.student.id}`);
-          if (student?.section?.grade) {
-            setGradeId(student.section.grade.id);
-            setGradeName(student.section.grade.name);
-          }
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, [user]);
+  const { data: student, isLoading: loadingStudent } = useSWR<any>(
+    user?.student?.id ? `/students/${user.student.id}` : null
+  );
+  const gradeId = student?.section?.grade?.id ?? "";
+  const gradeName = student?.section?.grade?.name ?? "";
+  const loading = loadingExamTypes || loadingStudent;
 
   const handleExamSelect = async (examTypeId: string) => {
     if (!gradeId) return;

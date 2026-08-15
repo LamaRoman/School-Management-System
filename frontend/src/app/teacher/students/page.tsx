@@ -1,18 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import { formatGradeSection } from "@/lib/bsDate";
 import toast from "react-hot-toast";
 import { Save, X, Hash } from "lucide-react";
-
-interface ClassTeacherSection {
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
 
 interface Student {
   id: string;
@@ -29,10 +22,9 @@ interface Student {
 }
 
 export default function TeacherStudentsPage() {
-  const [sections, setSections] = useState<ClassTeacherSection[]>([]);
+  const { classTeacherSections: sections, loading } = useMyAssignments();
   const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [saving, setSaving] = useState(false);
   const runStudents = useLatestRequest();
@@ -45,14 +37,6 @@ export default function TeacherStudentsPage() {
   const [showRolls, setShowRolls] = useState(false);
   const [rollAssignments, setRollAssignments] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>("/teacher-assignments/my");
-        setSections(data.classTeacherSections || []);
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   const handleSectionSelect = async (section: ClassTeacherSection) => {
     setSelectedSection(section);

@@ -3,16 +3,13 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { getTodayBS, formatBSDateLong, BS_MONTH_NAMES, getCurrentBSMonthName, getPreviousDayBS, getNextDayBS, isFutureBS, isTodayBS } from "@/lib/bsDate";
 import { ChevronLeft, ChevronRight, Printer, Search, AlertTriangle, BookOpen, FileBarChart, Users, Calendar, Receipt } from "lucide-react";
+import { useActiveYear, useGrades } from "@/hooks/useReferenceData";
 
 type ReportView = "menu" | "daily-cashbook" | "payment-history" | "defaulters" | "discounts" | "monthly-summary" | "student-count";
 
 export default function AccountantReportsPage() {
   const [view, setView] = useState<ReportView>("menu");
-  const [activeYear, setActiveYear] = useState<any>(null);
-
-  useEffect(() => {
-    api.get<any>("/academic-years/active").then(setActiveYear).catch(() => {});
-  }, []);
+  const { activeYear } = useActiveYear();
 
   if (!activeYear) return <div className="max-w-5xl mx-auto p-6"><div className="card p-8 text-center text-gray-400">Loading...</div></div>;
 
@@ -264,13 +261,11 @@ function PaymentHistory({ activeYear, onBack }: { activeYear: any; onBack: () =>
 // ─── DEFAULTER REPORT ───────────────────────────────────
 
 function DefaulterReport({ activeYear, onBack }: { activeYear: any; onBack: () => void }) {
-  const [grades, setGrades] = useState<any[]>([]);
+  const { grades } = useGrades();
   const [selectedGrade, setSelectedGrade] = useState("");
   const [currentMonth, setCurrentMonth] = useState(getCurrentBSMonthName());
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => { api.get<any[]>(`/grades?academicYearId=${activeYear.id}`).then(setGrades).catch(() => {}); }, []);
 
   const fetchData = async () => {
     setLoading(true);

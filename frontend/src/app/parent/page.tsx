@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { GraduationCap, Calendar, Receipt, Megaphone, Pin } from "lucide-react";
 import ResultsPending from "@/components/ui/ResultsPending";
+import { useExamTypes } from "@/hooks/useReferenceData";
 
 interface Child {
   id: string;
@@ -25,14 +26,12 @@ interface AttendanceData {
   absentDays: number;
 }
 
-interface ExamType { id: string; name: string, isFinal: boolean }
-
 export default function ParentDashboard() {
+  const { activeYear, examTypes } = useExamTypes();
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [fees, setFees] = useState<FeeData | null>(null);
   const [attendance, setAttendance] = useState<AttendanceData | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [reportData, setReportData] = useState<any>(null);
   const [selectedExam, setSelectedExam] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,20 +58,14 @@ export default function ParentDashboard() {
 
   const loadChildData = async (studentId: string) => {
     try {
-      const [feeData, attData, year, noticeData] = await Promise.all([
+      const [feeData, attData, noticeData] = await Promise.all([
         api.get<FeeData>(`/parents/child/${studentId}/fees`),
         api.get<AttendanceData>(`/parents/child/${studentId}/attendance`),
-        api.get<any>("/academic-years/active"),
         api.get<any[]>("/notices").catch(() => []),
       ]);
       setFees(feeData);
       setAttendance(attData);
       setNotices(Array.isArray(noticeData) ? noticeData : []);
-
-      if (year) {
-        const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
-        setExamTypes(et);
-      }
     } catch (err) { console.error(err); }
   };
 
@@ -82,8 +75,8 @@ export default function ParentDashboard() {
     try {
       const et = examTypes.find((e) => e.id === examTypeId);
       if (et?.isFinal) {
-        const year = await api.get<any>("/academic-years/active");
-        const data = await api.get(`/reports/final/${selectedChild.id}/${year.id}`);
+        if (!activeYear) return;
+        const data = await api.get(`/reports/final/${selectedChild.id}/${activeYear.id}`);
         setReportData(data);
       } else {
         const data = await api.get(`/reports/term/${selectedChild.id}/${examTypeId}`);

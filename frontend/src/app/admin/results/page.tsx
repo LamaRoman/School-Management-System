@@ -1,11 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { CheckCircle2, Clock, Send, Undo2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
-
-interface ExamType { id: string; name: string }
+import { useExamTypes } from "@/hooks/useReferenceData";
 
 interface SectionRow {
   sectionId: string;
@@ -31,46 +30,29 @@ const STATUS_LABEL: Record<SectionRow["status"], string> = {
 };
 
 export default function AdminResultsPage() {
-  const [activeYear, setActiveYear] = useState<any>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const { activeYear, examTypes, loading } = useExamTypes();
   const [selectedExam, setSelectedExam] = useState("");
-  const [grades, setGrades] = useState<GradeRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingOverview, setLoadingOverview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notify, setNotify] = useState(true);
-  const overviewRequest = useLatestRequest();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        setActiveYear(year);
-        if (year) {
-          const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`);
-          setExamTypes(et);
-          setSelectedExam(et[0]?.id ?? "");
-        }
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    })();
-  }, []);
+    if (!examTypes.length || selectedExam) return;
+    setSelectedExam(examTypes[0].id);
+  }, [examTypes, selectedExam]);
 
-  const loadOverview = useCallback(() => {
-    if (!activeYear || !selectedExam) return;
-    // Publishing writes, so the same stale-response guard applies: a late
-    // overview landing under a different exam would show one exam's readiness
-    // while the buttons publish another.
-    setGrades([]);
-    setLoadingOverview(true);
-    overviewRequest(
-      () => api.get<GradeRow[]>(`/result-status/overview?academicYearId=${activeYear.id}&examTypeId=${selectedExam}`),
-      (res) => { setGrades(res); setLoadingOverview(false); },
-      () => setLoadingOverview(false),
-    );
-  }, [activeYear, selectedExam]);
-
-  useEffect(loadOverview, [loadOverview]);
+  // Publishing writes, so the overview must be keyed by the exam it describes:
+  // a late response landing under a different exam would show one exam's
+  // readiness while the buttons publish another.
+  const {
+    data: overview,
+    isLoading: loadingOverview,
+    mutate: loadOverview,
+  } = useSWR<GradeRow[]>(
+    activeYear && selectedExam
+      ? `/result-status/overview?academicYearId=${activeYear.id}&examTypeId=${selectedExam}`
+      : null
+  );
+  const grades = overview ?? [];
 
   const publish = async (body: Record<string, unknown>, label: string) => {
     setSaving(true);

@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { api } from "@/lib/api";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useGrades } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Edit2, X, Save, Search, Camera } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
@@ -14,7 +15,6 @@ interface Student {
   guardianPhone?: string; address?: string; isActive: boolean;
   section: { name: string; grade: { name: string } };
 }
-interface Grade { id: string; name: string; sections: { id: string; name: string }[] }
 
 // `photo` is undefined until the existing photo has been loaded for an edit, so a
 // save that happens before then omits the field and leaves the stored photo alone.
@@ -23,62 +23,35 @@ const emptyForm = { name: "", nameNp: "", rollNo: undefined as number | undefine
 export default function StudentsPage() {
   const confirm = useConfirm();
   const router = useRouter();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [selectedSection, setSelectedSection] = useState("");
-  const [selectedGrade, setSelectedGrade] = useState("");
+  const { grades, loading: loadingGrades } = useGrades();
+  const [pickedSection, setPickedSection] = useState("");
+  const [pickedGrade, setPickedGrade] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const editIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
-  // Without these the table renders "No students in this section" while the
-  // roster is still in flight — which reads as an empty class rather than as
-  // loading, and is the reason a tap here feels like it didn't register.
-  const [loadingGrades, setLoadingGrades] = useState(true);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-  const runStudents = useLatestRequest();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        if (year) {
-          const g = await api.get<any[]>(`/grades?academicYearId=${year.id}`);
-          setGrades(g);
-          if (g.length > 0) {
-            setSelectedGrade(g[0].id);
-            if (g[0].sections?.length > 0) setSelectedSection(g[0].sections[0].id);
-          }
-        }
-      } finally {
-        setLoadingGrades(false);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedSection) return;
-    setStudents([]);
-    setLoadingStudents(true);
-    runStudents(
-      () => api.get<Student[]>(`/students?sectionId=${selectedSection}`),
-      (data) => {
-        setStudents(data);
-        setLoadingStudents(false);
-      },
-      () => setLoadingStudents(false)
-    );
-  }, [selectedSection, runStudents]);
-
+  // Nothing is selected until the grade list arrives, so the first grade and
+  // its first section are the default rather than something an effect writes
+  // back into state after the first render.
+  const selectedGrade = pickedGrade || grades[0]?.id || "";
   const currentGrade = grades.find((g) => g.id === selectedGrade);
-  const sections = currentGrade?.sections || [];
+  const sections = currentGrade?.sections ?? [];
+  const selectedSection = pickedSection || sections[0]?.id || "";
+
+  // Keyed by section, so a slow response for the section the user just left
+  // lands in that section's cache entry and never overwrites this one.
+  const {
+    data: studentsData,
+    isLoading: loadingStudents,
+    mutate: reloadStudents,
+  } = useSWR<Student[]>(selectedSection ? `/students?sectionId=${selectedSection}` : null);
+  const students = studentsData ?? [];
 
   const handleGradeChange = (gId: string) => {
-    setSelectedGrade(gId);
-    const g = grades.find((gr) => gr.id === gId);
-    if (g?.sections?.length) setSelectedSection(g.sections[0].id);
-    else setSelectedSection("");
+    setPickedGrade(gId);
+    setPickedSection(grades.find((g) => g.id === gId)?.sections[0]?.id ?? "");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,7 +72,7 @@ export default function StudentsPage() {
         }
       }
       setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
-      runStudents(() => api.get<Student[]>(`/students?sectionId=${selectedSection}`), setStudents);
+      reloadStudents();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -116,7 +89,7 @@ export default function StudentsPage() {
 
   const handleDelete = async (id: string) => {
     if (!await confirm({ title: "Deactivate student", message: "The student will be deactivated and will not appear in active lists.", confirmLabel: "Deactivate", variant: "warning" })) return;
-    try { await api.delete(`/students/${id}`); toast.success("Student deactivated"); api.get<Student[]>(`/students?sectionId=${selectedSection}`).then(setStudents); } catch (err: any) { toast.error(err.message); }
+    try { await api.delete(`/students/${id}`); toast.success("Student deactivated"); reloadStudents(); } catch (err: any) { toast.error(err.message); }
   };
 
   const filtered = students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
@@ -154,7 +127,7 @@ export default function StudentsPage() {
       </div>
       <div className="flex flex-wrap gap-2 mb-6">
         {sections.map((sec: any) => (
-          <button key={sec.id} onClick={() => setSelectedSection(sec.id)}
+          <button key={sec.id} onClick={() => setPickedSection(sec.id)}
             className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${selectedSection === sec.id ? "bg-accent text-white" : "bg-white border border-gray-200 text-gray-500 hover:border-accent"}`}>
             Section {sec.name}
           </button>

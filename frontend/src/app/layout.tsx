@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SwrProvider } from "@/components/SwrProvider";
 import { ConfirmDialogMount } from "@/components/ui/ConfirmDialog";
 import "./globals.css";
 
@@ -14,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AuthProvider>
-          {children}
+          <SwrProvider>{children}</SwrProvider>
           <ConfirmDialogMount />
           <Toaster
             position="top-right"

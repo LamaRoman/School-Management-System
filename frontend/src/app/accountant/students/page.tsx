@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { Search, User } from "lucide-react";
+import { useGrades } from "@/hooks/useReferenceData";
 
-interface Grade { id: string; name: string; sections?: { id: string; name: string }[] }
 interface Student {
   id: string; name: string; nameNp?: string; rollNo?: number;
   dateOfBirth?: string; gender?: string; guardianName?: string; guardianPhone?: string;
@@ -12,12 +13,13 @@ interface Student {
 }
 
 export default function AccountantStudentSearchPage() {
-  const [grades, setGrades] = useState<Grade[]>([]);
+  const { grades, loading } = useGrades();
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
-  const [sections, setSections] = useState<any[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: sectionStudents } = useSWR<Student[]>(
+    selectedSection ? `/students?sectionId=${selectedSection}` : null
+  );
+  const students = sectionStudents ?? [];
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   // Global search
@@ -25,18 +27,6 @@ export default function AccountantStudentSearchPage() {
   const [globalResults, setGlobalResults] = useState<Student[]>([]);
   const [globalSearching, setGlobalSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        if (year) {
-          const g = await api.get<Grade[]>(`/grades?academicYearId=${year.id}`);
-          setGrades(g);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   // Global search effect
   useEffect(() => {
@@ -60,22 +50,17 @@ export default function AccountantStudentSearchPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [globalQuery]);
 
+  const sections = grades.find((g) => g.id === selectedGrade)?.sections ?? [];
+
   const handleGradeChange = (gradeId: string) => {
     setSelectedGrade(gradeId);
     setSelectedSection("");
-    setStudents([]);
     setSelectedStudent(null);
-    const grade = grades.find((g) => g.id === gradeId);
-    setSections(grade?.sections || []);
   };
 
-  const handleSectionChange = async (sectionId: string) => {
+  const handleSectionChange = (sectionId: string) => {
     setSelectedSection(sectionId);
     setSelectedStudent(null);
-    try {
-      const data = await api.get<Student[]>(`/students?sectionId=${sectionId}`);
-      setStudents(data);
-    } catch { setStudents([]); }
   };
 
   if (loading) {

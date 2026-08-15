@@ -1,18 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
-import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
+import { useMyAssignments } from "@/hooks/useReferenceData";
 import { FileText, CalendarCheck, Table, ClipboardList, Users, BookOpen } from "lucide-react";
-
-interface ClassTeacherSection {
-  assignmentId: string;
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
 
 interface SubjectAssignment {
   assignmentId: string;
@@ -30,33 +21,16 @@ interface Student {
 }
 
 export default function TeacherDashboardPage() {
-  const [classTeacherSections, setClassTeacherSections] = useState<ClassTeacherSection[]>([]);
-  const [subjectAssignments, setSubjectAssignments] = useState<SubjectAssignment[]>([]);
-  const [studentCounts, setStudentCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const { classTeacherSections, subjectAssignments: rawSubjectAssignments, loading: loadingAssignments } =
+    useMyAssignments();
+  const subjectAssignments = rawSubjectAssignments as SubjectAssignment[];
+  const { data: students, isLoading: loadingStudents } = useSWR<Student[]>("/students");
+  const loading = loadingAssignments || loadingStudents;
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [assignments, students] = await Promise.all([
-          api.get<any>("/teacher-assignments/my"),
-          api.get<Student[]>("/students"),
-        ]);
-        setClassTeacherSections(assignments.classTeacherSections || []);
-        setSubjectAssignments(assignments.subjectAssignments || []);
-
-        const counts: Record<string, number> = {};
-        for (const stu of students) {
-          counts[stu.sectionId] = (counts[stu.sectionId] || 0) + 1;
-        }
-        setStudentCounts(counts);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const studentCounts: Record<string, number> = {};
+  for (const stu of students ?? []) {
+    studentCounts[stu.sectionId] = (studentCounts[stu.sectionId] || 0) + 1;
+  }
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 

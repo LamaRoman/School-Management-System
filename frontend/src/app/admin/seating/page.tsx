@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Printer, Shuffle, X } from "lucide-react";
 import { printSeatingArrangement } from "@/lib/printUtils";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { useGrades, useExamTypes } from "@/hooks/useReferenceData";
 
-interface ExamType { id: string; name: string }
-interface Grade { id: string; name: string; displayOrder: number }
 interface Room { id: string; name: string; capacity: number; displayOrder: number }
 interface RoomAllocation {
   room: { id: string; name: string; capacity: number };
@@ -25,40 +25,21 @@ interface RoomAllocation {
 
 export default function SeatingPage() {
   const confirm = useConfirm();
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const { activeYear, grades, loading: loadingGrades } = useGrades();
+  const { examTypes, loading: loadingExamTypes } = useExamTypes();
+  const { data: roomsData, mutate: reloadRooms } = useSWR<Room[]>("/seating/rooms");
+  const rooms = roomsData ?? [];
+  const loading = loadingGrades || loadingExamTypes;
   const [selectedExam, setSelectedExam] = useState("");
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [method, setMethod] = useState<"alternating" | "sequential" | "random">("alternating");
   const [allocations, setAllocations] = useState<RoomAllocation[]>([]);
-  const [activeYear, setActiveYear] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   // Room form
   const [showRoomForm, setShowRoomForm] = useState(false);
   const [roomName, setRoomName] = useState("");
   const [roomCapacity, setRoomCapacity] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const year = await api.get<any>("/academic-years/active");
-        setActiveYear(year);
-        if (year) {
-          const [et, g, r] = await Promise.all([
-            api.get<ExamType[]>(`/exam-types?academicYearId=${year.id}`),
-            api.get<Grade[]>(`/grades?academicYearId=${year.id}`),
-            api.get<Room[]>("/seating/rooms"),
-          ]);
-          setExamTypes(et);
-          setGrades(g);
-          setRooms(r);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
 
   const fetchAllocations = async (examTypeId: string) => {
     if (!activeYear) return;
@@ -103,7 +84,7 @@ export default function SeatingPage() {
         capacity: parseInt(roomCapacity),
         displayOrder: rooms.length,
       });
-      setRooms((prev) => [...prev, room]);
+      reloadRooms((prev) => [...(prev ?? []), room], { revalidate: false });
       setRoomName("");
       setRoomCapacity("");
       setShowRoomForm(false);
@@ -117,7 +98,7 @@ export default function SeatingPage() {
     if (!await confirm({ title: "Remove room", message: "This exam room will be removed from seating arrangements.", confirmLabel: "Remove", variant: "danger" })) return;
     try {
       await api.delete(`/seating/rooms/${id}`);
-      setRooms((prev) => prev.filter((r) => r.id !== id));
+      reloadRooms((prev) => (prev ?? []).filter((r) => r.id !== id), { revalidate: false });
       toast.success("Room removed");
     } catch (err: any) {
       toast.error(err.message);

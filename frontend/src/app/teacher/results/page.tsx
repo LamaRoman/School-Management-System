@@ -1,19 +1,11 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
+import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import { CheckCircle2, AlertTriangle, Clock, Undo2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { useLatestRequest } from "@/hooks/useLatestRequest";
-
-interface ClassTeacherSection {
-  assignmentId: string;
-  sectionId: string;
-  sectionName: string;
-  gradeId: string;
-  gradeName: string;
-  academicYearId: string;
-}
 
 interface ExamType { id: string; name: string }
 
@@ -43,53 +35,35 @@ interface StatusData {
 }
 
 export default function TeacherResultsPage() {
-  const [mySections, setMySections] = useState<ClassTeacherSection[]>([]);
-  const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const [pickedSection, setPickedSection] = useState<ClassTeacherSection | null>(null);
   const [selectedExam, setSelectedExam] = useState<string>("");
-  const [data, setData] = useState<StatusData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState(false);
   const [saving, setSaving] = useState(false);
-  const statusRequest = useLatestRequest();
+
+  const { classTeacherSections: mySections, loading } = useMyAssignments();
+
+  const selectedSection = pickedSection ?? mySections[0] ?? null;
+
+  const { data: examTypesData } = useSWR<ExamType[]>(
+    selectedSection ? `/exam-types?academicYearId=${selectedSection.academicYearId}` : null
+  );
+  const examTypes = examTypesData ?? [];
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get<any>("/teacher-assignments/my");
-        const sections: ClassTeacherSection[] = res.classTeacherSections || [];
-        setMySections(sections);
-        if (sections.length > 0) setSelectedSection(sections[0]);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
-    })();
-  }, []);
+    setSelectedExam(examTypesData?.[0]?.id ?? "");
+  }, [examTypesData]);
 
-  useEffect(() => {
-    if (!selectedSection) return;
-    api.get<ExamType[]>(`/exam-types?academicYearId=${selectedSection.academicYearId}`)
-      .then((et) => {
-        setExamTypes(et);
-        setSelectedExam(et[0]?.id ?? "");
-      })
-      .catch(() => setExamTypes([]));
-  }, [selectedSection]);
-
-  const loadStatus = useCallback(() => {
-    if (!selectedSection || !selectedExam) return;
-    // Same stale-response guard as the other section-selector pages (F4a):
-    // the buttons below write, so a late response landing under a different
-    // selection would let a teacher mark the wrong class complete.
-    setData(null);
-    setLoadingStatus(true);
-    statusRequest(
-      () => api.get<StatusData>(`/result-status/section/${selectedSection.sectionId}/${selectedExam}`),
-      (res) => { setData(res); setLoadingStatus(false); },
-      () => setLoadingStatus(false),
-    );
-  }, [selectedSection, selectedExam]);
-
-  useEffect(loadStatus, [loadStatus]);
+  // The buttons below write, so the status is keyed by the section and exam it
+  // describes: a late response cannot land under a different selection and let
+  // a teacher mark the wrong class complete (F4).
+  const {
+    data,
+    isLoading: loadingStatus,
+    mutate: loadStatus,
+  } = useSWR<StatusData>(
+    selectedSection && selectedExam
+      ? `/result-status/section/${selectedSection.sectionId}/${selectedExam}`
+      : null
+  );
 
   const act = async (path: "ready" | "reopen") => {
     if (!selectedSection || !selectedExam) return;
@@ -132,7 +106,7 @@ export default function TeacherResultsPage() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         {mySections.map((s) => (
-          <button key={s.assignmentId} onClick={() => setSelectedSection(s)}
+          <button key={s.assignmentId} onClick={() => setPickedSection(s)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === s.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
             {formatGradeSection(s.gradeName, s.sectionName)}
           </button>
