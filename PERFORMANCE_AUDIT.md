@@ -41,7 +41,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **X3** | No request logging or error tracking — pino + pino-http added, all console.* migrated to structured logger | #36 |
 | **P1b, P1c, X6** | Student photos routed through S3 (sharp resize + webp), backfill script for existing base64 rows, pagination added to `/students` | #37 |
 
-**Suggested next:** everything actionable is done. **S6b decided (leave as-is) and S7 decided and built 2026-08-17** (teachers now section-scoped for reports, matching the roster policy). What remains is three owner decisions (W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** everything is done. All five owner decisions are made: **S6b** (leave as-is), **S7** (teachers section-scoped for reports), **W3e** (Admissions is the only student entry point), **R8a** (pass/fail panel follows the most-recently-completed exam), and **P4b** (attendance totals freeze on transfer, formalized) — all built and verified 2026-08-16/17. Only the fee search trigram index (**X6**, not urgent) remains, and it's a "do it if it ever slows down" item, not a task. See [Everything still open, in one place](#everything-still-open-in-one-place).
 
 **Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
 
@@ -67,11 +67,7 @@ entry says exactly what the choice is and what it costs.
 
 ### Decisions the owner needs to make
 
-| | What has to be decided | Why it can't just be done | Full entry |
-|---|---|---|---|
-| **W3e** | Should "+ Add Student" be removed so Admissions is the only way in? | Its original justification was W2, which turned out not to exist (see below) — students created either way are billed identically. What is left is a process preference with no defect behind it. | **W3e** |
-| **R8a** | Should the dashboard's pass/fail panel report the *final* exam or the *most recently completed* one? | A final is partly entered for most of the year — 728 marks against First Terminal's 1,820 in dev — so the panel shows pass rates over a fraction of the cohort. Less pressing now that the panel names its exam. | **R8a** |
-| **P4b** | What should attendance totals do for a student who transfers out mid-year? | The recompute covers only students currently `isActive` in the section, so a leaver keeps whatever totals they had at that moment. Defensible; just undecided. | **P4b** |
+None open. The last three — **W3e**, **R8a**, **P4b** — were decided and built 2026-08-17; see their entries below for what each one changed.
 
 ### Closed as won't-do, with evidence
 
@@ -537,7 +533,9 @@ May be the intended forgiving reading — confirm and document either way.
 
 Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering exam types silently points the subject-wise pass/fail panel at the wrong exam. No error — just wrong dashboard numbers. The `isFinal` flag already exists on `ExamType`.
 
-- [ ] **R8a. Open question found while fixing R8, deliberately not decided:** should this panel report on the *final* exam or on the *most recently completed* one? It is about the final either way now, and a final exam is partially entered for most of the year — in the dev database it has 728 marks against First Terminal's 1,820, so the panel is reporting pass rates over a fraction of the cohort while presenting them like whole-class figures. That is a product decision about what the panel is for, not a bug to quietly fix, and it is much less urgent now that the panel names the exam it is using. Related to **W1**, which is the same question about half-entered results reaching people who read them as final.
+- [x] **R8a. Open question found while fixing R8:** should this panel report on the *final* exam or on the *most recently completed* one? It is about the final either way now, and a final exam is partially entered for most of the year — in the dev database it has 728 marks against First Terminal's 1,820, so the panel is reporting pass rates over a fraction of the cohort while presenting them like whole-class figures. Related to **W1**, which is the same question about half-entered results reaching people who read them as final.
+
+  > **Decided and built 2026-08-17 — most recently completed.** `analytics.routes.ts`'s `GET /dashboard` now selects the exam type with the most marks entered in the year, reusing the `examMarks` array already fetched for the term-comparison panel (no new query) rather than a separate `isFinal`/displayOrder rule. Ties favor the higher `displayOrder`, which also reproduces the old "nothing entered yet" fallback. The `inferred` field is gone from the response — it meant "no exam type was flagged isFinal," which no longer factors into selection at all — and the panel caption is now a plain `"{name} · most recently completed exam"`. Verified live on dev: the panel switched from "Final" (104 students) to "First Terminal" (260 students), matching the Term Comparison panel's own counts on the same page. Three tests in `analyticsDashboard.test.ts`'s R8/R8a block rewritten to pin count-based selection, including one that flags a different exam `isFinal` and gives it the higher `displayOrder` and still asserts the panel follows the exam with more marks.
 
 ---
 
@@ -646,11 +644,11 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 - [x] **W3d. Remove `/admin/admissions` from the admin sidebar.** Same shape as W3a — `accountant/admissions` is the identical component at a second URL. Admissions is accountant's job; remove the duplicate nav entry.
 
-- [-] **W3e. Remove "+ Add Student" from the admin students page — not cosmetic, this one matters for W2.**
+- [x] **W3e. Remove "+ Add Student" from the admin students page — not cosmetic, this one matters for W2.**
 
-  > **NOT DONE 2026-08-15 — its stated reason evaporated with W2.** The argument here is entirely *"W2's auto-fee-assignment hooks into `/admissions/:id/enroll`, so a student created via this button would silently get no fees set up"*. W2 turned out to be a non-issue (see above): fees come from the grade's `FeeStructure` via the student's section, so a student created through this button **is billed identically** to one created through Admissions. There is no silent divergence to close.
+  > **Decided and built 2026-08-17 — remove it, Admissions is the only entry point now.** `frontend/src/app/admin/students/page.tsx`'s header button now links to `/accountant/admissions` (the same route W3d already made the one Admissions screen for both roles) instead of opening the create form inline. The create branch of `handleSubmit` (the `POST /students` call) is gone from the page; the form is reachable only via the edit pencil, so it is always an edit now — heading and submit label simplified accordingly. `POST /students` (`student.routes.ts`) and `POST /students/bulk` (**W3f**, already flagged dormant) are left in place, unused by any frontend page but still exercised directly by backend integration tests — not removed, since the decision was about the UI entry point, not the route.
   >
-  > What is left is the process preference — that every student should enter through Admissions so there is a PENDING → APPROVED step. That is a real thing to want, but it is a **product decision with no defect behind it**, so it is not mine to take. Left open deliberately rather than marked done. Note the handler already writes a retroactive `Admission` record with remarks *"Added directly by admin"*, so the paper trail exists either way. `POST /students` (`student.routes.ts:263`) is a second, complete path to create a student that bypasses Admissions entirely — no PENDING → APPROVED step, straight to a live student. Telling detail: the handler already creates a retroactive `Admission` record afterward, `status: "ENROLLED"`, remarked **"Added directly by admin"** (`:302`) — purely for a paper trail, which is a sign this bypass was already understood to sit outside the intended process. The real reason to close it: **W2's auto-fee-assignment hooks into `/admissions/:id/enroll`.** A student created via this button never touches that endpoint, so they'd silently get no fees set up — some students auto-billed correctly, others not, with nothing distinguishing them until someone notices a student was never charged. Removing this button is what makes Admissions the only door a student can enter through, which is what makes W2 actually hold for every student, not most of them.
+  > Frontend typechecks clean. Verified live: the button now opens Admissions directly (with a working "New Application" flow), and the edit pencil still opens the prefilled "Edit Student" form and saves via `PUT /students/:id` as before.
 
 - [ ] **W3f. `POST /students/bulk` is the same bypass shape, currently dormant — flagged, not urgent.** Checked: no frontend page calls this route today, so it's not an active bug. But it creates students + accounts directly, same as W3e, with no admission and no enrollment step. Not worth touching now — flagged so that if a bulk CSV-import feature gets built later, it's built by extending the Admissions/Enrollment pipeline to handle batches, rather than by reaching for this existing route and quietly reopening the exact gap W3e closes.
 
@@ -861,7 +859,9 @@ This is the highest-frequency write path in the app — every teacher, every sec
 
   > **FIXED 2026-08-15** in the same change. Pinned by asserting both `INSERT`s fall between the same `BEGIN`/`COMMIT` — a test that fails against the old code, where the totals rewrite is outside the transaction entirely.
 
-- [ ] **P4b.** Decide intended behaviour for transferred/inactive students — the recompute only covers students currently `isActive` in the section, so a student who leaves keeps whatever totals they had at that moment.
+- [x] **P4b.** Decide intended behaviour for transferred/inactive students — the recompute only covers students currently `isActive` in the section, so a student who leaves keeps whatever totals they had at that moment.
+
+  > **Decided 2026-08-17 — freeze is correct, formalized as intended behavior.** A transferred or otherwise inactive student's attendance totals stay exactly as they were at the moment they left. This is what a TC (transfer certificate) or a future school's records request needs — the student's history at this school, not a total that kept moving after they were no longer here. No code change: the recompute already scopes to `isActive` students only (`dailyAttendance.routes.ts:119`), which is this behavior. Documented here so it reads as a decision, not an oversight.
 
 ---
 

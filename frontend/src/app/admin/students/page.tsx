@@ -1,11 +1,12 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useGrades } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
-import { Plus, Trash2, Edit2, X, Save, Search, Camera } from "lucide-react";
+import { Trash2, Edit2, X, Save, Search, Camera, UserPlus } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
@@ -55,25 +56,16 @@ export default function StudentsPage() {
     setPickedSection(grades.find((g) => g.id === gId)?.sections[0]?.id ?? "");
   };
 
+  // Students are only created through Admissions now (W3e) — this form is
+  // reachable solely via startEdit, so editId is always set here.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !editId) return;
     setSaving(true);
     try {
       const payload = { ...form, sectionId: selectedSection, rollNo: form.rollNo || undefined };
-      if (editId) {
-        await api.put(`/students/${editId}`, payload);
-        toast.success("Student updated");
-      } else {
-        const created = await api.post<any>("/students", payload);
-        if (created?.accountCreated === false) {
-          // Student saved, but with no login account. Long-lived toast — the 3s
-          // success one is easy to miss and reads as "all fine".
-          toast.error("Student added, but no login account was created.", { duration: 12000 });
-        } else {
-          toast.success("Student added");
-        }
-      }
+      await api.put(`/students/${editId}`, payload);
+      toast.success("Student updated");
       setShowForm(false); setEditId(null); editIdRef.current = null; setForm(emptyForm);
       reloadStudents();
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
@@ -111,9 +103,9 @@ export default function StudentsPage() {
               {search && students.length !== filtered.length ? ` of ${students.length}` : ""}
             </span>
           )}
-          <button onClick={() => { setShowForm(!showForm); setEditId(null); editIdRef.current = null; setForm(emptyForm); }} className="btn-primary">
-            <Plus size={16} /> Add Student
-          </button>
+          <Link href="/accountant/admissions" className="btn-primary">
+            <UserPlus size={16} /> Admissions
+          </Link>
         </div>
       </div>
 
@@ -140,7 +132,7 @@ export default function StudentsPage() {
       {showForm && (
         <div className="card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-primary">{editId ? "Edit Student" : "Add Student"}</h3>
+            <h3 className="font-semibold text-primary">Edit Student</h3>
             <button onClick={() => { setShowForm(false); setEditId(null); editIdRef.current = null; }} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -189,7 +181,7 @@ export default function StudentsPage() {
                 </div>
               </div>
             </div>
-            <div className="col-span-full flex justify-end"><button type="submit" disabled={saving} className="btn-primary"><Save size={16} /> {saving ? "Saving..." : editId ? "Update" : "Save"}</button></div>
+            <div className="col-span-full flex justify-end"><button type="submit" disabled={saving} className="btn-primary"><Save size={16} /> {saving ? "Saving..." : "Update"}</button></div>
           </form>
         </div>
       )}

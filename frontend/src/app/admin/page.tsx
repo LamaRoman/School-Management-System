@@ -23,9 +23,9 @@ interface Analytics {
   classAverages: { gradeName: string; avgGpa: number; avgPct: number; studentCount: number }[];
   topPerformers: { rank: number; studentName: string; gradeName: string; sectionName: string; gpa: number; percentage: number }[];
   subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[];
-  // Which exam the subjectStats panel is about. `inferred` means no exam type
-  // is flagged isFinal, so the last one by display order was used.
-  subjectStatsExam: { name: string; inferred: boolean } | null;
+  // Which exam the subjectStats panel is about — whichever exam type has the
+  // most marks entered (R8a), not necessarily the Final.
+  subjectStatsExam: { name: string } | null;
   attendanceOverview: { overallRate: number; gradeWise: { gradeName: string; rate: number }[] };
   termComparison: { examName: string; avgPercentage: number; studentCount: number }[];
 }
@@ -506,8 +506,7 @@ export default function AdminDashboard() {
                     pointing at the right exam. */}
                 {analytics.subjectStatsExam && (
                   <p className="text-[10px] text-gray-400 mb-3">
-                    {analytics.subjectStatsExam.name}
-                    {analytics.subjectStatsExam.inferred && " · latest exam (none marked final)"}
+                    {analytics.subjectStatsExam.name} · most recently completed exam
                   </p>
                 )}
                 <div className="space-y-3">
