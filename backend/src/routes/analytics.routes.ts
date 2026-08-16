@@ -26,7 +26,7 @@ type CachedDashboard = {
   classAverages: unknown;
   topPerformers: unknown;
   subjectStats: unknown;
-  subjectStatsExam: { name: string; inferred: boolean } | null;
+  subjectStatsExam: { name: string } | null;
   attendanceOverview: unknown;
   termComparison: unknown;
 };
@@ -130,26 +130,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
   }
   const activeStudentIds = [...gradeOfStudent.keys()];
 
-  // R8 — which exam the subject-wise pass/fail panel is about.
-  //
-  // This used to be `examTypes[examTypes.length - 1]`: the last one by
-  // displayOrder. Adding a makeup or supplementary exam, or reordering the
-  // list, silently pointed the panel at the wrong exam — no error, just wrong
-  // numbers on the dashboard.
-  //
-  // `isFinal` is the flag that actually means it, so prefer it. But it is
-  // opt-in and defaults to false, and no exam type in the dev database has it
-  // set — a school that never ticked the box would get an empty panel where it
-  // used to get a populated one. So fall back to display order rather than
-  // showing nothing, and report which way it was resolved: the response
-  // carries the exam's name so the panel can say what it is looking at, which
-  // is the part that turns a silently wrong number into a visibly wrong one.
-  const finalExam =
-    [...examTypes].reverse().find((e) => e.isFinal) ?? examTypes[examTypes.length - 1] ?? null;
-  const subjectStatsExam = finalExam
-    ? { name: finalExam.name, inferred: !finalExam.isFinal }
-    : null;
-
   // Two batches rather than one Promise.all of five: the pool is 5 connections
   // (utils/prisma.ts), and the landing page should not be able to hold all of
   // them at once while two admins log in together.
@@ -195,6 +175,32 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       : Promise.resolve([]),
     prisma.teacher.count({ where: { isActive: true, schoolId } }),
   ]);
+
+  // R8a — which exam the subject-wise pass/fail panel is about.
+  //
+  // Used to be whichever exam type had the highest displayOrder — the Final,
+  // once one exists. But the Final sits partly entered for most of the year
+  // (in dev: 728 marks vs First Terminal's 1,820), so the panel was reporting
+  // pass rates over a sliver of the cohort while presenting them like
+  // whole-class figures. Owner decided (2026-08-17): report on whichever exam
+  // has the most marks entered instead — the exam the school actually just
+  // finished, not the one furthest down the list. Ties go to the higher
+  // displayOrder (examTypes is ascending, so `>=` lets a later tie win),
+  // which also reproduces the old fallback when nothing has any marks yet.
+  const examMarkCounts = new Map<string, number>();
+  for (const m of examMarks) {
+    examMarkCounts.set(m.examTypeId, (examMarkCounts.get(m.examTypeId) ?? 0) + 1);
+  }
+  let finalExam: (typeof examTypes)[number] | null = null;
+  let bestMarkCount = -1;
+  for (const et of examTypes) {
+    const count = examMarkCounts.get(et.id) ?? 0;
+    if (count >= bestMarkCount) {
+      finalExam = et;
+      bestMarkCount = count;
+    }
+  }
+  const subjectStatsExam = finalExam ? { name: finalExam.name } : null;
 
   // ─── 1. Class-wise average GPA ─────────────────────
   const resultsByGrade = new Map<string, { totalGpa: number | null; totalPercentage: number | null }[]>();

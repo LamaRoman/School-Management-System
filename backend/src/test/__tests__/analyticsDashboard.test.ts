@@ -189,46 +189,66 @@ describe("GET /analytics/dashboard — numbers", () => {
   });
 });
 
-describe("GET /analytics/dashboard — R8: which exam the pass/fail panel is about", () => {
+describe("GET /analytics/dashboard — R8/R8a: which exam the pass/fail panel is about", () => {
   afterEach(async () => {
     await prisma.examType.updateMany({ where: { academicYearId: yearId }, data: { isFinal: false } });
     await prisma.examType.deleteMany({ where: { academicYearId: yearId, name: "Makeup" } });
     clearDashboardCache();
   });
 
-  it("names the exam it used, and says when it had to infer one", async () => {
+  it("names the exam it used", async () => {
+    // Final has 8 marks entered (Maths + Science × 4 students) against First
+    // Terminal's 4 (Maths only) — Final wins on marks entered here, same as
+    // it would have under the old displayOrder rule, but for a different
+    // reason (see the next test, where the two rules disagree).
     const res = await dashboard(adminToken).expect(200);
-    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final", inferred: true });
+    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final" });
   });
 
-  it("follows isFinal rather than display order", async () => {
-    await prisma.examType.update({ where: { id: firstTermId }, data: { isFinal: true } });
-    clearDashboardCache();
-
-    const res = await dashboard(adminToken).expect(200);
-    expect(res.body.data.subjectStatsExam).toEqual({ name: "First Terminal", inferred: false });
-
-    // First Terminal has Maths only, everyone at 50 → all pass.
-    const maths = res.body.data.subjectStats.find(
-      (s: { subjectName: string }) => s.subjectName === "Maths"
-    );
-    expect(maths).toMatchObject({ totalStudents: 4, passed: 4, failed: 0 });
-    expect(
-      res.body.data.subjectStats.find((s: { subjectName: string }) => s.subjectName === "Science")
-    ).toBeUndefined();
-  });
-
-  it("a makeup exam added after the final does not hijack the panel", async () => {
-    // This is the R8 failure exactly: a supplementary exam sorts last, so the
-    // old code pointed the panel at it and reported on a handful of retakes as
-    // though they were the whole cohort.
+  it("picks the exam with the most marks entered, not the one flagged final or sorting last (R8a)", async () => {
+    // Owner decision (2026-08-17): report on whichever exam the school has
+    // actually finished entering, not the Final — a Final sitting at a
+    // fraction entered for most of the year used to make this panel report
+    // pass rates over a sliver of the cohort. Flag Final isFinal and give it
+    // the higher displayOrder, exactly as in real data, then give First
+    // Terminal strictly more marks via a temporary subject — the panel must
+    // still follow the marks, not the flag or the order.
     await prisma.examType.update({ where: { id: finalExamId }, data: { isFinal: true } });
+
+    const mathsSubject = await prisma.subject.findUniqueOrThrow({
+      where: { id: mathsId },
+      select: { gradeId: true },
+    });
+    const extraSubject = await prisma.subject.create({
+      data: { name: "Social", gradeId: mathsSubject.gradeId, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+    });
+    try {
+      // First Terminal: 4 (Maths, existing) + 4 (Science, new) + 4 (Social, new) = 12, vs Final's 8.
+      for (const sid of gradeOneStudents) {
+        await addMark(sid, scienceId, firstTermId, 55);
+        await addMark(sid, extraSubject.id, firstTermId, 60);
+      }
+      clearDashboardCache();
+
+      const res = await dashboard(adminToken).expect(200);
+      expect(res.body.data.subjectStatsExam).toEqual({ name: "First Terminal" });
+    } finally {
+      await prisma.mark.deleteMany({ where: { subjectId: extraSubject.id } });
+      await prisma.mark.deleteMany({ where: { examTypeId: firstTermId, subjectId: scienceId } });
+      await prisma.subject.delete({ where: { id: extraSubject.id } });
+      clearDashboardCache();
+    }
+  });
+
+  it("a low-volume makeup exam added after the final does not hijack the panel", async () => {
+    // A supplementary exam sorting last, with almost nothing entered, must
+    // not outrank Final just because display order once decided this.
     const makeup = await addExamType("Makeup", 3);
     await addMark(gradeOneStudents[1], mathsId, makeup.id, 45);
     clearDashboardCache();
 
     const res = await dashboard(adminToken).expect(200);
-    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final", inferred: false });
+    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final" });
 
     const maths = res.body.data.subjectStats.find(
       (s: { subjectName: string }) => s.subjectName === "Maths"
