@@ -37,8 +37,9 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #31 |
 | **F7, F8, F9, F10** | Double-submit guard; print/export code-splitting; `alert()` → toast; shell renders before auth resolves | #33 |
 | **X5** | Parents could read a report in the portal but not download its PDF | #34 |
+| **X4, X6 (partial)** | Unbounded auth caches swept every 5 min; CLAUDE.md grading sentence fixed; pagination investigated and deferred | #35 |
 
-**Suggested next:** the remaining small ones — **X3** (request logging/error tracking), **X4** (unbounded auth caches), **X6** (pagination, fee search indexing). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** **X3** (request logging/error tracking) and the pagination half of **X6** (not urgent at current scale). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
 
 **Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
 
@@ -84,7 +85,6 @@ entry says exactly what the choice is and what it costs.
 |---|---|---|
 | **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
 | **X3** | No request logging or error tracking | |
-| **X4** | Unbounded auth caches | |
 | **W3f** | `POST /students/bulk` bypasses Admissions | Dormant — no frontend calls it. Recorded so a future CSV import extends the Admissions pipeline instead of reaching for this route. |
 | **X6** | Pagination, fee search indexing, and a self-contradictory sentence in `CLAUDE.md` | The `CLAUDE.md` wording is a two-minute fix and it is the rule people read the docs for. |
 
@@ -1215,7 +1215,12 @@ No gzip/brotli. Endpoints like `/students`, `/fees/section-overview` and `/grade
 
 For a production system: when a school reports "report cards were slow this morning", there's no record of which endpoint, how long, or how often. A 500 hit by a parent at 9pm is invisible. This is how you find the *next* problem without reading code.
 
-### [ ] X4. Unbounded auth caches
+### [x] X4. Unbounded auth caches
+
+> **FIXED 2026-08-16.** A `setInterval` sweep runs every 5 minutes and drops entries past their TTL from both `activeCache` and `blocklistCache`. Uses `.unref()` so it does not keep the process alive. The TTLs are 60s and 30s respectively, so the sweep is generous — it exists to prune entries from users/tokens that are never seen again, not to enforce the TTL (that is still on read). Lockout tracking (`loginAttempt`) is in Prisma, not in-memory, so it was never part of this.
+>
+> **Why not an LRU:** both caches are keyed on unique IDs (userId, jti) and the realistic ceiling is a few hundred users and a few thousand JTIs between sweeps. A Map with periodic pruning is simpler and adequate.
+
 **Where:** `backend/src/middleware/auth.ts:27` (`activeCache`) and `:49` (`blocklistCache`)
 
 Plain `Map`s, never pruned. Entries expire *logically* (TTL checked on read) but are never *removed*, so both grow for the process lifetime. Slow leak; on a long-running instance it shows as creeping memory.
@@ -1278,10 +1283,10 @@ The repair tool shipped separately (`prisma/backfill-missing-student-accounts.ts
 
 The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAccess`, but the PDF routes exclude them. The parent portal currently has no download button, so nothing is visibly broken — but the capability gap is probably unintended. Confirm and align.
 
-### [ ] X6. Smaller items
-- [ ] **Pagination** — only one paginated endpoint in the whole API (`fee.routes.ts:592`). `/students` and `/fees/section-overview` are the ones to watch.
-- [ ] **Fee search** — `accountantReport.routes.ts:398` uses `contains` + `mode: insensitive` = `ILIKE '%x%'`, unindexable by design. Fine now; trigram index if it slows.
-- [ ] **`CLAUDE.md` wording** — *"D and D+ and below D+ (D, E) are the failing bands"* is self-contradictory. Code is unambiguous (`FAILING_GRADES = ["D","E"]`, D+ passes). Fix the sentence — this is the rule people will read docs for. (See also **R1**, where the docs and code genuinely disagree.)
+### [~] X6. Smaller items
+- [ ] **Pagination** — only one paginated endpoint in the whole API (`fee.routes.ts:592`). `/students` and `/fees/section-overview` are the ones to watch. **Investigated 2026-08-16:** `/students` is always section-filtered in practice (the frontend passes `sectionId`); the two unfiltered calls are `admin/promotion` (transfer modal) and `accountant/students` (search). Both are admin-only, and at 260 students the payload is ~30KB. `/fees/section-overview` is scoped to one section by design. Pagination would be defensive — worth adding to `/students` if a school ever approaches 1,000 students, not urgent now.
+- [ ] **Fee search** — `accountantReport.routes.ts:146` uses `contains` + `mode: insensitive` = `ILIKE '%x%'`, unindexable by design. Fine now; trigram index if it slows.
+- [x] **`CLAUDE.md` wording** — ~~*"D and D+ and below D+ (D, E) are the failing bands"*~~ **FIXED 2026-08-16.** Now reads "D and E are the failing grades".
 
 ---
 
@@ -1324,7 +1329,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
 | ~~S5, F7–F10~~ | ✅ **done** | S5 shipped in #28; F7/F8/F9/F10 shipped in #33 |
 | ~~X5~~ | ✅ **done** | Shipped in #34, along with a shared `verifyStudentAccess` and one frontend PDF helper replacing two copies |
-| X4, X6 | as capacity allows | |
+| ~~X4~~ | ✅ **done** | Shipped in #35 — periodic sweep of the two auth Maps |
+| ~~X6 (partial)~~ | ✅ **done** | CLAUDE.md sentence fixed in #35; pagination investigated, not urgent at current scale |
 | **W1** (results-publish workflow) | 3–5 days | Design agreed, not scoped in detail. New feature, not a fix — plan separately from the bug-fix items above |
 | **W2** (enrollment → fee setup) | half day – 1 day | Decided: fully automatic, confirmed compatible with overrides. Ready to scope. |
 | **W3a + W3d** (remove duplicate admin fees + admissions pages) | ~1 hr | Both are one-line re-exports — just delete two nav links |

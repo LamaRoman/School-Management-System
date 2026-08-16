@@ -64,6 +64,23 @@ export function invalidateBlocklistCache(jti: string): void {
   blocklistCache.delete(jti);
 }
 
+// ─── In-memory cache sweep ──────────────────────────────
+// Both caches use short TTLs (30–60s), but expired entries are only evicted on
+// the next lookup for that key. Over time the maps accumulate stale entries from
+// users and tokens that are never seen again. This sweep runs every 5 minutes
+// and drops anything past its TTL, keeping memory flat.
+const SWEEP_INTERVAL_MS = 5 * 60_000;
+function sweepCaches(): void {
+  const now = Date.now();
+  for (const [k, v] of activeCache) {
+    if (v.expiresAt <= now) activeCache.delete(k);
+  }
+  for (const [k, v] of blocklistCache) {
+    if (v.expiresAt <= now) blocklistCache.delete(k);
+  }
+}
+setInterval(sweepCaches, SWEEP_INTERVAL_MS).unref();
+
 // ─── Periodic cleanup ────────────────────────────────────
 export async function cleanupExpiredAuthRecords(): Promise<void> {
   const now = new Date();
