@@ -24,6 +24,7 @@ import {
   loginAs,
   authHeader,
 } from "../helpers";
+import * as pdfService from "../../services/pdf.service";
 
 let adminToken: string;
 let classTeacherToken: string;
@@ -179,10 +180,12 @@ describe("what a family sees before results are published (W1e)", () => {
   });
 
   it("refuses the PDF too, so the portal gate is not one URL away from useless", async () => {
-    await request(app)
-      .get(`/pdf/term/${studentId}/${firstTermId}`)
-      .set("Authorization", authHeader(studentToken))
-      .expect(403);
+    for (const token of [studentToken, parentToken]) {
+      await request(app)
+        .get(`/pdf/term/${studentId}/${firstTermId}`)
+        .set("Authorization", authHeader(token))
+        .expect(403);
+    }
   });
 
   it("leaves admins and teachers seeing everything, exactly as before (W1g)", async () => {
@@ -283,6 +286,47 @@ describe("the annual result is gated by its terms, not published separately", ()
 
     await prisma.gradingPolicy.deleteMany({ where: { examTypeId: makeup.id } });
     await prisma.examType.delete({ where: { id: makeup.id } });
+  });
+});
+
+describe("who may download the report card PDF (X5)", () => {
+  // Puppeteer is not what these assert — they are about who gets past the door.
+  let pdfSpy: jest.SpyInstance;
+
+  beforeAll(() => {
+    pdfSpy = jest
+      .spyOn(pdfService, "generatePdf")
+      .mockImplementation(async () => Buffer.from("%PDF-stub"));
+  });
+
+  afterAll(() => pdfSpy.mockRestore());
+
+  const termPdf = (token: string, sid = studentId) =>
+    request(app).get(`/pdf/term/${sid}/${firstTermId}`).set("Authorization", authHeader(token));
+
+  it("gives a linked parent the same PDF their child can download", async () => {
+    await publishFirstTerm();
+
+    const res = await termPdf(parentToken).expect(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+  });
+
+  it("refuses a parent the PDF of a child who is not theirs", async () => {
+    await publishFirstTerm();
+
+    // Bina is in the same section and equally published — being allowed the
+    // route at all is what makes this check the one that matters.
+    await termPdf(parentToken, classmateId).expect(403);
+  });
+
+  it("gives a linked parent the annual PDF once every term is out", async () => {
+    await publishFirstTerm();
+    await setStatus({ examTypeId: finalExamId, all: true, notify: false }, "publish", adminToken).expect(200);
+
+    await request(app)
+      .get(`/pdf/final/${studentId}/${yearId}`)
+      .set("Authorization", authHeader(parentToken))
+      .expect(200);
   });
 });
 

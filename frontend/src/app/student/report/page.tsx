@@ -3,6 +3,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
+import { openReportCardPdf } from "@/lib/reportCardPdf";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
 import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
@@ -90,48 +91,16 @@ export default function StudentReportPage() {
     setDownloading(true);
     try {
       const et = examTypes.find((e) => e.id === selectedExam);
-      let url: string;
+      let path: string;
 
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
       if (et?.isFinal) {
         if (!activeYear) return;
-        url = `${API_BASE}/pdf/final/${user.student.id}/${activeYear.id}?mode=${pdfMode}`;
+        path = `/pdf/final/${user.student.id}/${activeYear.id}?mode=${pdfMode}`;
       } else {
-        url = `${API_BASE}/pdf/term/${user.student.id}/${selectedExam}?mode=${pdfMode}`;
+        path = `/pdf/term/${user.student.id}/${selectedExam}?mode=${pdfMode}`;
       }
 
-      const res = await fetch(url, {
-        credentials: "include",
-      });
-
-      if (!res.ok) throw new Error("PDF generation failed");
-
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      if (action === "print") {
-        const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = blobUrl;
-        document.body.appendChild(iframe);
-        iframe.onload = () => {
-          iframe.contentWindow?.print();
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            window.URL.revokeObjectURL(blobUrl);
-          }, 60000);
-        };
-      } else {
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        const disposition = res.headers.get("Content-Disposition");
-        const filenameMatch = disposition?.match(/filename="(.+)"/);
-        a.download = filenameMatch ? filenameMatch[1] : "report-card.pdf";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 5000);
-      }
+      await openReportCardPdf(path, action);
     } catch {
       toast.error("Failed to generate PDF. Please try again.");
     } finally {
