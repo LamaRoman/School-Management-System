@@ -41,7 +41,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **X3** | No request logging or error tracking — pino + pino-http added, all console.* migrated to structured logger | #36 |
 | **P1b, P1c, X6** | Student photos routed through S3 (sharp resize + webp), backfill script for existing base64 rows, pagination added to `/students` | #37 |
 
-**Suggested next:** everything actionable is done. What remains is the five owner decisions (S6b, S7, W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** everything actionable is done. **S6b decided and built 2026-08-16** (public routes now accept the school code, code required before a website can be connected). What remains is four owner decisions (S7, W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
 
 **Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
 
@@ -69,7 +69,6 @@ entry says exactly what the choice is and what it costs.
 
 | | What has to be decided | Why it can't just be done | Full entry |
 |---|---|---|---|
-| **S6b** | Should public URLs be keyed on `School.code` instead of the raw cuid `schoolId`? | Requires backfilling a `code` onto existing schools, and the receipt prefix is read fresh on every payment — so a school already taking payments would see its receipt series jump mid-stream (`RCP-A1B2C3-000046` → `RCP-SHS-000047`). Nothing errors and nothing duplicates, but it is a visible discontinuity on the document accountants reconcile and parents keep. | **S6b** |
 | **S7** | Should a TEACHER keep read access to *every* student's reports, or be scoped to their sections? | The codebase is currently inconsistent on purpose: `student.routes.ts` scopes teachers to assigned sections, `report.routes.ts:18` does not. W3b settled it for grade sheets and observation grading only. May well be right for a small school — it needs to be a decision rather than an accident. | **S7** |
 | **W3e** | Should "+ Add Student" be removed so Admissions is the only way in? | Its original justification was W2, which turned out not to exist (see below) — students created either way are billed identically. What is left is a process preference with no defect behind it. | **W3e** |
 | **R8a** | Should the dashboard's pass/fail panel report the *final* exam or the *most recently completed* one? | A final is partly entered for most of the year — 728 marks against First Terminal's 1,820 in dev — so the panel shows pass rates over a fraction of the cohort. Less pressing now that the panel names its exam. | **R8a** |
@@ -281,9 +280,9 @@ An admin who obtains a foreign `subjectId` gets that school's subject name back 
 
 ---
 
-### [~] S6. Public endpoints serve any school by ID, including deactivated ones
+### [x] S6. Public endpoints serve any school by ID, including deactivated ones
 
-> **S6a, S6c, S6d, S6e and S6b-i fixed 2026-08-15. S6b — the identifier change — deliberately left open; see its entry for why it is a decision rather than a task.**
+> **S6a, S6c, S6d, S6e and S6b-i fixed 2026-08-15. S6b — the identifier change — decided and built 2026-08-16 (owner confirmed schools are actively connected; the one live school already has a code). See its entry.**
 **Where:** `backend/src/routes/publicGallery.routes.ts:7`, `publicCalendar.routes.ts:13`
 
 Neither checks `School.isActive`, nor that the school has registered a `websiteUrl` at all.
@@ -300,7 +299,17 @@ This is three separate problems wearing one coat:
   >
   > **Note for whoever tests this on dev:** both dev schools have `websiteUrl: null` and there are **zero** gallery photos and calendar events in the database, so a live probe cannot tell "correctly gated" from "empty anyway". The suite covers it properly — a suspended school *with* content, plus an assertion that the rows still exist, so it is visibly a serving decision and not a deletion.
 
-- [ ] **S6b. The identifier — the more interesting one.** ← *a decision, not a task: it changes receipt numbering mid-series. Left for the owner (2026-08-15).* Public URLs currently carry the raw cuid `schoolId`: an internal primary key that ends up embedded in the school's public website HTML where anyone can read it. `School.code` already exists and is `@unique` (`schema.prisma:47`). Keying the public routes on `code` instead stops internal IDs leaking into public pages entirely. Catch: `code` is nullable, so it would need to become required for any school with a public site — worth doing as part of the same change rather than later.
+- [x] **S6b. The identifier — the more interesting one.** Public URLs currently carry the raw cuid `schoolId`: an internal primary key that ends up embedded in the school's public website HTML where anyone can read it. `School.code` already exists and is `@unique` (`schema.prisma:47`). Keying the public routes on `code` instead stops internal IDs leaking into public pages entirely. Catch: `code` is nullable, so it would need to become required for any school with a public site — worth doing as part of the same change rather than later.
+
+  > **DONE 2026-08-16 — owner confirmed the direction.** The trigger for revisiting: production has **one** school with a `websiteUrl`, and it **already has a `code`**, so the receipt-series concern below never materialises for it.
+  >
+  > **Both public routes now accept either identifier.** `/public/gallery/:identifier` and `/public/calendar/:identifier` resolve by `id` OR `code` (case-insensitive), so the existing website keeps working on its current cuid URL indefinitely *and* can switch to the `code` URL whenever its config is updated — no coordinated cutover, no break. `publicSchoolFilter` (S6a) still applies, so a suspended school is refused by code exactly as by id.
+  >
+  > **The gap is closed at the source going forward.** `createSchoolSchema` now `.refine()`s that `code` is present whenever `websiteUrl` is set, and `PUT /schools/:id` enforces the same against the school's existing code (a partial update that only sets `websiteUrl` is fine if the school already has a code). So any school connecting a site *from now on* gets a code-based identity before it has ever issued a receipt — meaning no receipt-prefix discontinuity is ever introduced. The super-admin edit page guards client-side too and now shows the `code`-based URL as the recommended one.
+  >
+  > **Pinned by 11 tests** — 5 in `publicEndpoints.test.ts` (id/code parity for gallery and calendar, case-insensitive match, suspended-by-code still refused, unknown identifier empty) and 6 in `schoolWebsiteGate.test.ts` (create/update both reject website-without-code and accept website-with-code). Suite 269 → **280**.
+  >
+  > **Deliberately not done:** no backfill or forced migration of the one live school. It already has a code, its cuid URL still works, and switching its website config to the code URL is a zero-urgency change the owner can make whenever convenient.
 
   > **Investigated 2026-08-14 — decided to leave as-is until S6b is actually built.** Checked how a school can end up with `code: null`, because the dev DB's main school has one:
   >

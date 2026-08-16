@@ -145,6 +145,35 @@ describe("S6a — only an active school with a website is served publicly", () =
   });
 });
 
+describe("S6b — public routes accept the school code as an alternative to the raw id", () => {
+  it("serves the same gallery whether keyed on the id or the code", async () => {
+    const byId = await request(app).get(`/public/gallery/${liveSchoolId}`).expect(200);
+    const byCode = await request(app).get(`/public/gallery/LIV`).expect(200);
+    expect(byCode.body.data).toEqual(byId.body.data);
+    expect(byCode.body.data).toHaveLength(1);
+  });
+
+  it("serves the same calendar whether keyed on the id or the code", async () => {
+    const byId = await request(app).get(`/public/calendar/${liveSchoolId}`).expect(200);
+    const byCode = await request(app).get(`/public/calendar/LIV`).expect(200);
+    expect(byCode.body.data).toEqual(byId.body.data);
+  });
+
+  it("matches the code case-insensitively", async () => {
+    const res = await request(app).get(`/public/gallery/liv`).expect(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("still refuses a suspended school by its code", async () => {
+    expect((await request(app).get(`/public/gallery/SUS`).expect(200)).body.data).toEqual([]);
+    expect((await request(app).get(`/public/calendar/SUS`).expect(200)).body.data).toEqual([]);
+  });
+
+  it("returns nothing for an unknown identifier", async () => {
+    expect((await request(app).get(`/public/gallery/ZZZ`).expect(200)).body.data).toEqual([]);
+  });
+});
+
 describe("S6e — public responses are cacheable", () => {
   it("sets Cache-Control on both endpoints", async () => {
     for (const path of [`/public/gallery/${liveSchoolId}`, `/public/calendar/${liveSchoolId}`]) {

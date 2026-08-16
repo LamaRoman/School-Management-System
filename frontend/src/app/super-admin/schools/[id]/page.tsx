@@ -138,6 +138,10 @@ export default function SchoolDetailPage() {
   };
 
   const handleSaveEdit = async () => {
+    if (editForm.websiteUrl && !editForm.code) {
+      toast.error("Set a school code before connecting a website — it keeps the internal ID out of public URLs.");
+      return;
+    }
     setSaving(true);
     try {
       await api.put(`/super-admin/schools/${id}`, editForm);
@@ -240,8 +244,9 @@ export default function SchoolDetailPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Setting these lets this school's website read its gallery from <code>/public/gallery/{id}</code> and get
-                notified when content changes. The secret must match the <code>REVALIDATE_SECRET</code> configured on that website.
+                Setting these lets this school's website read its gallery from <code>/public/gallery/{school.code || id}</code> and get
+                notified when content changes. Prefer the school code over the raw ID in the website's config — both work, but the code keeps the internal ID out of public pages.
+                The secret must match the <code>REVALIDATE_SECRET</code> configured on that website.
               </p>
             </div>
 
