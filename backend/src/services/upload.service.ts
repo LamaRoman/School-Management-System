@@ -10,6 +10,7 @@
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import sharp from "sharp";
+import logger from "../utils/logger";
 
 let s3: S3Client | null = null;
 let s3Checked = false;
@@ -29,11 +30,11 @@ function getS3(): { client: S3Client; bucket: string; region: string } | null {
 
   if (bucket && accessKeyId && secretAccessKey) {
     s3 = new S3Client({ region, credentials: { accessKeyId, secretAccessKey } });
-    console.log(`☁️  S3 upload enabled → ${bucket} (${region})`);
+    logger.info({ bucket, region }, "S3 upload enabled");
     return { client: s3, bucket, region };
   }
 
-  console.log("💾 S3 not configured — logo uploads will use base64 (dev mode)");
+  logger.info("S3 not configured — uploads will use base64 (dev mode)");
   return null;
 }
 
@@ -91,7 +92,7 @@ export async function deleteLogo(logoUrl: string): Promise<void> {
       await s3Config.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
     }
   } catch (err) {
-    console.warn("Failed to delete old logo from S3:", err);
+    logger.warn({ err }, "Failed to delete old logo from S3");
   }
 }
 
@@ -122,7 +123,7 @@ async function compressGalleryImage(
       .toBuffer();
     return { buffer, mimetype: "image/webp" };
   } catch (err) {
-    console.warn("Gallery photo compression failed, storing original:", err);
+    logger.warn({ err }, "Gallery photo compression failed, storing original");
     return { buffer: fileBuffer, mimetype: "image/jpeg" };
   }
 }
@@ -179,6 +180,6 @@ export async function deleteGalleryPhoto(photoUrl: string): Promise<void> {
       await s3Config.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
     }
   } catch (err) {
-    console.warn("Failed to delete gallery photo from S3:", err);
+    logger.warn({ err }, "Failed to delete gallery photo from S3");
   }
 }

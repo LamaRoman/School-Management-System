@@ -6,6 +6,7 @@ import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { verifyAcademicYear, verifyGrade, verifySection } from "../utils/schoolScope";
 import { AppError } from "../middleware/errorHandler";
 import { getStudentDefaultPassword } from "../utils/studentPassword";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -279,7 +280,7 @@ router.post("/:id/enroll", authenticate, ADMIN_OR_ACCOUNTANT, async (req, res) =
     });
     accountCreated = true;
   } catch (err) {
-    console.error("Failed to auto-create student user:", err);
+    logger.error({ err }, "Failed to auto-create student user");
     // Deliberately not the raw driver message — this reaches the browser, and
     // Prisma errors can carry the connection string. The specifics stay in the
     // server log; the admin gets something they can act on.

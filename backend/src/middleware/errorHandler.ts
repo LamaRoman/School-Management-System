@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
+import logger from "../utils/logger";
 
 export class AppError extends Error {
   statusCode: number;
@@ -11,11 +12,13 @@ export class AppError extends Error {
   }
 }
 
-export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
-  // Only log unexpected errors — skip routine 401/403 auth rejections to keep logs clean
+export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
   const statusCode = err instanceof AppError ? err.statusCode : 500;
   if (statusCode >= 500) {
-    console.error(`[ERROR] ${err.name}: ${err.message}`);
+    logger.error(
+      { err, method: req.method, url: req.originalUrl, statusCode },
+      `${err.name}: ${err.message}`
+    );
   }
 
   // Zod validation errors
@@ -48,7 +51,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   }
 
   if (err instanceof Prisma.PrismaClientUnknownRequestError) {
-    console.error("[Prisma Unknown]", err.message);
+    logger.error({ err, method: req.method, url: req.originalUrl }, "Prisma unknown request error");
     return res.status(500).json({ error: "A database error occurred. Check that all migrations have been applied." });
   }
 

@@ -9,6 +9,7 @@ import { AppError } from "../middleware/errorHandler";
 import { getStudentDefaultPassword } from "../utils/studentPassword";
 import { mangleEmail, unmangleEmail } from "../utils/deactivatedEmail";
 import { Prisma } from "@prisma/client";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -142,7 +143,7 @@ function resolveStudentPassword(): string | null {
     return getStudentDefaultPassword();
   } catch (err) {
     // The only throw is the deliberate production refusal above.
-    console.warn("Skipping student login account:", (err as Error).message);
+    logger.warn({ reason: (err as Error).message }, "Skipping student login account");
     return null;
   }
 }
@@ -448,7 +449,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Failed to auto-create admission record:", err);
+    logger.error({ err }, "Failed to auto-create admission record");
   }
 
   // Real account-creation failures already propagate (the create is inside the

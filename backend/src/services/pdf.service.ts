@@ -1,6 +1,7 @@
 import puppeteer, { Browser } from "puppeteer";
 import NepaliDate from "nepali-date-converter";
 import { GRADING_SCALE, isPassingGrade } from "./grading.service";
+import logger from "../utils/logger";
 
 let browserInstance: Browser | null = null;
 
@@ -16,7 +17,7 @@ function resetIdleShutdown(): void {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     closeBrowser().catch((err) =>
-      console.error("Idle browser shutdown failed:", err),
+      logger.error({ err }, "Idle browser shutdown failed"),
     );
   }, IDLE_SHUTDOWN_MS);
   idleTimer.unref();

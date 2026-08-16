@@ -1,4 +1,5 @@
 import prisma from "./prisma";
+import logger from "./logger";
 
 type AuditAction =
   | "PAYMENT_CREATED"
@@ -32,6 +33,6 @@ export async function logAudit({
     });
   } catch (err) {
     // Never let audit logging break the main request
-    console.error("[AuditLog] Failed to write audit log:", err);
+    logger.error({ err }, "Failed to write audit log");
   }
 }

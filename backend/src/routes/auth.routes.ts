@@ -6,6 +6,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, invalidateBlocklistCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -154,8 +155,9 @@ router.post("/login", async (req, res) => {
     // therefore learns nothing — the distinction is logged server-side instead,
     // which is where an admin asking "why can't this teacher sign in?" needs it.
     await recordFailedAttempt(email);
-    console.warn(
-      `[auth] Login rejected for ${email}: ${user ? "account is deactivated" : "no account exists with this email"}`
+    logger.warn(
+      { email, reason: user ? "deactivated" : "no_account" },
+      "Login rejected"
     );
     throw new AppError("Invalid email or password", 401);
   }
@@ -163,7 +165,7 @@ router.post("/login", async (req, res) => {
   const validPassword = await bcrypt.compare(password, user.password);
   if (!validPassword) {
     await recordFailedAttempt(email);
-    console.warn(`[auth] Login rejected for ${email}: incorrect password`);
+    logger.warn({ email, reason: "wrong_password" }, "Login rejected");
     throw new AppError("Invalid email or password", 401);
   }
 

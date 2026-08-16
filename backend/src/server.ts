@@ -1,12 +1,13 @@
 import app from "./app";
 import { closeBrowser } from "./services/pdf.service";
 import { cleanupExpiredAuthRecords } from "./middleware/auth";
+import logger from "./utils/logger";
 
 // ─── Validate required env vars on startup ────────────────
 const REQUIRED_ENV = ["JWT_SECRET", "DATABASE_URL"];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
-    console.error(`❌ Missing required env var: ${key}`);
+    logger.fatal({ key }, "Missing required env var");
     process.exit(1);
   }
 }
@@ -26,10 +27,10 @@ if (WEAK_JWT_SECRETS.has(jwtSecret) || jwtSecret.length < 32) {
   const msg =
     "JWT_SECRET is a known placeholder or shorter than 32 characters — tokens would be trivially forgeable.";
   if (process.env.NODE_ENV === "production") {
-    console.error(`❌ ${msg} Refusing to start.`);
+    logger.fatal(msg + " Refusing to start.");
     process.exit(1);
   }
-  console.warn(`⚠️  ${msg} Set a strong, random secret before deploying.`);
+  logger.warn(msg + " Set a strong, random secret before deploying.");
 }
 
 const PORT = process.env.PORT || 4000;
@@ -41,13 +42,12 @@ const PORT = process.env.PORT || 4000;
 // Runs every hour. Errors are logged but never crash the server.
 setInterval(() => {
   cleanupExpiredAuthRecords().catch((err) =>
-    console.error("Auth cleanup failed:", err)
+    logger.error({ err }, "Auth cleanup failed")
   );
 }, 60 * 60 * 1000);
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 API server running on http://localhost:${PORT}`);
-  console.log(`📋 Health check: http://localhost:${PORT}/health`);
+  logger.info({ port: PORT }, "API server running");
 });
 
 // ─── Graceful shutdown ────────────────────────────────────

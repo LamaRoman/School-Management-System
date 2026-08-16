@@ -5,6 +5,7 @@ import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyAcademicYear, verifyGrade, verifySection, verifyStudent, verifyFeeCategory, verifyExamType } from "../utils/schoolScope";
 import { logAudit } from "../utils/audit";
+import logger from "../utils/logger";
 
 const router = Router();
 
@@ -1135,7 +1136,7 @@ router.get("/invoices-bulk", authenticate, authorize("ADMIN", "ACCOUNTANT"), asy
     .map(r => r.value);
 
   const failed = results.filter(r => r.status === "rejected").length;
-  if (failed > 0) console.warn(`[invoices-bulk] ${failed} invoice(s) failed to generate`);
+  if (failed > 0) logger.warn({ failed }, "Invoice(s) failed to generate");
 
   res.json({ data: invoices });
 });

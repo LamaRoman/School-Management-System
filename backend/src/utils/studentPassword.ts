@@ -1,4 +1,5 @@
 import { AppError } from "../middleware/errorHandler";
+import logger from "../utils/logger";
 
 /**
  * Resolve the default password used for auto-created student accounts.
@@ -23,8 +24,6 @@ export function getStudentDefaultPassword(): string {
     );
   }
 
-  console.warn(
-    "[SECURITY] DEFAULT_STUDENT_PASSWORD is not set — using the weak dev fallback 'student123'. Set this before deploying."
-  );
+  logger.warn("DEFAULT_STUDENT_PASSWORD is not set — using the weak dev fallback. Set this before deploying.");
   return "student123";
 }

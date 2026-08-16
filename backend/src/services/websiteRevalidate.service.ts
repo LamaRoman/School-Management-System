@@ -13,6 +13,7 @@
  * action (upload, delete, etc.), so failures are only logged.
  */
 import prisma from "../utils/prisma";
+import logger from "../utils/logger";
 
 export async function revalidateWebsite(schoolId: string, tag: string): Promise<void> {
   const school = await prisma.school.findUnique({
@@ -21,7 +22,7 @@ export async function revalidateWebsite(schoolId: string, tag: string): Promise<
   });
 
   if (!school?.websiteUrl || !school.websiteRevalidateSecret) {
-    console.log(`🌐 Website revalidation skipped for school ${schoolId} — no website linked`);
+    logger.debug({ schoolId }, "Website revalidation skipped — no website linked");
     return;
   }
 
@@ -34,7 +35,7 @@ export async function revalidateWebsite(schoolId: string, tag: string): Promise<
   try {
     origin = new URL(school.websiteUrl).origin;
   } catch {
-    console.warn(`Website revalidation for school ${schoolId} skipped — malformed websiteUrl: ${school.websiteUrl}`);
+    logger.warn({ schoolId }, "Website revalidation skipped — malformed websiteUrl");
     return;
   }
 
@@ -48,9 +49,9 @@ export async function revalidateWebsite(schoolId: string, tag: string): Promise<
       body: JSON.stringify({ tag }),
     });
     if (!res.ok) {
-      console.warn(`Website revalidation for school ${schoolId}, tag "${tag}" returned ${res.status}`);
+      logger.warn({ schoolId, tag, status: res.status }, "Website revalidation returned non-OK");
     }
   } catch (err) {
-    console.warn(`Website revalidation for school ${schoolId}, tag "${tag}" failed:`, err);
+    logger.warn({ err, schoolId, tag }, "Website revalidation failed");
   }
 }
