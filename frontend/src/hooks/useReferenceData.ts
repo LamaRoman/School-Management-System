@@ -11,7 +11,6 @@ export interface Grade {
   id: string;
   name: string;
   displayOrder: number;
-  gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED";
   academicYearId: string;
   sections: Section[];
   _count: { subjects: number; sections: number };

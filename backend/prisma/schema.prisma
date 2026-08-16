@@ -30,9 +30,6 @@ enum AttendanceStatus {
   ABSENT
 }
 
-// Report card style for a grade/class level.
-// MARKS_BASED: existing full-marks / pass-marks / theory+practical report (unchanged default).
-// CREDIT_GRADE_BASED: new credit-hour + letter-grade + grade-point report (SEE/NEB style).
 // Where a section's results for one exam have got to. Deliberately separate
 // from ExamType.isFinal (which is about weighting in the annual result) and
 // from Notice.isPublished (which is about the announcement, not the data).
@@ -47,6 +44,10 @@ enum ResultStatus {
   PUBLISHED
 }
 
+// Report card layout for the whole school (ReportCardSettings.gradingStyle —
+// was per-grade until 2026-08-17; one school prints one design, not a mix).
+// MARKS_BASED: the original full-marks / pass-marks / theory+practical report.
+// CREDIT_GRADE_BASED: credit-hour + letter-grade + grade-point report (SEE/NEB style).
 enum GradingStyle {
   MARKS_BASED
   CREDIT_GRADE_BASED
@@ -145,9 +146,6 @@ model Grade {
   name           String
   displayOrder   Int          @map("display_order")
   academicYearId String       @map("academic_year_id")
-  // Which report card layout this grade/class level uses. Defaults to the
-  // existing marks-based report so current grades render exactly as before.
-  gradingStyle   GradingStyle @default(MARKS_BASED) @map("grading_style")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -543,6 +541,9 @@ model ReportCardSettings {
   showRemarks       Boolean @default(true) @map("show_remarks")
   showPromotion     Boolean @default(true) @map("show_promotion")
   showNepaliName    Boolean @default(false) @map("show_nepali_name")
+  // Was Grade.gradingStyle until 2026-08-17 — moved here so the whole school
+  // prints one report card design instead of picking it per grade.
+  gradingStyle      GradingStyle @default(MARKS_BASED) @map("grading_style")
   logoPosition      String  @default("center") @map("logo_position")
   logoSize          String  @default("medium") @map("logo_size")
   createdAt         DateTime @default(now()) @map("created_at")

@@ -51,6 +51,17 @@ async function getColumnSettings(schoolId: string): Promise<ReportCardColumnSett
   };
 }
 
+// Helper: fetch the school-wide report card design (W3e's sibling decision —
+// one design for the whole school, not one per grade — see ReportCardSettings
+// on the schema and PERFORMANCE_AUDIT.md).
+async function getGradingStyle(schoolId: string): Promise<"MARKS_BASED" | "CREDIT_GRADE_BASED"> {
+  const settings = await prisma.reportCardSettings.findUnique({
+    where: { schoolId },
+    select: { gradingStyle: true },
+  });
+  return settings?.gradingStyle ?? "MARKS_BASED";
+}
+
 // Helper: fetch observations for a student + exam
 async function getObservations(studentId: string, examTypeId: string, gradeId: string): Promise<any[] | null> {
   const categories = await prisma.observationCategory.findMany({
@@ -142,6 +153,7 @@ interface TermReportBatch {
   examType: any;
   academicYear: any;
   school: any;
+  gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED";
   gradeSubjects: any[];
   studentsById: Map<string, any>;
   marksByStudent: Map<string, any[]>;
@@ -159,7 +171,7 @@ async function loadTermReportBatch(
   examTypeId: string,
   schoolId: string
 ): Promise<TermReportBatch> {
-  const [section, examType, school] = await Promise.all([
+  const [section, examType, school, gradingStyle] = await Promise.all([
     prisma.section.findUniqueOrThrow({
       where: { id: sectionId },
       include: { grade: true },
@@ -167,6 +179,7 @@ async function loadTermReportBatch(
     // S5 — same scoping as the single-student builder below.
     prisma.examType.findFirstOrThrow({ where: { id: examTypeId, academicYear: { schoolId } } }),
     prisma.school.findUnique({ where: { id: schoolId } }),
+    getGradingStyle(schoolId),
   ]);
 
   const [academicYear, students, gradeSubjects] = await Promise.all([
@@ -221,6 +234,7 @@ async function loadTermReportBatch(
     examType,
     academicYear,
     school,
+    gradingStyle,
     gradeSubjects,
     studentsById: new Map(students.map((s) => [s.id, s])),
     marksByStudent,
@@ -314,7 +328,7 @@ async function buildTermReportData(
       ? batch.school
       : await prisma.school.findUnique({ where: { id: schoolId } });
   const hasPracticalSubjects = gradeSubjects.some((s: any) => s.fullPracticalMarks > 0);
-  const gradingStyle = student.section.grade.gradingStyle;
+  const gradingStyle = batch !== undefined ? batch.gradingStyle : await getGradingStyle(schoolId);
 
   let subjects: any[];
   let overallGpa: number | null;
@@ -470,7 +484,12 @@ async function buildTermReportData(
   };
 }
 
-async function buildFinalReportData(studentId: string, academicYearId: string, schoolId: string) {
+async function buildFinalReportData(
+  studentId: string,
+  academicYearId: string,
+  schoolId: string,
+  gradingStyle?: "MARKS_BASED" | "CREDIT_GRADE_BASED"
+) {
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },
     include: { section: { include: { grade: true } } },
@@ -548,22 +567,22 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
   });
 
   // Credit-hour / grade-point style reshapes the annual report the same way
-  // buildTermReportData does for term reports — otherwise a grade set to
-  // CREDIT_GRADE_BASED would get the SEE-style term report but fall through
-  // to the marks-based template at year end.
+  // buildTermReportData does for term reports — otherwise the school's
+  // CREDIT_GRADE_BASED setting would get the SEE-style term report but fall
+  // through to the marks-based template at year end.
   //
   // Grades are derived weighted-marks-first: each component's term marks are
   // combined using the existing gradingPolicy weightages, and the resulting
   // percentage is graded once. That matches how the marks-based annual report
   // already consolidates terms, so both styles rank and pass/fail identically.
-  const gradingStyle = student.section.grade.gradingStyle;
+  const style = gradingStyle ?? (await getGradingStyle(schoolId));
 
   let reportSubjects: any[];
   let overallGpa: number | null;
   let overallPct: number;
   let overallGradeLabel: string;
 
-  if (gradingStyle === "CREDIT_GRADE_BASED") {
+  if (style === "CREDIT_GRADE_BASED") {
     const weightedComponentPct = (subjectId: string, component: "theory" | "practical", componentFullMarks: number) =>
       calculateWeightedPercentage(
         policies.map((policy) => {
@@ -683,7 +702,7 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
     examType: finalExamType?.name || "Final",
     paperSize: finalExamType?.paperSize || "A4",
     isTermReport: false,
-    gradingStyle,
+    gradingStyle: style,
     hasPractical: subjects.some((s) => s.fullPracticalMarks > 0),
     subjects: reportSubjects,
     overallPercentage: overallPct,
@@ -862,16 +881,18 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
   const finalExamType = await prisma.examType.findFirst({ where: { isFinal: true, academicYearId } });
   const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId } });
 
-  // Observations and column settings are the same for every student here too. The
-  // annual builder itself still fetches per student — see the note under P3.
-  const [observationsByStudent, cols] = await Promise.all([
+  // Observations, column settings and the report design are the same for
+  // every student here too. The annual builder itself still fetches per
+  // student — see the note under P3.
+  const [observationsByStudent, cols, gradingStyle] = await Promise.all([
     getObservationsBatch(students.map((s) => s.id), finalExamType?.id || "", section.gradeId),
     getColumnSettings(schoolId),
+    getGradingStyle(schoolId),
   ]);
 
   const reportDataArray: any[] = [];
   for (const stu of students) {
-    const data = await buildFinalReportData(stu.id, academicYearId, schoolId);
+    const data = await buildFinalReportData(stu.id, academicYearId, schoolId, gradingStyle);
     if (data) {
       data._observations = observationsByStudent.get(stu.id) ?? null;
       reportDataArray.push(data);

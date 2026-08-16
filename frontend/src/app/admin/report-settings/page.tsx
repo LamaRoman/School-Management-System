@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Settings, Upload, Trash2 } from "lucide-react";
+import { Save, Settings, Upload, Trash2, FileText } from "lucide-react";
 
 interface SettingsData {
   showPassMarks: boolean;
@@ -15,6 +15,7 @@ interface SettingsData {
   showRemarks: boolean;
   showPromotion: boolean;
   showNepaliName: boolean;
+  gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED";
   logoPosition: string;
   logoSize: string;
 }
@@ -210,6 +211,29 @@ export default function ReportCardSettingsPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Report Card Design */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <FileText size={16} className="text-primary" />
+            <h2 className="font-display font-bold text-primary">Report Card Design</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            One design applies to every grade&apos;s report card, term and annual.
+          </p>
+          <select
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            value={settings.gradingStyle}
+            onChange={(e) => {
+              const updated = { ...settings, gradingStyle: e.target.value as "MARKS_BASED" | "CREDIT_GRADE_BASED" };
+              setSettings(updated);
+              setHasChanges(JSON.stringify(updated) !== JSON.stringify(originalSettings));
+            }}
+          >
+            <option value="MARKS_BASED">Marks-based (Full/Pass Marks)</option>
+            <option value="CREDIT_GRADE_BASED">Credit Hour + Grade Point (SEE/NEB style)</option>
+          </select>
         </div>
 
         {settingsConfig.map((group) => (
