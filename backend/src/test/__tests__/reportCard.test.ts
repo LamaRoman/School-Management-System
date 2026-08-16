@@ -1,11 +1,12 @@
 /**
  * Report Card Integration Tests
  *
- * Covers PDF generation for both report styles (Grade.gradingStyle):
+ * Covers PDF generation for both report styles (ReportCardSettings.gradingStyle
+ * — a single school-wide setting since 2026-08-17, not picked per grade):
  *   - MARKS_BASED        — the original full-marks / pass-marks report
  *   - CREDIT_GRADE_BASED — the credit-hour / grade-point (SEE/NEB) report
  *
- * The case that matters most here is that a grade set to CREDIT_GRADE_BASED
+ * The case that matters most here is that a school set to CREDIT_GRADE_BASED
  * gets the credit-grade template for BOTH its term report and its annual
  * report. Those are built by two separate functions (buildTermReportData and
  * buildFinalReportData), and an earlier revision wired the style through only
@@ -140,7 +141,11 @@ afterAll(async () => {
 });
 
 async function setStyle(style: "MARKS_BASED" | "CREDIT_GRADE_BASED") {
-  await prisma.grade.update({ where: { id: ctx.grade.id }, data: { gradingStyle: style } });
+  await prisma.reportCardSettings.upsert({
+    where: { schoolId: ctx.school.id },
+    update: { gradingStyle: style },
+    create: { schoolId: ctx.school.id, gradingStyle: style },
+  });
 }
 
 describe("Report card PDF generation", () => {

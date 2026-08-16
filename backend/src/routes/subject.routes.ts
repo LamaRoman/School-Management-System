@@ -18,8 +18,9 @@ const subjectSchema = z.object({
   fullTheoryMarks: z.number().int().min(1),
   fullPracticalMarks: z.number().int().min(0).default(0),
   passMarks: z.number().int().min(0),
-  // Only used for report rendering when the subject's grade has
-  // gradingStyle = CREDIT_GRADE_BASED. Harmless default for everyone else.
+  // Only used for report rendering when the school's report card design
+  // (ReportCardSettings.gradingStyle) is CREDIT_GRADE_BASED. Harmless default
+  // for everyone else.
   creditHour: z.number().int().min(1).default(4),
   isOptional: z.boolean().default(false),
   displayOrder: z.number().int().default(0),

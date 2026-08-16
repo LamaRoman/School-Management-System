@@ -121,9 +121,9 @@ export function calculateOverallGpa(subjectGpas: (number | null)[]): number | nu
 
 /**
  * Calculate overall GPA weighted by each subject's credit hour.
- * Used only by the credit-hour/grade-point report style (Grade.gradingStyle
- * === "CREDIT_GRADE_BASED"). Same null-handling convention as
- * calculateOverallGpa above.
+ * Used only by the credit-hour/grade-point report style
+ * (ReportCardSettings.gradingStyle === "CREDIT_GRADE_BASED"). Same
+ * null-handling convention as calculateOverallGpa above.
  */
 export function calculateOverallGpaWeighted(
   subjects: { gpa: number | null; creditHour: number }[]

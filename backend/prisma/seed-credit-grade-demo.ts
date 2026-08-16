@@ -1,13 +1,17 @@
 /**
  * seed-credit-grade-demo.ts — standalone demo data for the credit-hour /
- * grade-point report card (gradingStyle = CREDIT_GRADE_BASED).
+ * grade-point report card (ReportCardSettings.gradingStyle = CREDIT_GRADE_BASED).
  *
  * Deliberately separate from seed-all.ts / seed-dev.ts — doesn't touch or
  * depend on either. Adopts the existing school if one is present (from a
  * prior seed-all.ts run), otherwise creates a "Demo School".
  *
+ * gradingStyle is a school-wide setting (not per grade), so this switches the
+ * WHOLE adopted school to the credit-grade design — every grade's report card
+ * renders through that template after this runs, not just Grade "X".
+ *
  * Creates, all under a freshly-activated "current" BS academic year:
- *   - Grade "X" with gradingStyle = CREDIT_GRADE_BASED
+ *   - Grade "X"
  *   - Section "A"
  *   - 7 subjects matching the Asian Public School sample report
  *     (75 theory / 25 practical / credit hour 4 each)
@@ -105,15 +109,22 @@ async function main() {
     },
   });
 
-  // ── Grade (credit-hour / grade-point style) + Section ──
+  // gradingStyle is school-wide, not per grade — this switches every grade in
+  // the adopted school to the credit-grade report design, not just "X" below.
+  await prisma.reportCardSettings.upsert({
+    where: { schoolId: school.id },
+    update: { gradingStyle: "CREDIT_GRADE_BASED" },
+    create: { schoolId: school.id, gradingStyle: "CREDIT_GRADE_BASED" },
+  });
+
+  // ── Grade + Section ──
   const grade = await prisma.grade.upsert({
     where: { name_academicYearId: { name: "X", academicYearId: academicYear.id } },
-    update: { gradingStyle: "CREDIT_GRADE_BASED" },
+    update: {},
     create: {
       name: "X",
       academicYearId: academicYear.id,
       displayOrder: 9,
-      gradingStyle: "CREDIT_GRADE_BASED",
     },
   });
 
@@ -277,7 +288,8 @@ async function main() {
   console.log("✅ Credit-grade demo data ready.\n");
   console.log(`School:        ${school.name}`);
   console.log(`Academic Year: ${academicYear.yearBS} B.S. (now active)`);
-  console.log(`Grade/Section: X / A  (gradingStyle = CREDIT_GRADE_BASED)`);
+  console.log(`Grade/Section: X / A`);
+  console.log(`Report design: CREDIT_GRADE_BASED (school-wide)`);
   console.log(`Exam:          ${examType.name}\n`);
   console.log("Logins (all password: demo1234):");
   console.log(`  Teacher: sunita.gurung@demo.local`);

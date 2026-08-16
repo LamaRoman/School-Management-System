@@ -32,6 +32,7 @@ router.get("/", authenticate, async (req, res) => {
         showRemarks: true,
         showPromotion: true,
         showNepaliName: false,
+        gradingStyle: "MARKS_BASED",
         logoPosition: "center",
         logoSize: "medium",
       },
@@ -55,6 +56,7 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
     showRemarks: z.boolean().optional(),
     showPromotion: z.boolean().optional(),
     showNepaliName: z.boolean().optional(),
+    gradingStyle: z.enum(["MARKS_BASED", "CREDIT_GRADE_BASED"]).optional(),
     logoPosition: z.enum(["left", "center", "center-inline", "right"]).optional(),
     logoSize: z.enum(["small", "medium", "large"]).optional(),
   });

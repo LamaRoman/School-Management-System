@@ -11,9 +11,6 @@ const gradeSchema = z.object({
   name: z.string().min(1),
   displayOrder: z.number().int().min(0),
   academicYearId: z.string().min(1),
-  // Which report card layout this grade uses. Defaults to the existing
-  // marks-based report so creating a grade behaves exactly as before.
-  gradingStyle: z.enum(["MARKS_BASED", "CREDIT_GRADE_BASED"]).default("MARKS_BASED"),
 });
 
 // GET /api/grades?academicYearId=xxx
@@ -61,7 +58,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const createData: Prisma.GradeCreateInput = {
     name: data.name,
     displayOrder: data.displayOrder,
-    gradingStyle: data.gradingStyle,
     academicYear: { connect: { id: data.academicYearId } },
   };
   const grade = await prisma.grade.create({ data: createData });
