@@ -41,7 +41,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **X3** | No request logging or error tracking — pino + pino-http added, all console.* migrated to structured logger | #36 |
 | **P1b, P1c, X6** | Student photos routed through S3 (sharp resize + webp), backfill script for existing base64 rows, pagination added to `/students` | #37 |
 
-**Suggested next:** everything actionable is done. **S6b decided and built 2026-08-16** (public routes now accept the school code, code required before a website can be connected). What remains is four owner decisions (S7, W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** everything actionable is done. **S6b decided (leave as-is) and S7 decided and built 2026-08-17** (teachers now section-scoped for reports, matching the roster policy). What remains is three owner decisions (W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
 
 **Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
 
@@ -69,7 +69,6 @@ entry says exactly what the choice is and what it costs.
 
 | | What has to be decided | Why it can't just be done | Full entry |
 |---|---|---|---|
-| **S7** | Should a TEACHER keep read access to *every* student's reports, or be scoped to their sections? | The codebase is currently inconsistent on purpose: `student.routes.ts` scopes teachers to assigned sections, `report.routes.ts:18` does not. W3b settled it for grade sheets and observation grading only. May well be right for a small school — it needs to be a decision rather than an accident. | **S7** |
 | **W3e** | Should "+ Add Student" be removed so Admissions is the only way in? | Its original justification was W2, which turned out not to exist (see below) — students created either way are billed identically. What is left is a process preference with no defect behind it. | **W3e** |
 | **R8a** | Should the dashboard's pass/fail panel report the *final* exam or the *most recently completed* one? | A final is partly entered for most of the year — 728 marks against First Terminal's 1,820 in dev — so the panel shows pass rates over a fraction of the cohort. Less pressing now that the panel names its exam. | **R8a** |
 | **P4b** | What should attendance totals do for a student who transfers out mid-year? | The recompute covers only students currently `isActive` in the section, so a leaver keeps whatever totals they had at that moment. Defensible; just undecided. | **P4b** |
@@ -335,14 +334,15 @@ Two more worth doing in the same pass, both hitting the cost goal:
 
 ---
 
-### [ ] S7. Policy question: TEACHER has full read access to every student in the school
-**Where:** `backend/src/routes/report.routes.ts:18` — `if (role === "ADMIN" || role === "TEACHER") return; // full access`
+### [x] S7. Policy question: TEACHER has full read access to every student in the school
 
-A Class 1 teacher can pull report cards, marks and observation data for Class 10 students they've never taught. `student.routes.ts:197` *does* restrict teachers to their assigned sections for rosters — so the codebase is inconsistent about whether teachers are section-scoped.
+> **Decided and fixed 2026-08-17.** Owner chose section-scoped: a teacher may only view/print reports for sections they hold a `TeacherAssignment` in (any assignment — class teacher or subject teacher — matching `authorizeStudentRead`'s policy in `student.routes.ts`), not the class-teacher-only policy W3b used for grade sheets. `verifyStudentAccess` (`backend/src/utils/studentAccess.ts`) now checks the student's section against the teacher's assignments instead of returning early for every TEACHER; it's shared by `report.routes.ts` and `pdf.routes.ts`'s single-student routes so both stay in sync. The whole-class batch PDF routes (`pdf.routes.ts:791,846` — `/class/term/:sectionId/...`, `/class/final/:sectionId/...`) had the same gap at the section level and were closed the same way via the new exported `verifySectionTeacherAccess`. Verified live against the dev server with a seeded teacher: 200 for their own section, 403 for an unassigned section, for both the report API and the batch PDF route.
 
-This may well be intended for a small school. Flagging so it's a decision rather than an accident, and so the two endpoints get made consistent either way.
+**Where:** `backend/src/utils/studentAccess.ts`, `backend/src/routes/pdf.routes.ts:791,846`
 
-> **Note (2026-08-14):** **W3b** decides this for grade sheet and observations specifically — both move to class-teacher-only. `report.routes.ts:18` (the report/PDF access this item was originally about) is broader than that and still open — same underlying question, not yet decided for the rest of the surface.
+A Class 1 teacher could previously pull report cards, marks and observation data for Class 10 students they've never taught. `student.routes.ts:197` restricted teachers to their assigned sections for rosters — so the codebase was inconsistent about whether teachers are section-scoped for this surface.
+
+> **Note (2026-08-14):** **W3b** decided this for grade sheet and observations specifically — both are class-teacher-only. This item covers the broader report/PDF surface, now decided the same direction but with the looser "any assignment" policy (matching roster reads, not grade-entry writes).
 
 ---
 

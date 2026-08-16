@@ -3,7 +3,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyStudent, verifySection } from "../utils/schoolScope";
-import { verifyStudentAccess } from "../utils/studentAccess";
+import { verifyStudentAccess, verifySectionTeacherAccess } from "../utils/studentAccess";
 import {
   isSectionPublished,
   pendingTermsForAnnual,
@@ -792,6 +792,7 @@ router.get("/class/term/:sectionId/:examTypeId", authenticate, authorize("ADMIN"
   const schoolId = getSchoolId(req);
   const { sectionId, examTypeId } = req.params;
   await verifySection(sectionId, schoolId);
+  if (req.user!.role === "TEACHER") await verifySectionTeacherAccess(req.user!.userId, sectionId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const students = await prisma.student.findMany({
@@ -847,6 +848,7 @@ router.get("/class/final/:sectionId/:academicYearId", authenticate, authorize("A
   const schoolId = getSchoolId(req);
   const { sectionId, academicYearId } = req.params;
   await verifySection(sectionId, schoolId);
+  if (req.user!.role === "TEACHER") await verifySectionTeacherAccess(req.user!.userId, sectionId);
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
   const students = await prisma.student.findMany({

@@ -188,12 +188,19 @@ describe("what a family sees before results are published (W1e)", () => {
     }
   });
 
-  it("leaves admins and teachers seeing everything, exactly as before (W1g)", async () => {
-    for (const token of [adminToken, classTeacherToken, otherTeacherToken]) {
+  it("leaves admins and the student's own teachers seeing everything, unaffected by the publish gate (W1g)", async () => {
+    for (const token of [adminToken, classTeacherToken]) {
       const res = await termReport(token).expect(200);
       expect(res.body.data.pending).toBeUndefined();
       expect(res.body.data.subjects.length).toBeGreaterThan(0);
     }
+  });
+
+  it("refuses a teacher who isn't assigned to the student's section, publish gate aside (S7)", async () => {
+    // otherTeacherToken is class teacher of otherSectionId, not this student's
+    // section — S7 scopes teacher report access to assigned sections, so this
+    // is a 403 regardless of publish state.
+    await termReport(otherTeacherToken).expect(403);
   });
 
   it("keeps results pending while the class teacher has only marked them READY", async () => {
