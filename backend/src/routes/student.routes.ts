@@ -10,6 +10,7 @@ import { getStudentDefaultPassword } from "../utils/studentPassword";
 import { mangleEmail, unmangleEmail } from "../utils/deactivatedEmail";
 import { Prisma } from "@prisma/client";
 import logger from "../utils/logger";
+import { isBase64DataUri, uploadStudentPhoto, deleteStudentPhoto } from "../services/upload.service";
 
 const router = Router();
 
@@ -191,7 +192,9 @@ function asLoginEmailConflict(err: unknown, studentName: string): unknown {
 router.get("/", authenticate, async (req, res) => {
   const user = req.user!;
   const schoolId = getSchoolId(req);
-  const { sectionId, gradeId, search, subjectId } = req.query;
+  const { sectionId, gradeId, search, subjectId, page, limit } = req.query;
+  const pageNum = Math.max(1, parseInt(String(page || "1"), 10) || 1);
+  const pageSize = Math.min(1000, Math.max(1, parseInt(String(limit || "1000"), 10) || 1000));
   const where: any = { isActive: true, section: { grade: { academicYear: { schoolId } } } };
   if (search) where.name = { contains: String(search), mode: "insensitive" };
   if (sectionId) {
@@ -239,34 +242,38 @@ router.get("/", authenticate, async (req, res) => {
     }
   }
 
-  // `photo` is deliberately excluded: photos are stored as base64 data URIs, so
-  // including them turns a 40-student roster into tens of megabytes of JSON.
-  // Fetch a single student via GET /students/:id when the photo is actually needed.
-  const students = await prisma.student.findMany({
-    where,
-    orderBy: { rollNo: "asc" },
-    select: {
-      id: true,
-      name: true,
-      nameNp: true,
-      dateOfBirth: true,
-      rollNo: true,
-      symbolNumber: true,
-      gender: true,
-      fatherName: true,
-      motherName: true,
-      guardianName: true,
-      guardianPhone: true,
-      address: true,
-      sectionId: true,
-      isActive: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      section: { include: { grade: { select: { name: true } } } },
-    },
-  });
-  res.json({ data: students });
+  // `photo` is excluded from the list: new uploads go to S3 (small URL), but
+  // existing rows may still hold base64 data URIs until the backfill runs.
+  const [students, total] = await Promise.all([
+    prisma.student.findMany({
+      where,
+      orderBy: { rollNo: "asc" },
+      skip: (pageNum - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        nameNp: true,
+        dateOfBirth: true,
+        rollNo: true,
+        symbolNumber: true,
+        gender: true,
+        fatherName: true,
+        motherName: true,
+        guardianName: true,
+        guardianPhone: true,
+        address: true,
+        sectionId: true,
+        isActive: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        section: { include: { grade: { select: { name: true } } } },
+      },
+    }),
+    prisma.student.count({ where }),
+  ]);
+  res.json({ data: students, pagination: { page: pageNum, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } });
 });
 
 // GET /api/students/:id
@@ -392,6 +399,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     include: { grade: { include: { academicYear: true } } },
   });
 
+  const photoInput = data.photo;
   const createData: Prisma.StudentCreateInput = {
     name: data.name,
     nameNp: data.nameNp,
@@ -404,7 +412,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     guardianName: data.guardianName,
     guardianPhone: data.guardianPhone,
     address: data.address,
-    photo: data.photo,
     isActive: data.isActive,
     section: { connect: { id: data.sectionId } },
   };
@@ -423,6 +430,14 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     });
   } catch (err) {
     throw asLoginEmailConflict(err, data.name);
+  }
+
+  if (photoInput && isBase64DataUri(photoInput)) {
+    const result = await uploadStudentPhoto(photoInput, schoolId, student.id);
+    student = await prisma.student.update({
+      where: { id: student.id },
+      data: { photo: result.url },
+    });
   }
 
   // Auto-create admission record so there is always a paper trail
@@ -569,6 +584,15 @@ router.put("/:id", authenticate, async (req, res) => {
         }
       }
     }
+  }
+
+  if (data.photo && isBase64DataUri(data.photo)) {
+    const result = await uploadStudentPhoto(data.photo, schoolId, req.params.id);
+    if (student.photo) await deleteStudentPhoto(student.photo);
+    data.photo = result.url;
+  } else if (data.photo === "") {
+    if (student.photo) await deleteStudentPhoto(student.photo);
+    data.photo = null as any;
   }
 
   const updated = await prisma.$transaction(async (tx) => {
