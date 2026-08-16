@@ -38,8 +38,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F7, F8, F9, F10** | Double-submit guard; print/export code-splitting; `alert()` → toast; shell renders before auth resolves | #33 |
 | **X5** | Parents could read a report in the portal but not download its PDF | #34 |
 | **X4, X6 (partial)** | Unbounded auth caches swept every 5 min; CLAUDE.md grading sentence fixed; pagination investigated and deferred | #35 |
+| **X3** | No request logging or error tracking — pino + pino-http added, all console.* migrated to structured logger | #36 |
+| **P1b, P1c, X6** | Student photos routed through S3 (sharp resize + webp), backfill script for existing base64 rows, pagination added to `/students` | #37 |
 
-**Suggested next:** **X3** (request logging/error tracking) and the pagination half of **X6** (not urgent at current scale). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** everything actionable is done. What remains is the five owner decisions (S6b, S7, W3e, R8a, P4b) and the fee search trigram index (X6, not urgent). See [Everything still open, in one place](#everything-still-open-in-one-place).
 
 **Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
 
@@ -81,12 +83,12 @@ entry says exactly what the choice is and what it costs.
 
 ### Ready to pick up — no blocker, no decision needed
 
+Everything that was here is done (P1b/P1c in #37, X3 in #36, X6's pagination and CLAUDE.md fix in #35/#37). What's left in this category:
+
 | | What | Notes |
 |---|---|---|
-| **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
-| **X3** | No request logging or error tracking | **Done** — pino + pino-http, all console.* migrated |
 | **W3f** | `POST /students/bulk` bypasses Admissions | Dormant — no frontend calls it. Recorded so a future CSV import extends the Admissions pipeline instead of reaching for this route. |
-| **X6** | Pagination, fee search indexing, and a self-contradictory sentence in `CLAUDE.md` | The `CLAUDE.md` wording is a two-minute fix and it is the rule people read the docs for. |
+| **X6 (fee search)** | `accountantReport.routes.ts:146` uses `ILIKE '%x%'`, unindexable by design | Fine now; trigram index if it slows. |
 
 ---
 
@@ -670,9 +672,9 @@ Ordered by `displayOrder`, so adding a makeup/supplementary exam or reordering e
 
 # P — Backend performance & cost
 
-### [~] P1. Student photos are base64 blobs in Postgres, returned on every roster fetch  ← ~~*biggest single win*~~
+### [x] P1. Student photos are base64 blobs in Postgres, returned on every roster fetch  ← ~~*biggest single win*~~
 
-> **P1a done 2026-08-14; P1b–P1d still open.** The roster no longer ships photos, which is the cheap half.
+> **P1a done 2026-08-14; P1b–P1c done 2026-08-16.** The roster no longer ships photos (P1a), and new uploads go through S3 with sharp resize/webp conversion (P1b). A backfill script migrates existing base64 rows to S3 (P1c).
 >
 > **The "biggest single win" label is not supported by evidence.** Checked the dev database: **0 of 261 students have a photo**, so the tens-of-megabytes roster this describes has never actually occurred there. The storage design is still wrong and P1b–d are still worth doing — base64 in Postgres inflates rows ~33%, bloats backups, and can't be cached or resized — but schedule them as *fixing a design flaw*, not as *making the app faster*. If production turns out to have photos loaded, re-measure and re-prioritise.
 
@@ -706,8 +708,14 @@ Cost impact too: DB storage, backup size, and Railway egress all scale with it �
   > **Two frontend consumers had to move**, which the original note missed:
   > - The roster thumbnail (`admin/students/page.tsx`) now always renders the initials avatar that was already the no-photo fallback. Photos still show on the student detail page. Restoring roster thumbnails needs **P1b** (real image URLs), not a payload tweak.
   > - The edit dialog read `photo` off the list row, so with the field gone a save would have **wiped the stored photo**. It now lazy-fetches the single student on edit, and `photo` stays `undefined` until that lands — `PUT /students/:id` parses `.partial()`, so an omitted field leaves the column untouched. Guarded against the **F4** stale-response race with an id check.
-- [ ] **P1b.** Route student photos through the existing `upload.service.ts` S3 path; store a URL in `photo` instead of a data URI.
-- [ ] **P1c.** Backfill/migrate existing base64 rows to S3, then reclaim the space.
+- [x] **P1b.** Route student photos through the existing `upload.service.ts` S3 path; store a URL in `photo` instead of a data URI.
+
+  > **DONE 2026-08-16.** `uploadStudentPhoto` added to `upload.service.ts` — accepts a base64 data URI, runs it through sharp (400px cover crop, webp @ 80%), uploads to S3 under `students/{schoolId}/{studentId}.webp`. The `photo` column stores the S3 URL instead of the data URI. Both POST and PUT in `student.routes.ts` detect `data:` prefixed values and route them through S3; URL values (from S3) pass through unchanged. Old photos are deleted from S3 on replacement. Dev fallback: without S3 credentials, the compressed base64 is stored (same as gallery photos). The frontend needs zero changes — `<img src=...>` works with both URLs and data URIs.
+
+- [x] **P1c.** Backfill/migrate existing base64 rows to S3, then reclaim the space.
+
+  > **DONE 2026-08-16.** `prisma/backfill-student-photos-to-s3.ts` — finds all students with `photo LIKE 'data:%'`, uploads each to S3 via `uploadStudentPhoto`, and updates the row. Safe to re-run (only touches `data:` rows). Requires `AWS_S3_BUCKET` in env. Dev database has 0 photos, so the script is untested against real data — run against a staging backup before production.
+
 - [x] **P1d.** Add server-side `.max()` validation on the `photo` field (**S8**).
 
   > **DONE 2026-08-15 as part of S8** — `photo: z.string().max(700_000)`. Bounds the worst case; P1b/P1c are still the real fix.
@@ -1288,10 +1296,13 @@ The repair tool shipped separately (`prisma/backfill-missing-student-accounts.ts
 
 The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAccess`, but the PDF routes exclude them. The parent portal currently has no download button, so nothing is visibly broken — but the capability gap is probably unintended. Confirm and align.
 
-### [~] X6. Smaller items
-- [ ] **Pagination** — only one paginated endpoint in the whole API (`fee.routes.ts:592`). `/students` and `/fees/section-overview` are the ones to watch. **Investigated 2026-08-16:** `/students` is always section-filtered in practice (the frontend passes `sectionId`); the two unfiltered calls are `admin/promotion` (transfer modal) and `accountant/students` (search). Both are admin-only, and at 260 students the payload is ~30KB. `/fees/section-overview` is scoped to one section by design. Pagination would be defensive — worth adding to `/students` if a school ever approaches 1,000 students, not urgent now.
-- [ ] **Fee search** — `accountantReport.routes.ts:146` uses `contains` + `mode: insensitive` = `ILIKE '%x%'`, unindexable by design. Fine now; trigram index if it slows.
-- [x] **`CLAUDE.md` wording** — ~~*"D and D+ and below D+ (D, E) are the failing bands"*~~ **FIXED 2026-08-16.** Now reads "D and E are the failing grades".
+### [x] X6. Smaller items
+
+> **All sub-items resolved 2026-08-16.**
+
+- [x] **Pagination** — `GET /students` now returns `{ data, pagination: { page, limit, total, totalPages } }`. Default 1000 per page (capped at 1000). At current scale (260 students) every existing call returns everything in one page. The `pagination` metadata is additive — `api.get` extracts `.data` so the frontend is unaffected. Consumers can pass `?page=N&limit=N` when needed.
+- [ ] **Fee search** — `accountantReport.routes.ts:146` uses `ILIKE '%x%'`, unindexable by design. Fine now; trigram index if it slows.
+- [x] **`CLAUDE.md` wording** — **FIXED 2026-08-16.** Now reads "D and E are the failing grades".
 
 ---
 
@@ -1330,7 +1341,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | S6a–S6e (public routes) | ~half day | S6b needs a `code` migration |
 | ~~X3 (logging + error tracking)~~ | ✅ **done** | pino + pino-http, all console.* migrated to structured logger |
 | ~~X7 (enroll reports success on account failure)~~ | ✅ **done** | Repair shipped in #15; the silent failure behind it is now closed too |
-| P1b–P1d (photos → S3) + S8 | 1–2 days | |
+| ~~P1b–P1c (photos → S3)~~ | ✅ **done** | S3 upload + sharp compress + backfill script |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
 | ~~S5, F7–F10~~ | ✅ **done** | S5 shipped in #28; F7/F8/F9/F10 shipped in #33 |
 | ~~X5~~ | ✅ **done** | Shipped in #34, along with a shared `verifyStudentAccess` and one frontend PDF helper replacing two copies |

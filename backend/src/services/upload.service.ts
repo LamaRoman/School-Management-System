@@ -183,3 +183,79 @@ export async function deleteGalleryPhoto(photoUrl: string): Promise<void> {
     logger.warn({ err }, "Failed to delete gallery photo from S3");
   }
 }
+
+// ─── Student photos ─────────────────────────────────────
+const STUDENT_PHOTO_MAX = 400;
+const STUDENT_PHOTO_QUALITY = 80;
+
+async function compressStudentPhoto(
+  fileBuffer: Buffer
+): Promise<{ buffer: Buffer; mimetype: string }> {
+  try {
+    const buffer = await sharp(fileBuffer)
+      .rotate()
+      .resize({ width: STUDENT_PHOTO_MAX, height: STUDENT_PHOTO_MAX, fit: "cover" })
+      .webp({ quality: STUDENT_PHOTO_QUALITY })
+      .toBuffer();
+    return { buffer, mimetype: "image/webp" };
+  } catch {
+    return { buffer: fileBuffer, mimetype: "image/jpeg" };
+  }
+}
+
+export function isBase64DataUri(value: string): boolean {
+  return value.startsWith("data:");
+}
+
+function parseDataUri(dataUri: string): { buffer: Buffer; mimetype: string } {
+  const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error("Invalid data URI");
+  return { buffer: Buffer.from(match[2], "base64"), mimetype: match[1] };
+}
+
+export async function uploadStudentPhoto(
+  dataUri: string,
+  schoolId: string,
+  studentId: string
+): Promise<UploadResult> {
+  const { buffer } = parseDataUri(dataUri);
+  const compressed = await compressStudentPhoto(buffer);
+  const s3Config = getS3();
+
+  if (s3Config) {
+    const ext = compressed.mimetype.split("/")[1];
+    const key = `students/${schoolId}/${studentId}.${ext}`;
+
+    await s3Config.client.send(
+      new PutObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: key,
+        Body: compressed.buffer,
+        ContentType: compressed.mimetype,
+        CacheControl: "public, max-age=31536000",
+      })
+    );
+
+    return {
+      url: `https://${s3Config.bucket}.s3.${s3Config.region}.amazonaws.com/${key}`,
+      storageType: "s3",
+    };
+  }
+
+  const base64 = `data:${compressed.mimetype};base64,${compressed.buffer.toString("base64")}`;
+  return { url: base64, storageType: "base64" };
+}
+
+export async function deleteStudentPhoto(photoUrl: string): Promise<void> {
+  const s3Config = getS3();
+  if (!s3Config || !photoUrl.includes(".amazonaws.com/")) return;
+
+  try {
+    const key = photoUrl.split(".amazonaws.com/")[1];
+    if (key) {
+      await s3Config.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
+    }
+  } catch {
+    // best-effort
+  }
+}
