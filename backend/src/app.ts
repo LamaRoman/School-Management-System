@@ -11,6 +11,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import prisma from "./utils/prisma";
 import { errorHandler } from "./middleware/errorHandler";
+import requestLogger from "./middleware/requestLogger";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pdfRoutes from "./routes/pdf.routes";
@@ -77,6 +78,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
+if (process.env.NODE_ENV !== "test") {
+  app.use(requestLogger);
+}
 
 // Public, read-only routes (e.g. a school's website fetching its gallery) are
 // called from an origin outside the SMS frontend, so they get their own

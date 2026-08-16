@@ -84,7 +84,7 @@ entry says exactly what the choice is and what it costs.
 | | What | Notes |
 |---|---|---|
 | **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
-| **X3** | No request logging or error tracking | |
+| **X3** | No request logging or error tracking | **Done** — pino + pino-http, all console.* migrated |
 | **W3f** | `POST /students/bulk` bypasses Admissions | Dormant — no frontend calls it. Recorded so a future CSV import extends the Admissions pipeline instead of reaching for this route. |
 | **X6** | Pagination, fee search indexing, and a self-contradictory sentence in `CLAUDE.md` | The `CLAUDE.md` wording is a two-minute fix and it is the rule people read the docs for. |
 
@@ -1210,7 +1210,12 @@ No gzip/brotli. Endpoints like `/students`, `/fees/section-overview` and `/grade
 
 **Where:** `backend/src/app.ts:115` — returns `{status: "ok"}` unconditionally. If Postgres is down, the check passes and Railway keeps routing traffic to a broken instance.
 
-### [ ] X3. No request logging or error tracking
+### [x] X3. No request logging or error tracking
+
+> **FIXED 2026-08-16.** Added `pino` + `pino-http` for structured JSON request logging. Every request now emits method, URL, status code, and response time — except `/health`, which is silenced to avoid noise. The error handler (`errorHandler.ts`) now logs 500s with structured context (method, URL, stack trace) via pino instead of bare `console.error`. All `console.error`/`console.warn`/`console.log` calls across the backend source (`server.ts`, `auth.routes.ts`, `admission.routes.ts`, `student.routes.ts`, `fee.routes.ts`, `upload.service.ts`, `websiteRevalidate.service.ts`, `pdf.service.ts`, `audit.ts`, `studentPassword.ts`) migrated to the structured logger. Authorization header and cookie values are auto-redacted. Request logging is disabled in the test environment to keep test output clean.
+>
+> **Not included:** Sentry or equivalent error tracking SaaS — that is a deployment/billing decision, not a code change. The structured logs are parseable by Railway's log viewer, Datadog, or any JSON log aggregator, which is the prerequisite for wiring up alerting later.
+
 **Where:** `backend/` — no `morgan`/`pino`, no Sentry equivalent; errors go to `console.error` (`errorHandler.ts:19`) into Railway's log buffer
 
 For a production system: when a school reports "report cards were slow this morning", there's no record of which endpoint, how long, or how often. A 500 hit by a parent at 9pm is invisible. This is how you find the *next* problem without reading code.
@@ -1323,7 +1328,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | P5 (analytics cache) + R8 | ~half day | Same handler, do together |
 | S4 + S4a + S4b (grade-consistency invariant) | ~half day | S4b test is worth more than the patches |
 | S6a–S6e (public routes) | ~half day | S6b needs a `code` migration |
-| X3 (logging + error tracking) | ~half day | |
+| ~~X3 (logging + error tracking)~~ | ✅ **done** | pino + pino-http, all console.* migrated to structured logger |
 | ~~X7 (enroll reports success on account failure)~~ | ✅ **done** | Repair shipped in #15; the silent failure behind it is now closed too |
 | P1b–P1d (photos → S3) + S8 | 1–2 days | |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
@@ -1361,7 +1366,7 @@ All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14*
 2. **S4 (+S4a, S4b)** — promoted from Week 3+. F4a made the case concrete: `admin/teacher-assignments` posts a `subjectId` the server never checks against the section's grade, and that assignment is what gates mark entry. S4b's table-driven test is still the highest-value piece.
 3. **P5 (+R8)** — the analytics cache. Same handler as R8, so one visit covers both.
 
-**Then:** S5–S8, X3, and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
+**Then:** S5–S8 and the F2/F5 caching migration that subsumes F3/F4b/part of F6.
 
 **Not started at all:** the **W** items (W1–W4) — these are new features, not fixes, and want their own planning pass rather than being picked off this list.
 
@@ -1369,6 +1374,6 @@ All three original picks are done: ~~P1a~~, ~~R1~~, ~~S1~~ — ✅ **2026-08-14*
 
 ## What "done" means here
 
-Every item marked ✅ above was: implemented, typechecked in both projects, covered by a test where the behaviour was testable, **verified against the old code to confirm the test actually fails without the fix**, exercised in the running app where it was user-visible, merged, and deployed. Test count went 144 → **164** over this pass.
+Every item marked ✅ above was: implemented, typechecked in both projects, covered by a test where the behaviour was testable, **verified against the old code to confirm the test actually fails without the fix**, exercised in the running app where it was user-visible, merged, and deployed. Test count went 144 → **164** over the first pass, then to **266** with the X4/X5/X7 round.
 
 Where a finding turned out to be wrong or overstated, the correction is recorded inline under that item rather than quietly fixed — see the four listed at the top.
