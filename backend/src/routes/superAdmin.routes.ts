@@ -96,6 +96,14 @@ const createSchoolSchema = z.object({
   // Admin account to create with the school
   adminEmail: z.string().email("Valid admin email required"),
   adminPassword: z.string().min(6, "Admin password must be at least 6 characters"),
+}).refine((data) => !data.websiteUrl || !!data.code, {
+  // S6b — the public gallery/calendar routes accept a `code`-based identifier
+  // precisely so a school's website never has to embed the internal cuid.
+  // Requiring code *before* websiteUrl closes that gap at the source: a
+  // school that's never taken a payment gets a code-based identity from day
+  // one, so there's no receipt-prefix discontinuity to cause later either.
+  message: "A school code is required before a website can be connected.",
+  path: ["code"],
 });
 
 router.post("/schools", async (req, res) => {
@@ -175,6 +183,18 @@ const updateSchoolSchema = z.object({
 
 router.put("/schools/:id", async (req, res) => {
   const data = updateSchoolSchema.parse(req.body);
+
+  // S6b — same rule as school creation, checked against the DB here because
+  // this is a partial update: a request that sets websiteUrl without a code
+  // in this payload is still fine if the school already has one from before.
+  if (data.websiteUrl) {
+    const effectiveCode =
+      data.code ?? (await prisma.school.findUnique({ where: { id: req.params.id }, select: { code: true } }))?.code;
+    if (!effectiveCode) {
+      throw new AppError("A school code is required before a website can be connected.", 400);
+    }
+  }
+
   // The API no longer returns the secret, so the editor can't round-trip it.
   // Only overwrite it when a non-empty value is supplied; an empty/omitted
   // value means "keep the existing secret" rather than clearing it.
