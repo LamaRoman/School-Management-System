@@ -3,6 +3,7 @@ import prisma from "../utils/prisma";
 import { authenticate, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyStudent } from "../utils/schoolScope";
+import { verifyStudentAccess } from "../utils/studentAccess";
 import {
   getGradeFromPercentage,
   calculatePercentage,
@@ -18,22 +19,6 @@ import {
 } from "../services/resultStatus.service";
 
 const router = Router();
-
-// Helper: verify the requesting user has access to this student's academic data
-async function verifyStudentAccess(userId: string, role: string, studentId: string): Promise<void> {
-  if (role === "ADMIN" || role === "TEACHER") return; // full access
-  if (role === "STUDENT") {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { studentId: true } });
-    if (user?.studentId !== studentId) throw new AppError("You can only view your own report", 403);
-    return;
-  }
-  if (role === "PARENT") {
-    const link = await prisma.parentStudent.findFirst({ where: { parentId: userId, studentId } });
-    if (!link) throw new AppError("You can only view your linked children's reports", 403);
-    return;
-  }
-  throw new AppError("Not authorized to view reports", 403);
-}
 
 // Helper: calculate rank for a student among section peers for a given exam.
 // The algorithm lives in services/rank.service.ts — this used to be a second copy of

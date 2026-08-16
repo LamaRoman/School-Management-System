@@ -3,6 +3,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifyStudent, verifySection } from "../utils/schoolScope";
+import { verifyStudentAccess } from "../utils/studentAccess";
 import {
   isSectionPublished,
   pendingTermsForAnnual,
@@ -704,15 +705,11 @@ async function buildFinalReportData(studentId: string, academicYearId: string, s
 // ─── ROUTES ─────────────────────────────────────────────
 
 // GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
-router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT"), async (req, res) => {
+router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
   await verifyStudent(studentId, schoolId);
-
-  if (req.user!.role === "STUDENT") {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { studentId: true } });
-    if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
-  }
+  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
 
   // The portal's pending state (W1e) would be worth nothing if the PDF for the
   // same exam were one URL away. Gated for the same roles and on the same
@@ -749,15 +746,11 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
 });
 
 // GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw
-router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT"), async (req, res) => {
+router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
   await verifyStudent(studentId, schoolId);
-
-  if (req.user!.role === "STUDENT") {
-    const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { studentId: true } });
-    if (user?.studentId !== studentId) throw new AppError("You can only access your own report", 403);
-  }
+  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
 
   if (isGatedRole(req.user!.role)) {
     const student = await prisma.student.findUniqueOrThrow({

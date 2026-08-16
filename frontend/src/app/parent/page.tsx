@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { api } from "@/lib/api";
-import { GraduationCap, Calendar, Receipt, Megaphone, Pin } from "lucide-react";
+import { openReportCardPdf } from "@/lib/reportCardPdf";
+import { GraduationCap, Calendar, Receipt, Megaphone, Pin, Printer, Download } from "lucide-react";
 import ResultsPending from "@/components/ui/ResultsPending";
 import { useExamTypes } from "@/hooks/useReferenceData";
 
@@ -36,6 +38,7 @@ export default function ParentDashboard() {
   const [selectedExam, setSelectedExam] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"report" | "attendance" | "fees" | "notices">("report");
+  const [downloading, setDownloading] = useState(false);
   const [notices, setNotices] = useState<any[]>([]);
 
   useEffect(() => {
@@ -84,6 +87,26 @@ export default function ParentDashboard() {
       }
     } catch {
       setReportData(null);
+    }
+  };
+
+  const openPdf = async (pdfMode: "color" | "bw", action: "print" | "download") => {
+    if (!selectedChild || !selectedExam) return;
+    setDownloading(true);
+    try {
+      const et = examTypes.find((e) => e.id === selectedExam);
+      let path: string;
+      if (et?.isFinal) {
+        if (!activeYear) return;
+        path = `/pdf/final/${selectedChild.id}/${activeYear.id}?mode=${pdfMode}`;
+      } else {
+        path = `/pdf/term/${selectedChild.id}/${selectedExam}?mode=${pdfMode}`;
+      }
+      await openReportCardPdf(path, action);
+    } catch {
+      toast.error("Failed to generate PDF. Please try again.");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -161,13 +184,26 @@ export default function ParentDashboard() {
             {/* Report Card Tab */}
             {tab === "report" && (
               <div>
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-4 flex-wrap items-center">
                   {examTypes.map((et) => (
                     <button key={et.id} onClick={() => loadReport(et.id)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedExam === et.id ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
                       {et.name}
                     </button>
                   ))}
+                  {reportData && !reportData.pending && (
+                    <div className="flex gap-2 flex-wrap ml-auto">
+                      <button onClick={() => openPdf("color", "print")} disabled={downloading} className="btn-outline text-xs">
+                        <Printer size={14} /> {downloading ? "..." : "Print"}
+                      </button>
+                      <button onClick={() => openPdf("color", "download")} disabled={downloading} className="btn-primary text-xs">
+                        <Download size={14} /> {downloading ? "Generating..." : "PDF (Color)"}
+                      </button>
+                      <button onClick={() => openPdf("bw", "download")} disabled={downloading} className="btn-ghost text-xs border border-gray-300">
+                        <Download size={14} /> {downloading ? "..." : "PDF (B&W)"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {reportData?.pending ? (

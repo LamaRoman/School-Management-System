@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
+import { openReportCardPdf } from "@/lib/reportCardPdf";
 import toast from "react-hot-toast";
 import { Printer, Download, ChevronLeft, Users } from "lucide-react";
 import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
@@ -406,35 +407,7 @@ export default function TeacherMyClassPage() {
         path = `/pdf/term/${selectedStudent.id}/${selectedExam.id}?mode=${pdfMode}`;
       }
 
-      const res = await api.fetchRaw(path);
-      if (!res.ok) throw new Error("PDF generation failed");
-
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      if (action === "print") {
-        const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
-        iframe.src = blobUrl;
-        document.body.appendChild(iframe);
-        iframe.onload = () => {
-          iframe.contentWindow?.print();
-          setTimeout(() => {
-            document.body.removeChild(iframe);
-            window.URL.revokeObjectURL(blobUrl);
-          }, 60000);
-        };
-      } else {
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        const disposition = res.headers.get("Content-Disposition");
-        const filenameMatch = disposition?.match(/filename="(.+)"/);
-        a.download = filenameMatch ? filenameMatch[1] : "report-card.pdf";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 5000);
-      }
+      await openReportCardPdf(path, action);
     } catch {
       toast.error("Failed to generate PDF");
     } finally {

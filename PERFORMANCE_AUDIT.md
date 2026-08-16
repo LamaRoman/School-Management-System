@@ -36,10 +36,13 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` won't do /
 | **F2, F5, most of F4b** | Every page refetched the active year, its grades and its exam types on every visit; no client cache; 140 unguarded fetch effects | #29 |
 | **F4, F4b** | The last four pages off the stale-response stopgap; `useLatestRequest` deleted | #31 |
 | **F7, F8, F9, F10** | Double-submit guard; print/export code-splitting; `alert()` → toast; shell renders before auth resolves | #33 |
+| **X5** | Parents could read a report in the portal but not download its PDF | #34 |
 
-**Suggested next:** the remaining small ones — **X3** (request logging/error tracking), **X4** (unbounded auth caches), **X5** (parents can't download report card PDFs), **X6** (pagination, fee search indexing). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
+**Suggested next:** the remaining small ones — **X3** (request logging/error tracking), **X4** (unbounded auth caches), **X6** (pagination, fee search indexing). After that, everything left is a decision for the product owner, not a build task — see [Everything still open, in one place](#everything-still-open-in-one-place).
 
-**Handover note (2026-08-16, end of session):** **#29, #31, #33 are merged to `main`** and deployed — Railway auto-deploys on push, and there is no migration in any of them, so the deploy is a plain restart. `main` is clean at the #33 merge. The frontend gained a `swr` dependency (from #29), so anyone pulling `main` needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems, holding steady since #31). Verified in the running app: #33 was checked as all six roles (admin, super-admin, teacher, accountant, parent, student) for F10, and against a production build (`next start`, not dev mode — see F8) for the code-splitting claim. Nothing is mid-flight.
+**Handover note (2026-08-16, X5):** **#34 is open against `main`** — parents can now download report card PDFs. No migration, so the deploy is a plain restart. Backend suite **269/269**, both packages typecheck. Verified in the running app as parent, student and teacher. One thing to know before verifying anything else on dev: `exam_result_statuses` now has two Grade I rows at READY that were not there before — see the note under **X5**.
+
+**Handover note (2026-08-16, end of previous session):** **#29, #31, #33 are merged to `main`** and deployed — Railway auto-deploys on push, and there is no migration in any of them, so the deploy is a plain restart. `main` is clean at the #33 merge. The frontend gained a `swr` dependency (from #29), so anyone pulling `main` needs `npm install` in `frontend/`. Backend suite **266/266**, both packages typecheck, `npm run build` succeeds, and eslint shows no new rule violations (282 problems, holding steady since #31). Verified in the running app: #33 was checked as all six roles (admin, super-admin, teacher, accountant, parent, student) for F10, and against a production build (`next start`, not dev mode — see F8) for the code-splitting claim. Nothing is mid-flight.
 
 **F9 left one `alert()` in place on purpose** — `lib/printUtils.ts:11`, inside a shared `lib/` helper rather than a page, and no `lib/` file currently imports the toast library. Recorded under F9 rather than silently fixed, since it's a small scope call someone should make on purpose.
 
@@ -82,7 +85,6 @@ entry says exactly what the choice is and what it costs.
 | **P1b, P1c** | Route student photos through S3, migrate existing base64 rows | The real fix for **P1**; **P1d** (a size ceiling) is done and only bounds the worst case. Natural companion to **S6b**, since both move identifiers and blobs to where they belong. |
 | **X3** | No request logging or error tracking | |
 | **X4** | Unbounded auth caches | |
-| **X5** | Parents can't download report card PDFs | Note `pdf.routes.ts` allows STUDENT but not PARENT; **W1** gates both identically once it is added. |
 | **W3f** | `POST /students/bulk` bypasses Admissions | Dormant — no frontend calls it. Recorded so a future CSV import extends the Admissions pipeline instead of reaching for this route. |
 | **X6** | Pagination, fee search indexing, and a self-contradictory sentence in `CLAUDE.md` | The `CLAUDE.md` wording is a two-minute fix and it is the rule people read the docs for. |
 
@@ -1258,7 +1260,20 @@ The repair tool shipped separately (`prisma/backfill-missing-student-accounts.ts
 
 ---
 
-### [ ] X5. Parents can't download report card PDFs
+### [x] X5. Parents can't download report card PDFs
+
+> **FIXED 2026-08-16.** Both single-student PDF routes now accept `PARENT`, and the parent portal's Report Card tab gained the Print / PDF (Color) / PDF (B&W) buttons the student portal already had. The class-batch routes stay ADMIN/TEACHER — a parent has no business with a whole section.
+>
+> **The access check moved rather than being copied.** `verifyStudentAccess` was a private helper in `report.routes.ts`; it is now `utils/studentAccess.ts` and both files import it. Duplicating it would have set up exactly the drift this document keeps finding — a PDF URL that answers to a role the portal refuses. The publish gate (`isGatedRole`/`isSectionPublished`) was already in place on these routes and is unchanged, so a parent is refused an unpublished exam for the same reason a student is.
+>
+> **The frontend had two copies of the fetch-blob-then-print-or-save dance** (student report, teacher my-class), and the parent page would have been a third. Extracted to `lib/reportCardPdf.ts`. The student page's copy also used a bare `fetch` with `credentials: "include"` rather than `api.fetchRaw`, so it alone had no 401-refresh retry — moving it onto the shared helper fixed that in passing.
+>
+> Pinned by 3 tests in `resultsPublish.test.ts` (269 total), and the existing "refuses the PDF too" test now runs for the parent token as well as the student one.
+>
+> **Verified live as all three roles** on the dev database: a linked parent downloads the color PDF (200), is refused a classmate who is not their child (403, "You can only view your linked children's reports"), is refused an unpublished exam (403, "These results have not been published yet"), and sees no buttons at all while the exam is pending. Student and teacher report screens still download after the refactor.
+>
+> **Dev-data residue, deliberately recorded:** verifying this needed a published exam, and `exam_result_statuses` was **empty** on dev. Grade I's First Terminal was published and then unpublished, which leaves the two Grade I sections at **READY** rather than removing the rows — unpublishing withdraws the release but does not unsay "entry is finished". So the dev database now claims Grade I-A and I-B finished First Terminal entry, which no teacher actually asserted. Harmless, but it is a claim nobody made; delete those two rows if it matters.
+
 **Where:** `backend/src/routes/pdf.routes.ts:516,548` — `authorize("ADMIN", "TEACHER", "STUDENT")` omits `PARENT`
 
 The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAccess`, but the PDF routes exclude them. The parent portal currently has no download button, so nothing is visibly broken — but the capability gap is probably unintended. Confirm and align.
@@ -1308,7 +1323,8 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 | P1b–P1d (photos → S3) + S8 | 1–2 days | |
 | F2 + F5 + F4b (SWR migration) | 1–2 days | Subsumes F3, F4b, F5, part of F6 |
 | ~~S5, F7–F10~~ | ✅ **done** | S5 shipped in #28; F7/F8/F9/F10 shipped in #33 |
-| X4, X5, X6 | as capacity allows | |
+| ~~X5~~ | ✅ **done** | Shipped in #34, along with a shared `verifyStudentAccess` and one frontend PDF helper replacing two copies |
+| X4, X6 | as capacity allows | |
 | **W1** (results-publish workflow) | 3–5 days | Design agreed, not scoped in detail. New feature, not a fix — plan separately from the bug-fix items above |
 | **W2** (enrollment → fee setup) | half day – 1 day | Decided: fully automatic, confirmed compatible with overrides. Ready to scope. |
 | **W3a + W3d** (remove duplicate admin fees + admissions pages) | ~1 hr | Both are one-line re-exports — just delete two nav links |
