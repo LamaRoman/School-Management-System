@@ -30,6 +30,7 @@ import {
   Image,
   Send,
   History,
+  Bell,
 } from "lucide-react";
 
 interface NavItem { href: string; label: string; icon: any }
@@ -80,6 +81,7 @@ const navGroups: NavGroup[] = [
     label: "Website",
     items: [
       { href: "/admin/gallery", label: "Gallery", icon: Image },
+      { href: "/admin/announcements", label: "Announcements", icon: Bell },
     ],
   },
   {

@@ -184,6 +184,64 @@ export async function deleteGalleryPhoto(photoUrl: string): Promise<void> {
   }
 }
 
+/**
+ * Upload a homepage announcement image. Reuses the gallery compression
+ * pipeline — an announcement banner is the same shape of image (full-size
+ * marketing graphic, not a small headshot like a student photo).
+ * @param fileBuffer    - The raw file buffer (from multer)
+ * @param mimetype      - e.g. "image/jpeg"
+ * @param schoolId      - Used to namespace the S3 key
+ * @param announcementId - Used to make the S3 key unique per announcement
+ */
+export async function uploadAnnouncementImage(
+  fileBuffer: Buffer,
+  mimetype: string,
+  schoolId: string,
+  announcementId: string
+): Promise<UploadResult> {
+  const compressed = await compressGalleryImage(fileBuffer);
+  const s3Config = getS3();
+
+  if (s3Config) {
+    const ext = compressed.mimetype.split("/")[1];
+    const key = `announcements/${schoolId}/${announcementId}.${ext}`;
+
+    await s3Config.client.send(
+      new PutObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: key,
+        Body: compressed.buffer,
+        ContentType: compressed.mimetype,
+        CacheControl: "public, max-age=31536000",
+      })
+    );
+
+    const url = `https://${s3Config.bucket}.s3.${s3Config.region}.amazonaws.com/${key}`;
+    return { url, storageType: "s3" };
+  }
+
+  // Dev fallback: base64
+  const base64 = `data:${compressed.mimetype};base64,${compressed.buffer.toString("base64")}`;
+  return { url: base64, storageType: "base64" };
+}
+
+/**
+ * Delete an announcement image from S3 (no-op for base64).
+ */
+export async function deleteAnnouncementImage(imageUrl: string): Promise<void> {
+  const s3Config = getS3();
+  if (!s3Config || !imageUrl.includes(".amazonaws.com/")) return;
+
+  try {
+    const key = imageUrl.split(".amazonaws.com/")[1];
+    if (key) {
+      await s3Config.client.send(new DeleteObjectCommand({ Bucket: s3Config.bucket, Key: key }));
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to delete announcement image from S3");
+  }
+}
+
 // ─── Student photos ─────────────────────────────────────
 const STUDENT_PHOTO_MAX = 400;
 const STUDENT_PHOTO_QUALITY = 80;

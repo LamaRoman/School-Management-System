@@ -83,6 +83,7 @@ model School {
   examRooms          ExamRoom[]
   calendarEvents     CalendarEvent[]
   galleryPhotos      GalleryPhoto[]
+  announcements      Announcement[]
 
   @@map("schools")
 }
@@ -105,6 +106,27 @@ model GalleryPhoto {
   createdBy User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
 
   @@map("gallery_photos")
+}
+
+// ─── ANNOUNCEMENT ───────────────────────────────────────
+// Public homepage popup on the school's website — see GalleryPhoto above,
+// which this mirrors. Only one row per school is ever isActive at a time;
+// publishing a new announcement deactivates the previous one.
+
+model Announcement {
+  id          String   @id @default(cuid())
+  schoolId    String   @map("school_id")
+  imageUrl    String   @map("image_url")
+  storageType String   @map("storage_type") // "s3" | "base64"
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
 }
 
 // ─── ACADEMIC YEAR ──────────────────────────────────────
@@ -423,6 +445,7 @@ model User {
   auditLogs      AuditLog[]
   refreshTokens  RefreshToken[]
   galleryPhotos  GalleryPhoto[]
+  announcements  Announcement[]
   resultsPublished ExamResultStatus[]
   @@map("users")
 }
