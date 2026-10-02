@@ -250,12 +250,12 @@ function TeachersTab() {
                   </div>
                 )}
                 <div className="flex items-center justify-end gap-1 mt-1 -mb-1">
-                  <button onClick={() => handleStartEdit(t)} className="p-2.5 hover:bg-surface rounded text-gray-400 hover:text-primary" aria-label="Edit"><Edit2 size={16} /></button>
-                  <button onClick={() => { setResetPasswordId(t.id); setNewPassword(""); }} className="p-2.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label="Reset Password"><KeyRound size={16} /></button>
+                  <button onClick={() => handleStartEdit(t)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary" aria-label="Edit"><Edit2 size={16} /></button>
+                  <button onClick={() => { setResetPasswordId(t.id); setNewPassword(""); }} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label="Reset Password"><KeyRound size={16} /></button>
                   {t.isActive ? (
-                    <button onClick={() => handleDeactivate(t.id, t.name)} className="p-2.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
+                    <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
                   ) : (
-                    <button onClick={() => handleReactivate(t.id)} className="p-2.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
+                    <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
                   )}
                 </div>
               </div>
@@ -440,9 +440,9 @@ function AccountantsTab() {
                   </span>
                 </div>
                 <div className="flex items-center justify-end gap-1 mt-1 -mb-1">
-                  <button onClick={() => { setResetId(resetId === user.id ? null : user.id); setResetPw(""); }} className="p-2.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label="Reset Password"><KeyRound size={16} /></button>
+                  <button onClick={() => { setResetId(resetId === user.id ? null : user.id); setResetPw(""); }} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label="Reset Password"><KeyRound size={16} /></button>
                   <button onClick={() => handleToggle(user.id)}
-                    className={`p-2.5 rounded ${user.isActive ? "hover:bg-red-50 text-gray-400 hover:text-red-600" : "hover:bg-emerald-50 text-gray-400 hover:text-emerald-600"}`}
+                    className={`p-1.5 rounded ${user.isActive ? "hover:bg-red-50 text-gray-400 hover:text-red-600" : "hover:bg-emerald-50 text-gray-400 hover:text-emerald-600"}`}
                     aria-label={user.isActive ? "Deactivate" : "Activate"}>
                     {user.isActive ? <ShieldOff size={16} /> : <Shield size={16} />}
                   </button>
