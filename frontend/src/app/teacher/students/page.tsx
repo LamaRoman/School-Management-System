@@ -139,11 +139,11 @@ export default function TeacherStudentsPage() {
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
   if (sections.length === 0) {
-    return <div className="card p-8 text-center text-gray-400">You are not assigned as a class teacher for any section.</div>;
+    return <div className="max-w-6xl mx-auto p-4 sm:p-6"><div className="card p-8 text-center text-gray-400">You are not assigned as a class teacher for any section.</div></div>;
   }
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-display font-bold text-primary">My Students</h1>
@@ -181,7 +181,7 @@ export default function TeacherStudentsPage() {
                   <button onClick={() => setShowRolls(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-2 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
                 {students.map((stu) => (
                   <div key={stu.id} className="flex items-center gap-2">
                     <input
@@ -189,9 +189,9 @@ export default function TeacherStudentsPage() {
                       min={1}
                       value={rollAssignments[stu.id] || ""}
                       onChange={(e) => setRollAssignments({ ...rollAssignments, [stu.id]: parseInt(e.target.value) || 0 })}
-                      className="w-16 text-xs px-2 py-1.5 border border-gray-200 rounded text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      className="w-16 text-sm sm:text-xs px-2 py-1.5 border border-gray-200 rounded text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                     />
-                    <span className="text-xs text-gray-700 truncate">{stu.name}</span>
+                    <span className="text-sm sm:text-xs text-gray-700 truncate">{stu.name}</span>
                   </div>
                 ))}
               </div>
@@ -208,7 +208,48 @@ export default function TeacherStudentsPage() {
             <div className="px-5 py-3 border-b border-gray-100 text-sm font-semibold text-primary">
               {formatGradeSection(selectedSection.gradeName, selectedSection.sectionName)} ({students.length} students)
             </div>
-            <table className="w-full text-sm">
+            {/* Mobile: one card per student; inline edit stacks its fields. */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {loadingStudents && <div className="px-4 py-8 text-center text-gray-400">Loading...</div>}
+              {!loadingStudents && students.length === 0 && (
+                <div className="px-4 py-8 text-center text-gray-400">No students in this section yet. Students are added by the admin office.</div>
+              )}
+              {students.map((stu) => editingId === stu.id ? (
+                <div key={stu.id} className="p-4 space-y-2 bg-surface">
+                  <div className="text-xs text-gray-400">Roll {stu.rollNo || "—"}</div>
+                  <input className="input" placeholder="Name" value={editData.name || ""} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+                  <input className="input" placeholder="Date of birth" value={editData.dateOfBirth || ""} onChange={(e) => setEditData({ ...editData, dateOfBirth: e.target.value })} />
+                  <select className="input" value={editData.gender || ""} onChange={(e) => setEditData({ ...editData, gender: e.target.value })}>
+                    <option value="">Gender —</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <input className="input" placeholder="Guardian name" value={editData.guardianName || ""} onChange={(e) => setEditData({ ...editData, guardianName: e.target.value })} />
+                  <input className="input" type="tel" inputMode="tel" placeholder="Guardian phone" value={editData.guardianPhone || ""} onChange={(e) => setEditData({ ...editData, guardianPhone: e.target.value })} />
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button onClick={() => setEditingId(null)} className="btn-ghost text-sm py-2 px-3">Cancel</button>
+                    <button onClick={handleSaveEdit} disabled={saving} className="btn-primary text-sm py-2 px-3"><Save size={14} /> Save</button>
+                  </div>
+                </div>
+              ) : (
+                <div key={stu.id} className="p-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-primary">{stu.rollNo || "—"}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-primary">{stu.name}</div>
+                    {stu.nameNp && <div className="text-xs text-gray-400">{stu.nameNp}</div>}
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {[stu.gender, stu.dateOfBirth, stu.guardianName, stu.guardianPhone].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                  <button onClick={() => handleStartEdit(stu)} className="text-sm text-primary font-medium px-3 py-2 shrink-0">Edit</button>
+                </div>
+              ))}
+            </div>
+
+            <table className="w-full text-sm hidden md:table">
               <thead>
                 <tr className="table-header">
                   <th className="text-left px-4 py-2">Roll</th>

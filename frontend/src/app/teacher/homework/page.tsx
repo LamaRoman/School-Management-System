@@ -121,7 +121,7 @@ export default function TeacherHomeworkPage() {
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-display font-bold text-primary">Homework</h1>
