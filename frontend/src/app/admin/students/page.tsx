@@ -192,7 +192,37 @@ export default function StudentsPage() {
         <input className="input pl-9" placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Mobile: one card per student (the table needs ~640px). */}
+      <div className="md:hidden space-y-2">
+        {loadingGrades || loadingStudents ? (
+          <div className="card text-center py-8 text-gray-400 animate-pulse">Loading students...</div>
+        ) : filtered.length === 0 ? (
+          <div className="card text-center py-8 text-gray-400">{selectedSection ? "No students in this section" : "Select a grade and section"}</div>
+        ) : filtered.map((s) => (
+          <div
+            key={s.id}
+            onClick={() => router.push(`/admin/students/${s.id}`)}
+            className="card p-3 flex items-center gap-3 cursor-pointer active:bg-surface"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold text-primary">{s.rollNo || s.name[0]}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-primary truncate">{s.name}</div>
+              {s.nameNp && <div className="text-xs text-gray-400 truncate">{s.nameNp}</div>}
+              <div className="text-xs text-gray-500 mt-0.5">
+                {[s.gender, s.dateOfBirth, s.guardianPhone].filter(Boolean).join(" · ") || "—"}
+              </div>
+            </div>
+            <div className="flex items-center shrink-0">
+              <button aria-label="Edit student" onClick={(e) => { e.stopPropagation(); startEdit(s); }} className="p-2.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600"><Edit2 size={16} /></button>
+              <button aria-label="Delete student" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-2.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card overflow-hidden hidden md:block">
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
