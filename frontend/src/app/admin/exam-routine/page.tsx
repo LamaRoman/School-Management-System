@@ -279,7 +279,7 @@ export default function ExamRoutinePage() {
       {selectedExam && selectedGrade && (
         <>
           <div className="card">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
                   <th className="text-left px-3 py-2">#</th>
@@ -353,7 +353,7 @@ export default function ExamRoutinePage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
 
             {entries.length === 0 && (
               <div className="p-8 text-center text-gray-400 text-sm">

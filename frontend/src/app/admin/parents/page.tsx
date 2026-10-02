@@ -382,7 +382,7 @@ export default function AdminParentsPage() {
                 {/* Expanded children detail */}
                 {isExpanded && parent.parentLinks.length > 0 && (
                   <div className="border-t border-gray-100">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead>
                         <tr className="bg-gray-50 text-xs text-gray-500">
                           <th className="text-left px-5 py-2">Student</th>
@@ -418,7 +418,7 @@ export default function AdminParentsPage() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></div>
                   </div>
                 )}
 

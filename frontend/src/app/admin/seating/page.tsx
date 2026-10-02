@@ -283,7 +283,7 @@ export default function SeatingPage() {
                 <span className="font-semibold text-sm">{alloc.room.name}</span>
                 <span className="text-xs opacity-80">{alloc.filled} / {alloc.room.capacity} seats</span>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-xs text-gray-500 uppercase">
                     <th className="text-left px-4 py-2">Seat</th>
@@ -304,7 +304,7 @@ export default function SeatingPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           ))}
         </div>

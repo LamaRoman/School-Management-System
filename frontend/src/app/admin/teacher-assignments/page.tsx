@@ -257,7 +257,7 @@ export default function TeacherAssignmentsPage() {
                             <div className="card p-5 text-center text-sm text-gray-400">No subject teachers assigned{selectedSection ? " for this section" : ""}</div>
                         ) : (
                             <div className="card overflow-hidden">
-                                <table className="w-full text-sm">
+                                <div className="overflow-x-auto"><table className="w-full text-sm">
                                     <thead>
                                         <tr className="table-header">
                                             <th className="text-left px-5 py-3">Teacher</th>
@@ -293,7 +293,7 @@ export default function TeacherAssignmentsPage() {
                                             </tr>
                                         ))}
                                     </tbody>
-                                </table>
+                                </table></div>
                             </div>
                         )}
                     </div>

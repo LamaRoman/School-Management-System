@@ -97,7 +97,7 @@ export default function AcademicYearsPage() {
       )}
 
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">Year (BS)</th>
@@ -138,7 +138,7 @@ export default function AcademicYearsPage() {
               ))
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
