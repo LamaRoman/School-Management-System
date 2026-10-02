@@ -272,7 +272,7 @@ export default function ReportCardSettingsPage() {
                 );
               })}
               {group.group === "School Header" && (
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-gray-100">
                   <div>
                     <label className="text-sm font-medium text-gray-800 block mb-1">Logo Position</label>
                     <p className="text-xs text-gray-500 mb-2">Where the logo appears relative to the school name</p>

@@ -216,7 +216,7 @@ export default function SeatingPage() {
       {/* Generate controls */}
       <div className="card p-5 mb-6 no-print">
         <h2 className="font-semibold text-primary mb-3">Generate Seating</h2>
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="label">Exam Type</label>
             <select className="input" value={selectedExam} onChange={(e) => handleExamChange(e.target.value)}>

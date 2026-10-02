@@ -290,7 +290,7 @@ export default function AdminParentsPage() {
             return (
               <div key={parent.id} className="card overflow-hidden">
                 {/* Parent row */}
-                <div className="flex items-center gap-4 px-5 py-3">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 sm:gap-4 px-4 sm:px-5 py-3">
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <span className="text-xs font-bold text-primary">
@@ -300,7 +300,7 @@ export default function AdminParentsPage() {
 
                   {/* Email + children summary */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-primary truncate">{parent.email}</p>
+                    <p className="font-medium text-primary break-all sm:break-normal sm:truncate">{parent.email}</p>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {parent.parentLinks.length === 0 ? (
                         <span className="text-xs text-gray-400">No children linked</span>
@@ -316,21 +316,21 @@ export default function AdminParentsPage() {
                   </div>
 
                   {/* Status + actions */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center justify-end gap-2 shrink-0 w-full sm:w-auto">
                     <button onClick={() => handleToggleActive(parent)}
-                      className={`text-xs px-2 py-0.5 rounded-full transition-all hover:opacity-80 ${parent.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                      className={`text-xs px-3 py-1.5 sm:px-2 sm:py-0.5 rounded-full transition-all hover:opacity-80 ${parent.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
                       {parent.isActive ? "Active" : "Inactive"}
                     </button>
                     <button
                       onClick={() => { setLinkingParentId(isLinking ? null : parent.id); setExpandedId(parent.id); }}
-                      className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"
+                      className="p-2.5 sm:p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"
                       title="Link student"
                     >
                       <Link2 size={14} />
                     </button>
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : parent.id)}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-all"
+                      className="p-2.5 sm:p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-all"
                       title={isExpanded ? "Collapse" : "Expand"}
                     >
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

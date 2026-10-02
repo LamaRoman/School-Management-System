@@ -224,7 +224,7 @@ export default function PromotionPage() {
             <h3 className="font-semibold text-primary">Transfer Student to Different Section</h3>
             <button onClick={() => setShowTransfer(false)} className="text-gray-400 hover:text-gray-600 text-xs">Close</button>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="label">Student</label>
               <select className="input" value={transferStudentId} onChange={(e) => setTransferStudentId(e.target.value)}>
@@ -254,7 +254,7 @@ export default function PromotionPage() {
 
       <div className="card p-5 mb-6">
         <h2 className="font-semibold text-primary mb-3">Step 1: Select Academic Years</h2>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label className="label">Source Year (promoting FROM)</label>
             <select className="input" value={sourceYear} onChange={(e) => handleSourceYearChange(e.target.value)}>

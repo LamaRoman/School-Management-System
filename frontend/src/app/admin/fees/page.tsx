@@ -204,14 +204,14 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">Assign fees that apply to specific students only — like hostel, food, or transport. These appear automatically in the student's collection ledger.</p>
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div><label className="label">Grade</label><select className="input" value={selectedGrade} onChange={(e) => handleGradeChange(e.target.value)}><option value="">Select</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
         <div><label className="label">Section</label><select className="input" value={selectedSection} onChange={(e) => handleSectionChange(e.target.value)}><option value="">Select</option>{sections.map((s: any) => <option key={s.id} value={s.id}>Section {s.name}</option>)}</select></div>
         <div><label className="label">Student</label><select className="input" value={selectedStudent} onChange={(e) => handleStudentChange(e.target.value)}><option value="">Select</option>{students.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div>
       {selectedStudent && (<>
         {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Assign Fee</h3>
-          <div className="grid grid-cols-4 gap-3 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
             <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{availableCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <div><label className="label">Amount (Rs)</label><input className="input" type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="2000" /></div>
             <div><label className="label">Frequency</label><select className="input" value={form.frequency} onChange={(e) => setForm({ ...form, frequency: e.target.value })}><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option><option value="ONE_TIME">One-Time</option></select></div>
@@ -254,14 +254,14 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
 
   return (
     <div>
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div><label className="label">Grade</label><select className="input" value={selectedGrade} onChange={(e) => handleGradeChange(e.target.value)}><option value="">Select</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
         <div><label className="label">Section</label><select className="input" value={selectedSection} onChange={(e) => handleSectionChange(e.target.value)}><option value="">Select</option>{sections.map((s: any) => <option key={s.id} value={s.id}>Section {s.name}</option>)}</select></div>
         <div><label className="label">Student</label><select className="input" value={selectedStudent} onChange={(e) => handleStudentChange(e.target.value)}><option value="">Select</option>{students.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
       </div>
       {selectedStudent && (<>
         {!readOnly && (<div className="card p-4 mb-4"><h3 className="text-sm font-semibold text-primary mb-3">Add Discount</h3>
-          <div className="grid grid-cols-5 gap-3 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
             <div><label className="label">Category</label><select className="input" value={form.feeCategoryId} onChange={(e) => setForm({ ...form, feeCategoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
             <div><label className="label">Type</label><select className="input" value={form.discountType} onChange={(e) => setForm({ ...form, discountType: e.target.value })}><option value="PERCENTAGE">Percentage</option><option value="FLAT">Flat Amount</option></select></div>
             <div>{form.discountType === "PERCENTAGE" ? <><label className="label">%</label><input className="input" type="number" min={0} max={100} value={form.discountPercent} onChange={(e) => setForm({ ...form, discountPercent: e.target.value })} /></> : <><label className="label">Rs</label><input className="input" type="number" min={0} value={form.overrideAmount} onChange={(e) => setForm({ ...form, overrideAmount: e.target.value })} /></>}</div>

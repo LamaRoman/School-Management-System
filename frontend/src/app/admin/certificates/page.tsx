@@ -130,7 +130,7 @@ export default function CertificatesPage() {
             <label className="label">Recipient Name *</label>
             <input className="input" value={form.recipient} onChange={(e) => setForm({ ...form, recipient: e.target.value })} placeholder="e.g. Aarav Sharma" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Function / Event</label>
               <input className="input" value={form.functionName} onChange={(e) => setForm({ ...form, functionName: e.target.value })} placeholder="e.g. Annual Sports Day 2082" />
@@ -149,7 +149,7 @@ export default function CertificatesPage() {
               placeholder="Leave blank to auto-generate from the function and award, or write your own wording."
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Date (BS)</label>
               <BSDatePicker value={form.date} onChange={(date) => setForm({ ...form, date })} placeholder="2082/01/15" />
