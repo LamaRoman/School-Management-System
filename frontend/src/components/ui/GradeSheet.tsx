@@ -112,7 +112,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                 <tr className="bg-primary text-white">
                   {data.showRank && <th className="p-2 border border-primary text-center w-10">Rank</th>}
                   <th className="p-2 border border-primary text-center w-10">Roll</th>
-                  <th className="p-2 border border-primary text-left min-w-[120px]">Student Name</th>
+                  <th className="p-2 border border-primary text-left min-w-[120px] sticky left-0 z-10 bg-primary">Student Name</th>
                   {data.subjects.map((s) => (
                     <th key={s.id} className="p-2 border border-primary text-center min-w-[60px]">
                       <div>{s.name}</div>
@@ -131,7 +131,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                       <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.rank}</td>
                     )}
                     <td className="p-2 border border-gray-200 text-center text-gray-400">{row.rollNo || "—"}</td>
-                    <td className="p-2 border border-gray-200 font-medium">{row.studentName}</td>
+                    <td className={`p-2 border border-gray-200 font-medium sticky left-0 z-10 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>{row.studentName}</td>
                     {row.subjects.map((s, j) => {
                       const value = isFinal ? s.weightedPercentage : s.obtained;
                       return (
