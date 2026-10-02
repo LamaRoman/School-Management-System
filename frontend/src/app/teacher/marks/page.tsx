@@ -203,7 +203,7 @@ export default function MarksEntryPage() {
 
       {allSelected && students.length > 0 && (
         <>
-          <div className="flex items-center justify-between mb-4">
+          <div className="sticky top-0 z-10 -mx-4 px-4 py-2 mb-2 bg-surface flex items-center justify-between sm:-mx-6 sm:px-6 md:static md:mx-0 md:px-0 md:py-0 md:mb-4">
             <div className="text-sm text-gray-500">
               {students.length} students
             </div>
@@ -212,7 +212,54 @@ export default function MarksEntryPage() {
             </button>
           </div>
 
-          <div className="card overflow-hidden">
+          {/* Mobile: one card per student (the table needs ~500px). */}
+          <div className="md:hidden space-y-2">
+            {students.map((s) => {
+              const m = marks[s.id] || { studentId: s.id, theoryMarks: null, practicalMarks: null, isAbsent: false };
+              const total = (m.theoryMarks || 0) + (m.practicalMarks || 0);
+              const over = (v: number | null, full?: number) => !m.isAbsent && v !== null && full !== undefined && v > full;
+              const inputCls = (bad: boolean) => `input w-full text-center py-2 ${bad ? "border-red-400 bg-red-50 focus:ring-red-300" : ""}`;
+              return (
+                <div key={s.id} className={`card p-3 ${m.isAbsent ? "bg-red-50/50" : ""}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xs text-gray-400 mr-2">{s.rollNo || "—"}</span>
+                      <span className="font-medium text-gray-700">{s.name}</span>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-500 shrink-0 py-1 pl-2 cursor-pointer">
+                      <input type="checkbox" checked={m.isAbsent} className="rounded h-5 w-5"
+                        onChange={(e) => updateMark(s.id, "isAbsent", e.target.checked)} />
+                      Absent
+                    </label>
+                  </div>
+                  <div className="mt-2 flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-[11px] text-gray-500">Theory (/{currentAssignment?.fullTheoryMarks})</label>
+                      <input type="number" inputMode="decimal" min={0} max={currentAssignment?.fullTheoryMarks}
+                        className={inputCls(over(m.theoryMarks, currentAssignment?.fullTheoryMarks))}
+                        value={m.theoryMarks ?? ""} disabled={m.isAbsent}
+                        onChange={(e) => updateMark(s.id, "theoryMarks", e.target.value ? parseFloat(e.target.value) : null)} />
+                    </div>
+                    {hasPractical && (
+                      <div className="flex-1">
+                        <label className="text-[11px] text-gray-500">Practical (/{currentAssignment?.fullPracticalMarks})</label>
+                        <input type="number" inputMode="decimal" min={0} max={currentAssignment?.fullPracticalMarks}
+                          className={inputCls(over(m.practicalMarks, currentAssignment?.fullPracticalMarks))}
+                          value={m.practicalMarks ?? ""} disabled={m.isAbsent}
+                          onChange={(e) => updateMark(s.id, "practicalMarks", e.target.value ? parseFloat(e.target.value) : null)} />
+                      </div>
+                    )}
+                    <div className="w-14 text-center">
+                      <div className="text-[11px] text-gray-500">Total</div>
+                      <div className="py-2 font-semibold text-primary">{m.isAbsent ? "—" : total || "—"}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="card overflow-hidden hidden md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
