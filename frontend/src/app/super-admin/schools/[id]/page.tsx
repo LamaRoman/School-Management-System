@@ -208,7 +208,7 @@ export default function SchoolDetailPage() {
 
         {editing && (
           <div className="border-t pt-4 mt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Name" className="border rounded-lg px-3 py-2 text-sm" />
               <input value={editForm.code} onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })} placeholder="School Code (e.g. GHS) — used in receipt numbers" maxLength={6} className="border rounded-lg px-3 py-2 text-sm uppercase" />
               <input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} placeholder="Address" className="border rounded-lg px-3 py-2 text-sm" />
@@ -218,7 +218,7 @@ export default function SchoolDetailPage() {
 
             <div>
               <p className="text-xs font-semibold text-gray-500 mb-2">Public Website (optional)</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   value={editForm.websiteUrl}
                   onChange={(e) => setEditForm({ ...editForm, websiteUrl: e.target.value })}

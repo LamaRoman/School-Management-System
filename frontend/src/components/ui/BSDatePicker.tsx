@@ -148,7 +148,7 @@ export default function BSDatePicker({
       </div>
 
       {open && !disabled && (
-        <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-[300px]">
+        <div className="absolute z-50 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-[300px] max-w-[calc(100vw-2rem)]">
           {/* Year + Month selectors */}
           <div className="flex items-center justify-between mb-3">
             <button

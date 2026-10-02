@@ -176,7 +176,7 @@ export default function NoticeBoardPage() {
               <textarea className="input min-h-[100px]" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Notice content..." />
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="label">Type</label>
                 <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -204,7 +204,7 @@ export default function NoticeBoardPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="label">Publish Date (BS) *</label>
                 <BSDatePicker value={form.publishDate} onChange={(date) => setForm({ ...form, publishDate: date })} placeholder="2082/01/15" />

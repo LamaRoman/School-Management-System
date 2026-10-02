@@ -221,7 +221,7 @@ export default function AdmissionPage() {
             <h2 className="font-semibold text-primary">New Admission Application</h2>
             <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="label">Student Name (English) *</label>
               <input className="input" value={form.studentName} onChange={(e) => setForm({ ...form, studentName: e.target.value })} />

@@ -221,7 +221,7 @@ export default function AdminTeachersPage() {
       {showForm && (
         <div className="card p-5 mb-6">
           <h2 className="font-semibold text-primary mb-3">{editingId ? "Edit Teacher" : "Add New Teacher"}</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="label">Name *</label>
               <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" />
@@ -291,7 +291,75 @@ export default function AdminTeachersPage() {
 
       {/* Teachers Table */}
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto"><table className="w-full text-sm">
+        {/* Mobile: one card per teacher (the table needs ~930px). */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {teachers.map((t) => {
+            const summary = buildAssignmentSummary(t.assignments);
+            return (
+              <div key={t.id} className={`p-4 ${!t.isActive ? "opacity-50" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium text-primary">
+                      {t.name}
+                      {t.nameNp && <span className="text-xs text-gray-400 ml-2">{t.nameNp}</span>}
+                    </div>
+                    <div className="text-sm text-gray-600 break-all mt-0.5">
+                      {loginEmailOf(t.user) ?? (
+                        <>
+                          <span className="text-gray-400 italic">{t.email || "—"}</span>
+                          <span className="block text-[10px] mt-0.5 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium w-fit">
+                            No login account
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {t.phone && <div className="text-xs text-gray-500 mt-0.5">{t.phone}</div>}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                      {t.isActive ? "Active" : "Inactive"}
+                    </span>
+                    {t.isActive && t.user && !t.user.isActive && (
+                      <span className="block text-[10px] mt-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium">
+                        Sign-in disabled
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {summary.length === 0 ? (
+                  <p className="text-xs text-gray-400 mt-2">No assignments</p>
+                ) : (
+                  <div className="space-y-1.5 mt-2">
+                    {summary.map((entry, idx) => (
+                      <div key={idx}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold px-1.5 py-0.5 bg-primary/10 text-primary rounded">{entry.label}</span>
+                          {entry.isClassTeacher && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded font-medium">Class Teacher</span>
+                          )}
+                        </div>
+                        {entry.subjects.length > 0 && (
+                          <p className="text-[11px] text-gray-500 mt-0.5 ml-1">{entry.subjects.join(", ")}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-end gap-1 mt-1 -mb-1">
+                  <button onClick={() => handleStartEdit(t)} className="p-2.5 hover:bg-surface rounded text-gray-400 hover:text-primary" aria-label="Edit"><Edit2 size={16} /></button>
+                  <button onClick={() => openResetPassword(t)} className="p-2.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label={t.user ? "Reset Password" : "Create login account"}><KeyRound size={16} /></button>
+                  {t.isActive ? (
+                    <button onClick={() => handleDeactivate(t.id, t.name)} className="p-2.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
+                  ) : (
+                    <button onClick={() => handleReactivate(t.id)} className="p-2.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="overflow-x-auto hidden md:block"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">#</th>

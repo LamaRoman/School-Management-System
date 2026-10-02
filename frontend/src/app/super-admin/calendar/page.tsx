@@ -196,7 +196,7 @@ export default function MasterCalendarPage() {
               <label className="label">Description</label>
               <textarea className="input min-h-[70px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional details..." />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="label">Date (BS) *</label>
                 <BSDatePicker value={form.date} onChange={(date) => setForm({ ...form, date })} placeholder="2082/01/15" />
@@ -207,7 +207,7 @@ export default function MasterCalendarPage() {
                   {eventTypes.map((t) => (<option key={t} value={t}>{t}</option>))}
                 </select>
               </div>
-              <div className="flex items-end justify-end">
+              <div className="flex items-end sm:justify-end">
                 <button onClick={handleSubmit} className="btn-primary text-sm">
                   {editingId ? "Update Event" : "Add Event"}
                 </button>
@@ -217,9 +217,9 @@ export default function MasterCalendarPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Month grid */}
-        <div className="col-span-2 card p-5">
+        <div className="lg:col-span-2 card p-3 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <button onClick={goToPrevMonth} className="p-1.5 hover:bg-surface rounded-lg"><ChevronLeft size={18} className="text-gray-600" /></button>
             <h2 className="font-display font-bold text-primary text-lg">{BS_MONTH_NAMES[viewMonth - 1]} {viewYear}</h2>
@@ -251,17 +251,17 @@ export default function MasterCalendarPage() {
                 <button
                   key={day}
                   onClick={() => openNewEventOnDay(day)}
-                  className={`min-h-20 rounded-lg border p-2 text-left align-top transition-all hover:border-primary ${cellBg} ${isToday ? "ring-2 ring-primary ring-inset" : ""}`}
+                  className={`min-h-14 sm:min-h-20 rounded-lg border p-1 sm:p-2 text-left align-top transition-all hover:border-primary ${cellBg} ${isToday ? "ring-2 ring-primary ring-inset" : ""}`}
                 >
-                  <div className={`text-base font-semibold mb-1.5 ${isToday ? "text-primary" : hasHoliday || isSat ? "text-red-500" : "text-gray-700"}`}>{day}</div>
-                  <div className="space-y-1">
+                  <div className={`text-sm sm:text-base font-semibold mb-1 sm:mb-1.5 ${isToday ? "text-primary" : hasHoliday || isSat ? "text-red-500" : "text-gray-700"}`}>{day}</div>
+                  <div className="space-y-1 flex flex-wrap gap-1 sm:block">
                     {dayEvents.slice(0, 2).map((ev) => (
                       <div key={ev.id} className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full shrink-0 ${typeDot[ev.type] || typeDot.OTHER}`} />
-                        <span className="text-xs text-gray-700 truncate">{ev.title}</span>
+                        <span className="hidden sm:inline text-xs text-gray-700 truncate">{ev.title}</span>
                       </div>
                     ))}
-                    {dayEvents.length > 2 && (<div className="text-xs text-gray-400">+{dayEvents.length - 2} more</div>)}
+                    {dayEvents.length > 2 && (<div className="hidden sm:block text-xs text-gray-400">+{dayEvents.length - 2} more</div>)}
                   </div>
                 </button>
               );
