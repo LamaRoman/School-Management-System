@@ -106,7 +106,7 @@ export default function ExamTypesPage() {
       )}
 
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">Order</th>
@@ -157,7 +157,7 @@ export default function ExamTypesPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

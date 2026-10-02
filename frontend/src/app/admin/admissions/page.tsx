@@ -346,7 +346,7 @@ export default function AdmissionPage() {
                 <div className="px-4 py-2 bg-primary/5 border-b border-gray-100">
                   <h3 className="text-sm font-semibold text-primary">{gradeName} — {students.length} student{students.length !== 1 ? "s" : ""}</h3>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <tbody>
                     {students.map((adm) => (
                       <tr key={adm.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
@@ -363,7 +363,7 @@ export default function AdmissionPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             ))
           )}
@@ -372,7 +372,7 @@ export default function AdmissionPage() {
         // Standard paginated table view
         <>
           <div className="card overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
                   <th className="text-left px-4 py-2">Student Name</th>
@@ -427,7 +427,7 @@ export default function AdmissionPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             {paginatedAdmissions.length === 0 && (
               <div className="p-8 text-center text-gray-400 text-sm">No admission applications found.</div>
             )}

@@ -83,7 +83,7 @@ function CategoriesTab({ categories, reloadCategories, readOnly }: { categories:
       </div>
       {!readOnly && showForm && (<div className="card p-4 mb-4"><div className="flex gap-3 items-end"><div className="flex-1"><label className="label">Name *</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Tuition Fee" /></div><div className="flex-1"><label className="label">Description</label><input className="input" value={description} onChange={(e) => setDescription(e.target.value)} /></div><button onClick={handleAdd} className="btn-primary text-xs">Add</button><button onClick={() => setShowForm(false)} className="btn-ghost text-xs"><X size={14} /></button></div></div>)}
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead><tr className="table-header"><th className="text-left px-5 py-3">#</th><th className="text-left px-5 py-3">Name</th><th className="text-left px-5 py-3">Description</th>{!readOnly && <th className="text-right px-5 py-3">Actions</th>}</tr></thead>
           <tbody>{categories.map((cat, i) => (
             <tr key={cat.id} className="border-t border-gray-100 hover:bg-surface">
@@ -92,7 +92,7 @@ function CategoriesTab({ categories, reloadCategories, readOnly }: { categories:
               <td className="px-5 py-3">{editingId === cat.id ? <input className="text-sm px-2 py-1 border border-gray-200 rounded w-full" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} /> : <span className="text-gray-500">{cat.description || "—"}</span>}</td>
               {!readOnly && <td className="px-5 py-3 text-right">{editingId === cat.id ? (<><button onClick={handleSaveEdit} className="text-xs text-primary hover:underline">Save</button><button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:underline ml-2">Cancel</button></>) : (<><button onClick={() => handleStartEdit(cat)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary"><Edit2 size={14} /></button><button onClick={() => handleDelete(cat.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></>)}</td>}
             </tr>))}</tbody>
-        </table>
+        </table></div>
         {categories.length === 0 && <div className="p-8 text-center text-gray-400 text-sm">No categories.</div>}
       </div>
     </div>
@@ -145,7 +145,7 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
       <div className="mb-4"><label className="label">Grade</label><select className="input max-w-xs" value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)}><option value="">Select</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
       {selectedGrade && entries.length > 0 && (
         <div className="card overflow-hidden mb-4">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="w-28 px-4 py-2">Amount</th><th className="w-36 px-4 py-2">Frequency</th><th className="w-36 px-4 py-2">Exam</th><th className="w-28 text-right px-4 py-2">Annual</th><th className="w-12"></th></tr></thead>
             <tbody>{entries.map((entry, i) => (
               <tr key={i} className="border-t border-gray-100">
@@ -157,7 +157,7 @@ function StructureTab({ activeYear, categories, grades, examTypes, readOnly }: {
                 <td className="px-4 py-2">{!readOnly && <button onClick={() => handleRemoveRow(i)} className="p-1 hover:bg-red-50 rounded text-gray-300 hover:text-red-600"><Trash2 size={12} /></button>}</td>
               </tr>))}</tbody>
             <tfoot><tr className="border-t-2 border-primary"><td colSpan={4} className="px-4 py-2 text-right font-bold text-primary">Total Annual</td><td className="px-4 py-2 text-right font-bold text-primary">Rs {entries.reduce((s, e) => s + calcAnnual(e), 0).toLocaleString()}</td><td></td></tr></tfoot>
-          </table>
+          </table></div>
         </div>
       )}
       {selectedGrade && entries.length === 0 && <div className="card p-6 mb-4 text-center text-gray-400 text-sm">No entries. Add below.</div>}
@@ -218,7 +218,7 @@ function IndividualFeesTab({ activeYear, categories, grades, readOnly }: { activ
             <button onClick={handleAssign} className="btn-primary text-xs">Assign</button>
           </div>
         </div>)}
-        {assignments.length > 0 && (<div className="card overflow-hidden"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Amount</th><th className="text-center px-4 py-2">Frequency</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{assignments.map((a: any) => (<tr key={a.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{a.feeCategory.name}</td><td className="px-4 py-2 text-center font-semibold">Rs {a.amount.toLocaleString()}</td><td className="px-4 py-2 text-center"><span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{a.frequency}</span></td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(a.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div>)}
+        {assignments.length > 0 && (<div className="card overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Amount</th><th className="text-center px-4 py-2">Frequency</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{assignments.map((a: any) => (<tr key={a.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{a.feeCategory.name}</td><td className="px-4 py-2 text-center font-semibold">Rs {a.amount.toLocaleString()}</td><td className="px-4 py-2 text-center"><span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700">{a.frequency}</span></td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(a.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div></div>)}
         {assignments.length === 0 && <div className="card p-6 text-center text-gray-400 text-sm">No individual fees assigned.</div>}
       </>)}
       {!selectedStudent && <div className="card p-8 text-center text-gray-400">Select grade, section, and student to assign individual fees.</div>}
@@ -269,7 +269,7 @@ function DiscountsTab({ activeYear, categories, grades, readOnly }: { activeYear
             <button onClick={handleAdd} className="btn-primary text-xs">Apply</button>
           </div>
         </div>)}
-        {overrides.length > 0 && (<div className="card overflow-hidden"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Type</th><th className="text-center px-4 py-2">Discount</th><th className="text-left px-4 py-2">Reason</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{overrides.map((o: any) => (<tr key={o.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{o.feeCategory.name}</td><td className="px-4 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${o.discountType === "PERCENTAGE" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{o.discountType}</span></td><td className="px-4 py-2 text-center font-semibold">{o.discountType === "PERCENTAGE" ? `${o.discountPercent}%` : `Rs ${o.overrideAmount}`}</td><td className="px-4 py-2 text-gray-500">{o.reason || "—"}</td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(o.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div>)}
+        {overrides.length > 0 && (<div className="card overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="table-header"><th className="text-left px-4 py-2">Category</th><th className="text-center px-4 py-2">Type</th><th className="text-center px-4 py-2">Discount</th><th className="text-left px-4 py-2">Reason</th>{!readOnly && <th className="w-12"></th>}</tr></thead><tbody>{overrides.map((o: any) => (<tr key={o.id} className="border-t border-gray-100"><td className="px-4 py-2 font-medium text-primary">{o.feeCategory.name}</td><td className="px-4 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${o.discountType === "PERCENTAGE" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{o.discountType}</span></td><td className="px-4 py-2 text-center font-semibold">{o.discountType === "PERCENTAGE" ? `${o.discountPercent}%` : `Rs ${o.overrideAmount}`}</td><td className="px-4 py-2 text-gray-500">{o.reason || "—"}</td>{!readOnly && <td className="px-4 py-2"><button onClick={() => handleRemove(o.id)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600"><Trash2 size={14} /></button></td>}</tr>))}</tbody></table></div></div>)}
         {overrides.length === 0 && <div className="card p-6 text-center text-gray-400 text-sm">No discounts.</div>}
       </>)}
       {!selectedStudent && <div className="card p-8 text-center text-gray-400">Select grade, section, and student.</div>}
@@ -459,7 +459,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
           {ledger.fixedFees.length > 0 && (
             <div className="card overflow-hidden mb-4">
               <div className="px-4 py-2 bg-gray-50 border-b"><h3 className="text-sm font-semibold text-primary">Annual / One-time Fees</h3></div>
-              <table className="w-full text-sm"><tbody>{ledger.fixedFees.map((f: any) => {
+              <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{ledger.fixedFees.map((f: any) => {
                 const remaining = f.amount - f.paid;
                 const isSelected = payFixed.some((pf) => pf.categoryId === f.categoryId);
                 return (
@@ -467,7 +467,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
                     <td className="px-4 py-2 font-medium">{f.categoryName}</td>
                     <td className="px-4 py-2 text-right">{f.status === "PAID" ? <span className="text-emerald-600 text-xs font-semibold">Paid</span> : <span className="text-red-600 font-semibold">Rs {remaining.toLocaleString()}</span>}</td>
                   </tr>);
-              })}</tbody></table>
+              })}</tbody></table></div>
             </div>
           )}
 
@@ -487,8 +487,8 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
           {ledger.recentPayments.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-4 py-2 bg-gray-50 border-b"><h3 className="text-sm font-semibold text-primary">Recent Payments</h3></div>
-              <table className="w-full text-xs"><thead><tr className="table-header"><th className="text-left px-4 py-2">Date</th><th className="text-left px-4 py-2">Category</th><th className="text-left px-4 py-2">Month</th><th className="text-right px-4 py-2">Amount</th><th className="text-left px-4 py-2">Receipt</th></tr></thead>
-              <tbody>{ledger.recentPayments.map((p: any, i: number) => (<tr key={i} className="border-t border-gray-100"><td className="px-4 py-2">{p.paymentDate}</td><td className="px-4 py-2">{p.category}</td><td className="px-4 py-2 text-gray-500">{p.paidMonth || "—"}</td><td className="px-4 py-2 text-right">Rs {p.amount.toLocaleString()}</td><td className="px-4 py-2 text-gray-400">{p.receiptNumber}</td></tr>))}</tbody></table>
+              <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="table-header"><th className="text-left px-4 py-2">Date</th><th className="text-left px-4 py-2">Category</th><th className="text-left px-4 py-2">Month</th><th className="text-right px-4 py-2">Amount</th><th className="text-left px-4 py-2">Receipt</th></tr></thead>
+              <tbody>{ledger.recentPayments.map((p: any, i: number) => (<tr key={i} className="border-t border-gray-100"><td className="px-4 py-2">{p.paymentDate}</td><td className="px-4 py-2">{p.category}</td><td className="px-4 py-2 text-gray-500">{p.paidMonth || "—"}</td><td className="px-4 py-2 text-right">Rs {p.amount.toLocaleString()}</td><td className="px-4 py-2 text-gray-400">{p.receiptNumber}</td></tr>))}</tbody></table></div>
             </div>
           )}
         </div>
@@ -518,7 +518,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
 
           {!loadingOverview && overview.length > 0 && (
             <div className="card overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead><tr className="table-header"><th className="text-left px-4 py-2">Roll</th><th className="text-left px-4 py-2">Student</th><th className="text-left px-4 py-2">Paid Up To</th><th className="text-right px-4 py-2">Due</th><th className="text-right px-4 py-2">Paid</th><th className="text-right px-4 py-2">Balance</th><th className="w-12"></th></tr></thead>
                 <tbody>{overview.map((s) => (
                   <tr key={s.id} onClick={() => handleOpenLedger(s.id)} className="border-t border-gray-100 hover:bg-surface cursor-pointer transition-colors">
@@ -530,7 +530,7 @@ function CollectionTab({ activeYear, grades }: { activeYear: any; grades: Grade[
                     <td className="px-4 py-2 text-right font-semibold text-red-600">{s.balance > 0 ? `Rs ${s.balance.toLocaleString()}` : <span className="text-emerald-600">Clear</span>}</td>
                     <td className="px-4 py-2"><ChevronRight size={14} className="text-gray-300" /></td>
                   </tr>))}</tbody>
-              </table>
+              </table></div>
             </div>
           )}
           {selectedSection && !loadingOverview && overview.length === 0 && <div className="card p-8 text-center text-gray-400">No students or fee structure not set.</div>}

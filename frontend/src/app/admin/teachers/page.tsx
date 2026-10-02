@@ -291,7 +291,7 @@ export default function AdminTeachersPage() {
 
       {/* Teachers Table */}
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">#</th>
@@ -387,7 +387,7 @@ export default function AdminTeachersPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
         {teachers.length === 0 && <div className="p-8 text-center text-gray-400">No teachers. Add one above.</div>}
       </div>
     </div>

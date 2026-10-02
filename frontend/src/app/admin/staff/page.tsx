@@ -215,7 +215,7 @@ function TeachersTab() {
 
       {/* Teachers Table */}
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">#</th>
@@ -278,7 +278,7 @@ function TeachersTab() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
         {teachers.length === 0 && <div className="p-8 text-center text-gray-400">No teachers. Add one above.</div>}
       </div>
     </div>
@@ -378,7 +378,7 @@ function AccountantsTab() {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead>
               <tr className="table-header">
                 <th className="text-left px-5 py-3">#</th>
@@ -416,7 +416,7 @@ function AccountantsTab() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           {resetId && (
             <div className="px-5 py-3 bg-amber-50 border-t border-amber-200 flex items-center gap-3">
               <span className="text-sm text-amber-700">New password for {staff.find(s => s.id === resetId)?.email}:</span>
