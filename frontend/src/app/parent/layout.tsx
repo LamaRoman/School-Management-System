@@ -28,14 +28,14 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-surface">
       <header className="bg-primary text-white shadow-md no-print">
         {/* Top bar */}
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <Users size={22} />
             <span className="font-display font-bold">Zentara <span className="text-accent-light">शिक्षा</span></span>
             <span className="text-xs bg-white/10 px-2 py-0.5 rounded">Parent</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-white/70">{user?.email}</span>
+          <div className="flex items-center gap-1 sm:gap-4 min-w-0">
+            <span className="hidden sm:inline text-sm text-white/70 truncate">{user?.email}</span>
             <button onClick={() => setShowChangePassword(true)} className="p-2 hover:bg-white/10 rounded-lg" title="Change password"><KeyRound size={16} className="text-white/60" /></button>
             <button onClick={logout} className="p-2 hover:bg-white/10 rounded-lg">
               <LogOut size={16} />
@@ -43,7 +43,7 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
         {/* Tabs */}
-        <div className="max-w-4xl mx-auto px-6 overflow-x-auto">
+        <div className="max-w-4xl mx-auto px-2 sm:px-6 overflow-x-auto">
           <div className="flex gap-1">
             {navItems.map((item) => (
               <Link

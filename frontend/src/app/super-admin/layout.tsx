@@ -10,6 +10,8 @@ import {
   LogOut,
   KeyRound,
   CalendarDays,
+  Menu,
+  X,
 } from "lucide-react";
 
 const navItems = [
@@ -20,9 +22,15 @@ const navItems = [
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Close the mobile drawer after navigating.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -33,12 +41,22 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen flex bg-surface">
-      <aside className="w-64 bg-primary text-white flex flex-col shadow-xl shrink-0">
-        <div className="p-5 border-b border-white/10">
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-primary text-white flex flex-col shadow-xl shrink-0 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+          navOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="p-5 border-b border-white/10 flex items-start justify-between">
           <div>
             <h1 className="font-display font-bold text-sm leading-tight">Zentara <span style={{color: '#e8384f'}}>शिक्षा</span></h1>
             <p className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Super Admin</p>
           </div>
+          <button onClick={() => setNavOpen(false)} className="p-1 -m-1 hover:bg-white/10 rounded-lg lg:hidden" aria-label="Close menu">
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="flex-1 py-3 px-3 overflow-y-auto space-y-0.5">
@@ -83,7 +101,13 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       </aside>
 
       <main className="flex-1 overflow-auto min-w-0">
-        <div className="max-w-6xl mx-auto p-6">
+        <div className="sticky top-0 z-20 flex items-center gap-3 bg-primary px-4 py-3 text-white shadow lg:hidden">
+          <button onClick={() => setNavOpen(true)} className="p-1 -m-1 hover:bg-white/10 rounded-lg" aria-label="Open menu">
+            <Menu size={22} />
+          </button>
+          <span className="font-display font-bold text-sm">Zentara <span className="text-accent-light">शिक्षा</span></span>
+        </div>
+        <div className="max-w-6xl mx-auto p-4 sm:p-6">
           {authorized ? children : (
             <div className="flex items-center justify-center py-24">
               <div className="animate-pulse text-primary font-display text-xl">Loading...</div>

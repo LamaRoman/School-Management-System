@@ -43,7 +43,7 @@ export default function TeacherDashboardPage() {
   const hasNothing = classTeacherSections.length === 0 && otherSubjectAssignments.length === 0;
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6">
       {hasNothing && (
         <div className="card p-8 text-center text-gray-400">
           You have no class or subject assignments yet.

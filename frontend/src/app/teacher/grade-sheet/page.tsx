@@ -19,7 +19,7 @@ export default function TeacherGradeSheetPage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
         <div className="card p-8 text-center text-gray-400">Loading...</div>
       </div>
     );
@@ -27,7 +27,7 @@ export default function TeacherGradeSheetPage() {
 
   if (mySections.length === 0) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-display font-bold text-primary">Grade Sheet</h1>
         </div>
@@ -39,7 +39,7 @@ export default function TeacherGradeSheetPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6 no-print">
         <div>
           <h1 className="text-2xl font-display font-bold text-primary">Grade Sheet</h1>

@@ -47,9 +47,9 @@ export default function FeeManagementPage() {
         <h1 className="text-2xl font-display font-bold text-primary">Fee Management</h1>
         <p className="text-sm text-gray-500 mt-1">Categories, structure, individual fees, scholarships, and collection</p>
       </div>
-      <div className="flex gap-1 mb-6 border-b">
+      <div className="flex gap-1 mb-6 border-b overflow-x-auto">
         {([{ key: "categories", label: "Fee Categories" }, { key: "structure", label: "Fee Structure" }, { key: "individual", label: "Individual Fees" }, { key: "discounts", label: "Scholarships" }, { key: "collection", label: "Fee Collection" }] as { key: Tab; label: string }[]).map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>{t.label}</button>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap shrink-0 ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>{t.label}</button>
         ))}
       </div>
       {tab === "categories" && <CategoriesTab categories={categories} reloadCategories={reloadCategories} readOnly={readOnly} />}
