@@ -114,7 +114,7 @@ export default function ParentDashboard() {
 
   if (children.length === 0) {
     return (
-      <div className="min-h-screen bg-surface p-6">
+      <div className="min-h-screen bg-surface p-4 sm:p-6">
         <div className="max-w-3xl mx-auto card p-8 text-center text-gray-400">
           No children linked to your account. Please contact the school administration.
         </div>
@@ -123,7 +123,7 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-surface p-6">
+    <div className="min-h-screen bg-surface p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Child selector */}
         {children.length > 1 && (

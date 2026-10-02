@@ -81,12 +81,12 @@ export default function TeacherResultsPage() {
   };
 
   if (loading) {
-    return <div className="max-w-5xl mx-auto p-6"><div className="card p-8 text-center text-gray-400">Loading...</div></div>;
+    return <div className="max-w-5xl mx-auto p-4 sm:p-6"><div className="card p-8 text-center text-gray-400">Loading...</div></div>;
   }
 
   if (mySections.length === 0) {
     return (
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6">
         <h1 className="text-2xl font-display font-bold text-primary mb-6">Results</h1>
         <div className="card p-8 text-center text-gray-400">
           You are not a class teacher of any section.
@@ -98,7 +98,7 @@ export default function TeacherResultsPage() {
   const c = data?.completeness;
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6">
       <h1 className="text-2xl font-display font-bold text-primary mb-1">Results</h1>
       <p className="text-sm text-gray-500 mb-6">
         Mark an exam complete when marks entry is done. An admin publishes it to parents and students.

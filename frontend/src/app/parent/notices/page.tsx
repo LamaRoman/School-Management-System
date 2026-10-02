@@ -43,7 +43,7 @@ export default function ParentNoticesPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-primary">Loading...</div></div>;
 
   return (
-    <div className="min-h-screen bg-surface p-6">
+    <div className="min-h-screen bg-surface p-4 sm:p-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-display font-bold text-primary mb-6">Notices</h1>
 

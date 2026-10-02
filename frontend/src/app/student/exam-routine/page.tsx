@@ -44,7 +44,7 @@ export default function StudentExamRoutinePage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-primary">Loading...</div></div>;
 
   return (
-    <div className="min-h-screen bg-surface p-6">
+    <div className="min-h-screen bg-surface p-4 sm:p-6">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6 no-print">
           <div>
