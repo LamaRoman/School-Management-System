@@ -323,14 +323,14 @@ export default function AdminParentsPage() {
                     </button>
                     <button
                       onClick={() => { setLinkingParentId(isLinking ? null : parent.id); setExpandedId(parent.id); }}
-                      className="p-2.5 sm:p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"
+                      className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"
                       title="Link student"
                     >
                       <Link2 size={14} />
                     </button>
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : parent.id)}
-                      className="p-2.5 sm:p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-all"
+                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-all"
                       title={isExpanded ? "Collapse" : "Expand"}
                     >
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

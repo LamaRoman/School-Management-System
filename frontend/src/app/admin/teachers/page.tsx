@@ -346,12 +346,12 @@ export default function AdminTeachersPage() {
                   </div>
                 )}
                 <div className="flex items-center justify-end gap-1 mt-1 -mb-1">
-                  <button onClick={() => handleStartEdit(t)} className="p-2.5 hover:bg-surface rounded text-gray-400 hover:text-primary" aria-label="Edit"><Edit2 size={16} /></button>
-                  <button onClick={() => openResetPassword(t)} className="p-2.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label={t.user ? "Reset Password" : "Create login account"}><KeyRound size={16} /></button>
+                  <button onClick={() => handleStartEdit(t)} className="p-1.5 hover:bg-surface rounded text-gray-400 hover:text-primary" aria-label="Edit"><Edit2 size={16} /></button>
+                  <button onClick={() => openResetPassword(t)} className="p-1.5 hover:bg-amber-50 rounded text-gray-400 hover:text-amber-600" aria-label={t.user ? "Reset Password" : "Create login account"}><KeyRound size={16} /></button>
                   {t.isActive ? (
-                    <button onClick={() => handleDeactivate(t.id, t.name)} className="p-2.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
+                    <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
                   ) : (
-                    <button onClick={() => handleReactivate(t.id)} className="p-2.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
+                    <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
                   )}
                 </div>
               </div>

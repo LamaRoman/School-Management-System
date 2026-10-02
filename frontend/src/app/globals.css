@@ -50,6 +50,18 @@
   }
 }
 
+/* Touch targets: icon-only buttons are ~26-30px, under the ~40px a thumb needs.
+   On touch devices, grow the tappable area with an invisible ::after instead of
+   resizing the button, so layout (compact chips, table rows) doesn't change.
+   :where() keeps specificity at zero so a button that is already absolute/fixed
+   keeps its own positioning. Neighbouring icons ~4px apart overlap slightly; a
+   tap in the overlap goes to the later button. Needs :has() (Chrome 105+,
+   Safari 15.4+); older browsers simply keep the small targets. */
+@media (pointer: coarse) {
+  button:where(:has(> svg:only-child)) { position: relative; }
+  button:where(:has(> svg:only-child))::after { content: ""; position: absolute; inset: -6px; }
+}
+
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
