@@ -166,7 +166,7 @@ export default function ParentDashboard() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 mb-6 border-b">
+            <div className="flex gap-1 mb-6 border-b overflow-x-auto">
               {([
                 { key: "report", label: "Report Card", icon: GraduationCap },
                 { key: "attendance", label: "Attendance", icon: Calendar },
@@ -174,7 +174,7 @@ export default function ParentDashboard() {
                 { key: "notices", label: "Notices", icon: Megaphone },
               ] as { key: typeof tab; label: string; icon: any }[]).map((t) => (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all border-b-2 ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all border-b-2 whitespace-nowrap shrink-0 ${tab === t.key ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-primary"}`}>
                   <t.icon size={16} />
                   {t.label}
                 </button>
