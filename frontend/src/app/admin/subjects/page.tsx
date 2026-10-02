@@ -133,7 +133,48 @@ export default function SubjectsPage() {
       )}
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto"><table className="w-full text-sm">
+        {/* Mobile: one card per subject (the table needs ~870px). */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {loadingGrades || loadingSubjects ? (
+            <div className="text-center py-8 text-gray-400 animate-pulse">Loading subjects...</div>
+          ) : subjects.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</div>
+          ) : subjects.map((s, i) => (
+            <div key={s.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-primary"><span className="text-gray-400 font-normal mr-2">{i + 1}</span>{s.name}</div>
+                  {s.nameNp && <div className="text-xs text-gray-400 ml-5">{s.nameNp}</div>}
+                </div>
+                <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${s.isOptional ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>
+                  {s.isOptional ? "Optional" : "Compulsory"}
+                </span>
+              </div>
+              <dl className="grid grid-cols-4 gap-2 mt-3 text-center">
+                {[
+                  ["Theory", s.fullTheoryMarks],
+                  ["Practical", s.fullPracticalMarks || "—"],
+                  ["Full", s.fullTheoryMarks + s.fullPracticalMarks],
+                  ["Pass", s.passMarks],
+                ].map(([label, value]) => (
+                  <div key={label as string} className="bg-surface rounded-lg py-1.5">
+                    <dt className="text-[10px] uppercase tracking-wide text-gray-400">{label}</dt>
+                    <dd className={`text-sm ${label === "Full" ? "font-semibold" : ""}`}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-gray-500">Credit hr: {s.creditHour}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => startEdit(s)} className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600" aria-label="Edit"><Edit2 size={16} /></button>
+                  <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 size={16} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="overflow-x-auto hidden md:block"><table className="w-full text-sm">
           <thead>
             <tr className="table-header">
               <th className="text-left px-5 py-3">#</th>

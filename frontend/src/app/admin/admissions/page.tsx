@@ -346,7 +346,24 @@ export default function AdmissionPage() {
                 <div className="px-4 py-2 bg-primary/5 border-b border-gray-100">
                   <h3 className="text-sm font-semibold text-primary">{gradeName} — {students.length} student{students.length !== 1 ? "s" : ""}</h3>
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-sm">
+                {/* Mobile: one row per student (the table needs ~600px). */}
+                <div className="md:hidden divide-y divide-gray-100">
+                  {students.map((adm) => (
+                    <div key={adm.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-primary">
+                          {adm.studentName}
+                          {adm.studentNameNp && <span className="text-xs text-gray-400 ml-1">({adm.studentNameNp})</span>}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {[adm.guardianName || adm.fatherName, adm.guardianPhone, adm.appliedDate].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">ENROLLED</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="overflow-x-auto hidden md:block"><table className="w-full text-sm">
                   <tbody>
                     {students.map((adm) => (
                       <tr key={adm.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
@@ -372,7 +389,44 @@ export default function AdmissionPage() {
         // Standard paginated table view
         <>
           <div className="card overflow-hidden">
-            <div className="overflow-x-auto"><table className="w-full text-sm">
+            {/* Mobile: one card per application (the table needs ~750px). */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {paginatedAdmissions.map((adm) => (
+                <div key={adm.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-primary">
+                        {adm.studentName}
+                        {adm.studentNameNp && <span className="text-xs text-gray-400 ml-1">({adm.studentNameNp})</span>}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Grade {adm.applyingForGrade.name} · Applied {adm.appliedDate}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {[adm.guardianName || adm.fatherName, adm.guardianPhone].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${statusColors[adm.status] || ""}`}>{adm.status}</span>
+                  </div>
+                  {adm.status !== "ENROLLED" && (
+                    <div className="flex justify-end gap-1 mt-1 -mb-1">
+                      {adm.status === "PENDING" && (
+                        <>
+                          <button onClick={() => handleApprove(adm.id)} className="p-1.5 rounded hover:bg-emerald-50 text-gray-400 hover:text-emerald-600" aria-label="Approve"><Check size={16} /></button>
+                          <button onClick={() => handleReject(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" aria-label="Reject"><X size={16} /></button>
+                        </>
+                      )}
+                      {adm.status === "APPROVED" && (
+                        <button onClick={() => handleStartEnroll(adm)} className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" aria-label="Enroll"><UserPlus size={16} /></button>
+                      )}
+                      <button onClick={() => handleDelete(adm.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 size={16} /></button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="overflow-x-auto hidden md:block"><table className="w-full text-sm">
               <thead>
                 <tr className="table-header">
                   <th className="text-left px-4 py-2">Student Name</th>
@@ -435,7 +489,7 @@ export default function AdmissionPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-4">
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
               <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} className="btn-ghost text-xs">Previous</button>
               <span className="text-sm text-gray-500">Page {currentPage} of {totalPages} ({admissions.length} total)</span>
               <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages} className="btn-ghost text-xs">Next</button>
