@@ -128,7 +128,7 @@ export default function StudentReportPage() {
   return (
     <div className="min-h-screen bg-surface p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6 no-print">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6 no-print">
           <h1 className="text-2xl font-display font-bold text-primary">My Report Card</h1>
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setMode(mode === "color" ? "bw" : "color")}
@@ -221,7 +221,7 @@ export default function StudentReportPage() {
             </div>
 
             {/* Marks Table */}
-            <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+            <div className="overflow-x-auto"><table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: t.primary, color: "#fff" }}>
                   <th className="text-left p-2 border" style={{ borderColor: t.primary }}>Subject</th>
@@ -275,7 +275,7 @@ export default function StudentReportPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
 
             {/* Bottom Section */}
             <div className="p-4 border-t-2" style={{ borderColor: t.primary }}>
@@ -391,9 +391,9 @@ export default function StudentReportPage() {
               )}
 
               {/* Signatures */}
-              <div className="flex justify-between mt-14 text-xs">
+              <div className="flex justify-between gap-2 mt-14 text-xs">
                 {["Class Teacher", "Exam Coordinator", "Principal"].map((r) => (
-                  <div key={r} className="text-center min-w-[120px]">
+                  <div key={r} className="text-center min-w-[90px] sm:min-w-[120px]">
                     <div className="border-b border-gray-400 mb-1 h-6" />
                     <span className="font-semibold">{r}</span>
                   </div>

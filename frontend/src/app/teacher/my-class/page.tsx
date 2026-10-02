@@ -136,7 +136,7 @@ function ReportCard({
       </div>
 
       {/* Marks Table */}
-      <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+      <div className="overflow-x-auto"><table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr style={{ background: t.primary, color: "#fff" }}>
             <th className="text-left p-2 border" style={{ borderColor: t.primary }}>Subject</th>
@@ -187,7 +187,7 @@ function ReportCard({
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
 
       {/* Bottom Section */}
       <div className="p-4 border-t-2" style={{ borderColor: t.primary }}>
@@ -303,9 +303,9 @@ function ReportCard({
         )}
 
         {/* Signatures */}
-        <div className="flex justify-between mt-14 text-xs">
+        <div className="flex justify-between gap-2 mt-14 text-xs">
           {["Class Teacher", "Exam Coordinator", "Principal"].map((r) => (
-            <div key={r} className="text-center min-w-[120px]">
+            <div key={r} className="text-center min-w-[90px] sm:min-w-[120px]">
               <div className="border-b border-gray-400 mb-1 h-6" />
               <span className="font-semibold">{r}</span>
             </div>
@@ -451,11 +451,11 @@ export default function TeacherMyClassPage() {
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
   if (sections.length === 0) {
-    return <div className="card p-8 text-center text-gray-400">You are not assigned as a class teacher for any section.</div>;
+    return <div className="max-w-6xl mx-auto p-4 sm:p-6"><div className="card p-8 text-center text-gray-400">You are not assigned as a class teacher for any section.</div></div>;
   }
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6">
       {/* Section selector */}
       <div className="flex flex-wrap gap-2 mb-4">
         {sections.map((sec) => (
@@ -516,9 +516,9 @@ export default function TeacherMyClassPage() {
       {selectedStudent && (
         <div>
           {/* Back + action buttons */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
             <button onClick={() => { setSelectedStudent(null); setReportData(null); setObservations(null); }}
-              className="btn-ghost text-xs">
+              className="btn-ghost text-xs self-start whitespace-nowrap">
               <ChevronLeft size={14} /> Back to Student List
             </button>
             <div className="flex gap-2 flex-wrap">
