@@ -97,7 +97,7 @@ export default function ReportCardsScreen() {
       }
     } catch (err) {
       if (err instanceof FolderPickCancelled) {
-        Alert.alert('Choose a folder', 'Pick the folder to save report cards in (for example Downloads), then try again.');
+        Alert.alert('Choose a folder', 'Android does not allow saving into the Downloads folder itself. In the picker, tap “Create new folder” (for example “Report Cards”) inside Downloads, open it and tap “Use this folder”. Then try again.');
       } else {
         Alert.alert("Couldn't download the report card", getErrorMessage(err));
       }
@@ -149,7 +149,7 @@ export default function ReportCardsScreen() {
       {canChooseFolder && (
         <TouchableOpacity onPress={changeFolder} style={styles.folderRow}>
           <Text style={styles.folderText}>
-            {folderName ? `Saving to: ${folderName}` : 'Saving to: not chosen yet (you will be asked — pick Downloads)'}
+            {folderName ? `Saving to: ${folderName}` : 'Saving to: not chosen yet (you will be asked to pick or create a folder inside Downloads)'}
             {'  '}<Text style={styles.folderLink}>{folderName ? 'Change' : 'Choose'}</Text>
           </Text>
         </TouchableOpacity>

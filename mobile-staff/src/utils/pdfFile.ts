@@ -4,13 +4,17 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 // Getting a report card PDF onto the phone.
-//  - Android: saved straight into a folder the teacher chose once (pick "Downloads"); the
-//    choice is remembered. Android only lets an app write to a folder the user picked.
+//  - Android: saved straight into a folder the teacher chose once; the choice is remembered.
+//    Android only lets an app write to a folder the user picked, and since Android 11 it
+//    refuses the top-level Downloads folder itself — so the picker opens inside Downloads and
+//    the teacher makes/picks a sub-folder there (e.g. Downloads/Report Cards).
 //  - iPhone: apps cannot write to a Downloads folder, so the system share sheet opens
 //    (it has "Save to Files").
 //  - Browser (testing only): opens in a new tab.
 
 const FOLDER_KEY = 'pdfFolder';
+// Where the folder picker starts, so "Create new folder" lands inside Downloads.
+const DOWNLOADS_HINT = 'content://com.android.externalstorage.documents/document/primary%3ADownload';
 interface SavedFolder { uri: string; name: string }
 
 export type SaveResult =
@@ -42,7 +46,7 @@ async function readFolder(): Promise<SavedFolder | null> {
 export async function chooseFolder(): Promise<SavedFolder> {
   let dir: Directory;
   try {
-    dir = await Directory.pickDirectoryAsync();
+    dir = await Directory.pickDirectoryAsync(DOWNLOADS_HINT);
   } catch {
     throw new FolderPickCancelled();
   }
