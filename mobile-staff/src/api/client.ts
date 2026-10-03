@@ -109,6 +109,28 @@ export const api = {
     client.delete<{ data: T }>(path).then((r) => r.data.data),
 };
 
+/**
+ * Download a binary file (a PDF) with the same auth + refresh handling as every other call.
+ * PDF generation can take a while for a whole class, hence the long timeout. When the
+ * server answers with an error, its JSON body arrives as bytes: decode it so the usual
+ * `{ error }` message still reaches the user.
+ */
+export async function getFile(path: string): Promise<{ bytes: Uint8Array; disposition: string | null }> {
+  try {
+    const res = await client.get<ArrayBuffer>(path, { responseType: 'arraybuffer', timeout: 120000 });
+    return { bytes: new Uint8Array(res.data), disposition: (res.headers?.['content-disposition'] as string) ?? null };
+  } catch (err: any) {
+    const data = err?.response?.data;
+    if (data && typeof data === 'object' && 'byteLength' in data) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(new Uint8Array(data)));
+        err.response.data = parsed;
+      } catch { /* not JSON — leave as is */ }
+    }
+    throw err;
+  }
+}
+
 export const getErrorMessage = (err: any): string => {
   if (isNetworkError(err)) return "Can't reach the server. Check your connection and try again.";
   return err?.response?.data?.error || err?.message || 'Something went wrong';

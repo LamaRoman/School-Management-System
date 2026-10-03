@@ -122,7 +122,7 @@ Backend — accept a just-rotated token for a short grace window.
   touch behaviour, and anything on iOS/Android. Do a manual pass on a phone before release.
 - `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
   values only the project owner has (Expo account, real API URL).
-- Offline mark entry, push notifications and the missing web-parity screen (report cards) are features, not fixes, and are not done.
+- Offline mark entry, push notifications and the are features, not fixes, and are not done. Every screen the web teacher portal has now exists on the phone.
 - Web `getTodayBS()` still uses the browser's clock.
 
 ## Suggested order
@@ -137,3 +137,4 @@ Backend — accept a just-rotated token for a short grace window.
 - **My Students screen (class teachers):** added, read-only — roster in roll order, search, tap for details, tap-to-call guardian. Editing students and assigning roll numbers stay on the web. Verified as a web build against the dev backend (roster, search, expand); tap-to-call not exercised (needs a phone).
 - **Exam Routine screen (teachers):** added, read-only — every grade the teacher teaches, per exam, date/day/time, past exams dimmed. Verified as a web build against the dev backend (two exams switched; all dummy dates are in 2082 so everything showed as past).
 - **Observations screen (class teachers):** added — one category at a time, big grade buttons, "fill all empty with…", only changed cells are sent, read-back after Save. Verified as a web build against the dev backend (graded two students, saved, DB checked; the dummy rows were left). Like the web, a saved grade can be changed but not cleared. The discard-changes prompt (RN `Alert`) is not exercised on web. Not run on a phone.
+- **Report Cards screen (class teachers):** added — the server-made PDF (per student, or the whole class in one) in colour or B&W is downloaded with the app's own login, saved to the phone's cache and opened in the share sheet (new deps `expo-file-system`, `expo-sharing`; `expo-doctor` 21/21, Android bundle builds). Verified as a web build against the dev backend: a student's PDF (154 KB), a whole-class B&W PDF (675 KB) and the final-exam route (curl, 200 KB) all returned real `%PDF` files. **Not run on a phone** — the share sheet and writing the file to the cache are the untested parts; the web build opens the PDF in a new tab instead. The on-screen report-card preview the web has is not reproduced: the PDF is the preview.
