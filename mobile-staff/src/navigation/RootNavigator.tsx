@@ -19,6 +19,7 @@ import ObservationsScreen from '../screens/teacher/ObservationsScreen';
 import ReportCardsScreen from '../screens/teacher/ReportCardsScreen';
 import HomeworkScreen from '../screens/teacher/HomeworkScreen';
 import AccountantDashboard from '../screens/accountant/DashboardScreen';
+import { ReportsMenuScreen, CashBookScreen, DefaultersScreen, PaymentHistoryScreen, MonthlySummaryScreen } from '../screens/accountant/ReportsScreens';
 import FeeCollectionScreen from '../screens/accountant/FeeCollectionScreen';
 import NoticesScreen from '../screens/shared/NoticesScreen';
 import CalendarScreen from '../screens/shared/CalendarScreen';
@@ -140,6 +141,11 @@ export default function RootNavigator() {
           : user.role === 'ACCOUNTANT' || user.role === 'ADMIN' ? (
             <>
               <Stack.Screen name="Accountant" component={AccountantTabs} />
+              <Stack.Screen name="Reports" component={ReportsMenuScreen} options={{ headerShown: true, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white, title: 'Reports' }} />
+              <Stack.Screen name="ReportCashBook" component={CashBookScreen} options={{ headerShown: true, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white, title: 'Daily Cash Book' }} />
+              <Stack.Screen name="ReportDefaulters" component={DefaultersScreen} options={{ headerShown: true, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white, title: 'Fee Defaulters' }} />
+              <Stack.Screen name="ReportPayments" component={PaymentHistoryScreen} options={{ headerShown: true, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white, title: 'Payment History' }} />
+              <Stack.Screen name="ReportMonthly" component={MonthlySummaryScreen} options={{ headerShown: true, headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white, title: 'Monthly Summary' }} />
               <Stack.Screen
                 name="Calendar"
                 component={CalendarScreen}
