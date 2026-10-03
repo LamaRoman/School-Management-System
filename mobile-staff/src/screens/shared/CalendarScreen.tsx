@@ -7,7 +7,7 @@ import {
   BS_MONTH_NAMES, getDaysInBSMonth, getStartWeekday, getTodayBS, parseBSDate, formatBSDateLong,
 } from '../../utils/bsDate';
 import {
-  CalEvent, buildMonthCells, toWeeks, monthEvents, shiftMonth, dayLabel,
+  CalEvent, buildMonthCells, toWeeks, monthEvents, shiftMonth, dayLabel, coversDate,
 } from '../../utils/calendarMonth';
 
 // Read-only school calendar for staff: the school's own activities plus the national
@@ -74,7 +74,7 @@ export default function CalendarScreen() {
   if (loading) return <LoadingScreen />;
   if (error && !data) return <ErrorState message={error} onRetry={() => { setLoading(true); load(year, true); }} />;
 
-  const shown = selectedDate ? list.filter(e => e.date === selectedDate) : list;
+  const shown = selectedDate ? list.filter(e => coversDate(e, selectedDate)) : list;
 
   return (
     <ScrollView
@@ -154,7 +154,7 @@ export default function CalendarScreen() {
         shown.map(e => (
           <View key={e.id} style={[styles.eventCard, { borderLeftColor: TYPE_COLOR[e.type] ?? Colors.textMuted }]}>
             <View style={styles.eventHead}>
-              <Text style={styles.eventDate}>{formatBSDateLong(e.date)}</Text>
+              <Text style={styles.eventDate}>{formatBSDateLong(e.date)}{e.endDate ? ` → ${formatBSDateLong(e.endDate)}` : ''}</Text>
               <Text style={[styles.eventType, { color: TYPE_COLOR[e.type] ?? Colors.textMuted }]}>
                 {TYPE_LABEL[e.type] ?? e.type}{e.isMaster ? ' · national' : ''}
               </Text>

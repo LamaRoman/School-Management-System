@@ -76,7 +76,8 @@ export async function getDayStatus(schoolId: string, date: string): Promise<DayS
     SELECT
       (SELECT s.weekly_off_days FROM schools s WHERE s.id = ${schoolId}) AS weekly_off_days,
       (SELECT array_agg(e.title ORDER BY e.title) FROM calendar_events e
-         WHERE e.school_id = ${schoolId} AND e.date = ${date} AND e.type = 'HOLIDAY') AS school_holidays,
+         WHERE e.school_id = ${schoolId} AND e.type = 'HOLIDAY'
+           AND e.date <= ${date} AND COALESCE(e.end_date, e.date) >= ${date}) AS school_holidays,
       (SELECT array_agg(m.title ORDER BY m.title) FROM master_calendar_events m
          WHERE m.date = ${date} AND m.type = 'HOLIDAY') AS national_holidays
   `);
