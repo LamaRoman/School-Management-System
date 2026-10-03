@@ -71,6 +71,11 @@ model School {
   websiteUrl              String? @map("website_url")
   websiteRevalidateSecret String? @map("website_revalidate_secret")
   isActive  Boolean  @default(true) @map("is_active")
+  // Weekdays the school is closed every week, as JS weekday numbers (0=Sunday .. 6=Saturday).
+  // Default Saturday only; the admin can choose Saturday + Sunday. Together with the school's
+  // HOLIDAY calendar events and the national holidays this decides whether a day is "closed"
+  // for attendance (see services/schoolDay.service.ts).
+  weeklyOffDays Int[]  @default([6]) @map("weekly_off_days")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

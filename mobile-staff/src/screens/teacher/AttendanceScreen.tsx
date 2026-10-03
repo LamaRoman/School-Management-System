@@ -7,9 +7,12 @@ import { api, getErrorMessage } from '../../api/client';
 import { Button, EmptyState, ErrorState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS } from '../../utils/bsDate';
+import {
+  ServerRecord, Edits, Status, showRecords, nextStatus, countStatuses,
+  unsavedCount, needsSave, toPayload, savedSummary, isClosed, reasonText, DayStatus,
+} from '../../utils/attendanceForm';
 
 interface Section { sectionId: string; sectionName: string; gradeName: string; academicYearId: string; }
-interface Record { studentId: string; studentName: string; rollNo: number | null; status: 'PRESENT' | 'ABSENT' | null; isMarked: boolean; }
 
 
 export default function AttendanceScreen() {
@@ -18,12 +21,21 @@ export default function AttendanceScreen() {
   const [date, setDate] = useState(getTodayBS());
   const [loadError, setLoadError] = useState<string | null>(null);
   const todayRef = useRef(getTodayBS());
+  // Weekly day off / school holiday / public holiday? On a closed day the list is shown
+  // GREY (nobody recorded, nobody assumed present) and the teacher can Mark All Present or
+  // tap students individually. Informational only: nothing is blocked or confirmed.
+  const [day, setDay] = useState<DayStatus | null>(null);
+  const [dayLoading, setDayLoading] = useState(true);
   const fetchSeq = useRef(0); // ignore a slow response for a day/section we've since left
-  const [records, setRecords] = useState<Record[]>([]);
+  // What the server holds, and the teacher's unsaved taps laid over it. What is shown is
+  // derived from both plus the kind of day, so nothing has to be re-seeded when the day
+  // status arrives after the records.
+  const [raw, setRaw] = useState<ServerRecord[]>([]);
+  const [edits, setEdits] = useState<Edits>({});
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const hasChanges = Object.keys(edits).length > 0;
 
   const loadSections = async () => {
     setLoading(true);
@@ -46,6 +58,17 @@ export default function AttendanceScreen() {
     if (selected) fetchAttendance(selected, date);
   }, [selected, date]);
 
+  useEffect(() => {
+    let ignore = false; // a newer date supersedes this response
+    setDayLoading(true);
+    setDay(null);
+    api.get<DayStatus>(`/daily-attendance/day?date=${date}`)
+      .then(d => { if (!ignore) setDay(d); })
+      .catch(() => { if (!ignore) setDay(null); }) // can't tell: treat the day as open, never block on a failed lookup
+      .finally(() => { if (!ignore) setDayLoading(false); });
+    return () => { ignore = true; };
+  }, [date]);
+
   // If the app stays open past midnight, a screen showing "today" should follow the
   // calendar rather than keep saving against yesterday.
   useEffect(() => {
@@ -66,12 +89,13 @@ export default function AttendanceScreen() {
     try {
       const data = await api.get<any[]>(`/daily-attendance?sectionId=${sec.sectionId}&date=${d}&academicYearId=${sec.academicYearId}`);
       if (mine !== fetchSeq.current) return;
-      setRecords(Array.isArray(data) ? data : []);
-      setHasChanges(false);
+      setRaw(Array.isArray(data) ? (data as ServerRecord[]) : []);
+      setEdits({});
       setLoadError(null);
     } catch (err) {
       if (mine !== fetchSeq.current) return;
-      setRecords([]);
+      setRaw([]);
+      setEdits({});
       setLoadError(getErrorMessage(err));
     } finally { if (mine === fetchSeq.current) setFetching(false); }
   };
@@ -86,18 +110,16 @@ export default function AttendanceScreen() {
     ]);
   };
 
+  const closed = isClosed(day);
+  const shown = showRecords(raw, edits, closed);
+
   const toggleStatus = (studentId: string) => {
-    setRecords(prev => prev.map(r => {
-      if (r.studentId !== studentId) return r;
-      const next = r.status === 'PRESENT' ? 'ABSENT' : 'PRESENT';
-      return { ...r, status: next };
-    }));
-    setHasChanges(true);
+    const current = shown.find(r => r.studentId === studentId)?.status ?? null;
+    setEdits(prev => ({ ...prev, [studentId]: nextStatus(current) }));
   };
 
-  const markAll = (status: 'PRESENT' | 'ABSENT') => {
-    setRecords(prev => prev.map(r => ({ ...r, status })));
-    setHasChanges(true);
+  const markAll = (status: Status) => {
+    setEdits(Object.fromEntries(raw.map(r => [r.studentId, status])) as Edits);
   };
 
   const handleSave = async () => {
@@ -108,13 +130,32 @@ export default function AttendanceScreen() {
         sectionId: selected.sectionId,
         date,
         academicYearId: selected.academicYearId,
-        records: records.map(r => ({ studentId: r.studentId, status: r.status || 'PRESENT' })),
+        records: toPayload(shown),
       });
-      Alert.alert('Saved', 'Attendance saved successfully.');
-      setHasChanges(false);
     } catch (err) {
       Alert.alert('Error', getErrorMessage(err));
-    } finally { setSaving(false); }
+      setSaving(false);
+      return;
+    }
+
+    // Read it back: show what the server now holds, not what we think we sent, so
+    // "Saved" and the screen can never disagree with what is actually stored.
+    try {
+      fetchSeq.current++; // supersede any older in-flight load
+      const data = await api.get<ServerRecord[]>(
+        `/daily-attendance?sectionId=${selected.sectionId}&date=${date}&academicYearId=${selected.academicYearId}`,
+      );
+      const stored = Array.isArray(data) ? data : [];
+      setRaw(stored);
+      setEdits({});
+      const { present, absent } = countStatuses(showRecords(stored, {}, closed));
+      Alert.alert('Saved', savedSummary(present, absent));
+    } catch {
+      setEdits({});
+      Alert.alert('Saved', "Attendance was saved, but we couldn't reload it to double-check. Pull back to this screen to refresh.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <LoadingScreen />;
@@ -124,8 +165,10 @@ export default function AttendanceScreen() {
     return <EmptyState message="You are not assigned as class teacher for any section." icon="🏫" />;
   }
 
-  const presentCount = records.filter(r => r.status === 'PRESENT').length;
-  const absentCount = records.filter(r => r.status === 'ABSENT').length;
+  const { present: presentCount, absent: absentCount } = countStatuses(shown);
+  const notSaved = unsavedCount(raw);
+  const showSave = needsSave(hasChanges, raw, closed) && !isFutureBS(date) && !dayLoading;
+  const closedWhy = (day?.reasons ?? []).map(reasonText).join(', ');
 
   return (
     <View style={styles.container}>
@@ -171,7 +214,18 @@ export default function AttendanceScreen() {
         </Row>
       </View>
 
+      {/* Closed day: informational only. The list below is grey (nothing recorded, nobody assumed present). */}
+      {closed && !isFutureBS(date) && !dayLoading && (
+        <View style={styles.closedCard}>
+          <Text style={styles.closedTitle}>Closed: {closedWhy}</Text>
+          <Text style={styles.closedText}>
+            Attendance isn't normally taken on this day. Mark All Present, or tap students individually, only if school was held.
+          </Text>
+        </View>
+      )}
+
       {/* Quick mark all */}
+      {!dayLoading && (
       <Row style={styles.markAllRow}>
         <TouchableOpacity style={[styles.markAllBtn, { backgroundColor: Colors.successBg }]} onPress={() => markAll('PRESENT')}>
           <Text style={[styles.markAllText, { color: Colors.success }]}>Mark All Present</Text>
@@ -180,36 +234,46 @@ export default function AttendanceScreen() {
           <Text style={[styles.markAllText, { color: Colors.danger }]}>Mark All Absent</Text>
         </TouchableOpacity>
       </Row>
+      )}
+
+      {/* A day nobody has saved yet shows everyone as present: say so, so a default is never mistaken for a record. */}
+      {!closed && !dayLoading && !fetching && !loadError && notSaved > 0 && !isFutureBS(date) && (
+        <View style={styles.notSavedBanner}>
+          <Text style={styles.notSavedText}>
+            Not saved yet. Everyone is shown present — tap a student to mark them absent, then Save.
+          </Text>
+        </View>
+      )}
 
       {/* Student list */}
-      {fetching ? (
+      {(fetching || dayLoading) ? (
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={() => selected && fetchAttendance(selected, date)} />
       ) : (
         <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
-          {records.map(r => (
+          {shown.map(r => (
             <TouchableOpacity
               key={r.studentId}
-              style={[styles.studentRow, r.status === 'ABSENT' && styles.studentRowAbsent]}
+              style={[styles.studentRow, r.status === 'ABSENT' && styles.studentRowAbsent, r.status === null && styles.studentRowGrey]}
               onPress={() => toggleStatus(r.studentId)}
               activeOpacity={0.7}
             >
               <View style={styles.rollBadge}>
                 <Text style={styles.rollText}>{r.rollNo ?? '—'}</Text>
               </View>
-              <Text style={styles.studentName}>{r.studentName}</Text>
-              <View style={[styles.statusDot, { backgroundColor: r.status === 'PRESENT' ? Colors.success : r.status === 'ABSENT' ? Colors.danger : Colors.border }]} />
+              <Text style={[styles.studentName, r.status === null && styles.studentNameGrey]}>{r.studentName}</Text>
+              <View style={[styles.statusDot, { backgroundColor: r.status === 'ABSENT' ? Colors.danger : r.status === 'PRESENT' ? Colors.success : Colors.border }]} />
             </TouchableOpacity>
           ))}
-          {records.length === 0 && !loadError && <EmptyState message="No students found in this section." icon="👥" />}
+          {shown.length === 0 && !loadError && <EmptyState message="No students found in this section." icon="👥" />}
         </ScrollView>
       )}
 
       {/* Save button */}
-      {hasChanges && (
+      {showSave && (
         <View style={styles.saveBar}>
-          <Button title={saving ? 'Saving...' : 'Save Attendance'} onPress={handleSave} loading={saving} style={styles.saveBtn} />
+          <Button title={saving ? 'Saving...' : `Save Attendance (${presentCount} present, ${absentCount} absent)`} onPress={handleSave} loading={saving} style={styles.saveBtn} />
         </View>
       )}
     </View>
@@ -245,10 +309,17 @@ const styles = StyleSheet.create({
 
   list: { flex: 1, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
   studentRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2, elevation: 1 },
+  studentRowGrey: { backgroundColor: '#f3f4f6', opacity: 0.85 },
+  studentNameGrey: { color: Colors.textMuted },
   studentRowAbsent: { backgroundColor: '#fff8f8', borderWidth: 1, borderColor: Colors.danger + '30' },
   rollBadge: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: Colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
   rollText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
   studentName: { flex: 1, fontSize: FontSize.md, color: Colors.text },
+  closedCard: { marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1' },
+  closedTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#334155' },
+  closedText: { fontSize: FontSize.sm, color: '#475569', marginTop: 4, lineHeight: 20 },
+  notSavedBanner: { marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warning + '55' },
+  notSavedText: { fontSize: FontSize.sm, color: Colors.warning, lineHeight: 20 },
   statusDot: { width: 14, height: 14, borderRadius: 7 },
 
   saveBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.lg, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.border },

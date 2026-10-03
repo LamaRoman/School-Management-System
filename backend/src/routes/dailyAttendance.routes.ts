@@ -5,6 +5,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifySection, verifyAcademicYear, verifyStudent } from "../utils/schoolScope";
+import { getDayStatus } from "../services/schoolDay.service";
 
 const router = Router();
 
@@ -45,6 +46,14 @@ router.get("/", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) =>
   });
 
   res.json({ data: attendance });
+});
+
+// GET /api/daily-attendance/day?date=YYYY/MM/DD — is this a closed day (weekly off day,
+// school holiday or national holiday) and why. Informational only: it never blocks a save,
+// the screens use it to explain the day and to ask before recording a closed one.
+router.get("/day", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) => {
+  const date = String(req.query.date ?? "");
+  res.json({ data: await getDayStatus(getSchoolId(req), date) });
 });
 
 // POST /api/daily-attendance/bulk — mark attendance for entire section

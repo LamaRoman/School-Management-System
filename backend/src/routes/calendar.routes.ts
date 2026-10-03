@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { revalidateWebsite } from "../services/websiteRevalidate.service";
+import { DEFAULT_WEEKLY_OFF_DAYS } from "../services/schoolDay.service";
 
 const router = Router();
 
@@ -18,12 +19,7 @@ const EVENT_TYPES = ["EVENT", "HOLIDAY", "MEETING", "EXAM", "OTHER"] as const;
 // master calendar (national holidays etc.), which are read-only here and
 // flagged isMaster so the UI can lock them.
 
-router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
-  const schoolId = getSchoolId(req);
-  const { year, from, limit } = req.query;
-
-  const dateFilter = year ? { startsWith: `${year}/` } : from ? { gte: String(from) } : undefined;
-
+async function loadMergedEvents(schoolId: string, dateFilter: { startsWith: string } | { gte: string } | undefined) {
   const [schoolEvents, masterEvents] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: { schoolId, ...(dateFilter ? { date: dateFilter } : {}) },
@@ -36,7 +32,7 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
     }),
   ]);
 
-  let merged = [
+  return [
     ...masterEvents.map((e) => ({
       id: e.id,
       title: e.title,
@@ -56,10 +52,39 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
       createdBy: e.createdBy,
     })),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
 
+router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const { year, from, limit } = req.query;
+
+  const dateFilter = year ? { startsWith: `${year}/` } : from ? { gte: String(from) } : undefined;
+  let merged = await loadMergedEvents(schoolId, dateFilter);
   if (limit) merged = merged.slice(0, Number(limit));
 
   res.json({ data: merged });
+});
+
+// ─── GET /api/calendar-events/view?year=YYYY — read-only calendar for staff ──
+// The same merged list (school events + national holidays) plus the school's weekly days
+// off, for the teacher and accountant app/screens. Created-by emails are left out: staff
+// only need what is on the calendar, not who entered it.
+router.get("/view", authenticate, authorize("ADMIN", "TEACHER", "ACCOUNTANT"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const year = String(req.query.year ?? "");
+  if (!/^\d{4}$/.test(year)) return res.status(400).json({ error: "year (BS, e.g. 2083) is required" });
+
+  const [events, school] = await Promise.all([
+    loadMergedEvents(schoolId, { startsWith: `${year}/` }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: { weeklyOffDays: true } }),
+  ]);
+
+  res.json({
+    data: {
+      weeklyOffDays: school?.weeklyOffDays?.length ? school.weeklyOffDays : DEFAULT_WEEKLY_OFF_DAYS,
+      events: events.map(({ id, title, description, date, type, isMaster }) => ({ id, title, description, date, type, isMaster })),
+    },
+  });
 });
 
 // ─── POST /api/calendar-events ──────────────────────────

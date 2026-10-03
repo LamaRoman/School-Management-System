@@ -5,6 +5,7 @@ import { verifyAcademicYear } from "../utils/schoolScope";
 import {
   calculatePercentage,
 } from "../services/grading.service";
+import { getDayStatus, type DayStatus } from "../services/schoolDay.service";
 
 const router = Router();
 
@@ -90,14 +91,25 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       todayPresent = byStatus.find((r) => r.status === "PRESENT")?._count._all ?? 0;
       todayAbsent = byStatus.find((r) => r.status === "ABSENT")?._count._all ?? 0;
     }
-    return { todayPresent, todayAbsent };
+    // Is today a weekly day off / holiday? Lets the dashboard say "Closed" instead of an
+    // empty "—". Only computed when the client sent a valid todayBS; never fails the dashboard.
+    let todayStatus: Pick<DayStatus, "closed" | "reasons"> | null = null;
+    if (todayBS) {
+      try {
+        const st = await getDayStatus(schoolId, String(todayBS));
+        todayStatus = { closed: st.closed, reasons: st.reasons };
+      } catch {
+        todayStatus = null;
+      }
+    }
+    return { todayPresent, todayAbsent, todayStatus };
   };
 
   const cached = readDashboardCache(schoolId, yearId);
   if (cached) {
-    const { todayPresent, todayAbsent } = await todayCounts();
+    const { todayPresent, todayAbsent, todayStatus } = await todayCounts();
     return res.json({
-      data: { ...cached, summary: { ...cached.summary, todayPresent, todayAbsent } },
+      data: { ...cached, summary: { ...cached.summary, todayPresent, todayAbsent, todayStatus } },
     });
   }
 
@@ -391,10 +403,10 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
   };
   writeDashboardCache(schoolId, yearId, payload);
 
-  const { todayPresent, todayAbsent } = await todayCounts();
+  const { todayPresent, todayAbsent, todayStatus } = await todayCounts();
 
   res.json({
-    data: { ...payload, summary: { ...payload.summary, todayPresent, todayAbsent } },
+    data: { ...payload, summary: { ...payload.summary, todayPresent, todayAbsent, todayStatus } },
   });
 });
 

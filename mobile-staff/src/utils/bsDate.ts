@@ -1,4 +1,4 @@
-import NepaliDateImport from 'nepali-date-converter';
+import NepaliDateImport, { dateConfigMap } from 'nepali-date-converter';
 
 // Metro gives the class directly; Node's ESM loader (used by `npm test`) wraps the
 // UMD build so the class is on `.default`. Accept either.
@@ -63,3 +63,42 @@ function shiftBSDate(dateStr: string, deltaDays: number): string {
 
 export const getPreviousDayBS = (dateStr: string): string => shiftBSDate(dateStr, -1);
 export const getNextDayBS = (dateStr: string): string => shiftBSDate(dateStr, 1);
+
+// ─── Month grid (for the calendar screen) ────────────────
+
+export const BS_MONTH_NAMES = [
+  'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
+  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra',
+];
+
+// The library's own key spellings differ from BS_MONTH_NAMES ("Asar", "Aswin"), so keep a
+// dedicated list for the dateConfigMap lookup.
+const DATE_CONFIG_MONTH_KEYS = [
+  'Baisakh', 'Jestha', 'Asar', 'Shrawan', 'Bhadra', 'Aswin',
+  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra',
+];
+
+/** Number of days in a BS month (month is 1-12). Read from the library's table, not probed. */
+export function getDaysInBSMonth(year: number, month: number): number {
+  const map = (dateConfigMap as Record<string, Record<string, number> | undefined>)[String(year)];
+  return map?.[DATE_CONFIG_MONTH_KEYS[month - 1]] ?? 30;
+}
+
+/** Weekday (0=Sunday .. 6=Saturday) of the 1st of a BS month. */
+export function getStartWeekday(year: number, month: number): number {
+  try {
+    return new NepaliDate(year, month - 1, 1).toJsDate().getDay();
+  } catch {
+    return 0;
+  }
+}
+
+export function formatBSDate(year: number, month: number, day: number): string {
+  return `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+}
+
+/** "17 Ashwin 2083" */
+export function formatBSDateLong(dateStr: string): string {
+  const p = parseBSDate(dateStr);
+  return p ? `${p.day} ${BS_MONTH_NAMES[p.month - 1] ?? ''} ${p.year}` : dateStr;
+}

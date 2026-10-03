@@ -5,6 +5,7 @@ import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { uploadLogo, deleteLogo } from "../services/upload.service";
 import { sanitizeSchool } from "../utils/sanitizeSchool";
+import { isAllowedWeeklyOff } from "../services/schoolDay.service";
 
 const router = Router();
 const upload = multer({
@@ -70,6 +71,22 @@ router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const data = schoolSchema.parse(req.body);
   const school = await prisma.school.update({ where: { id: schoolId }, data });
   res.json({ data: sanitizeSchool(school) });
+});
+
+// PUT /api/school/week — which weekdays the school is closed every week.
+// Only two patterns are offered: Saturday only [6], or Saturday + Sunday [0, 6].
+// A dedicated endpoint (not PUT /school) so changing it can never overwrite the profile.
+const weekSchema = z.object({
+  weeklyOffDays: z.array(z.number().int().min(0).max(6)).max(2).refine(isAllowedWeeklyOff, {
+    message: "Choose Saturday only, or Saturday and Sunday.",
+  }),
+});
+router.put("/week", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const { weeklyOffDays } = weekSchema.parse(req.body);
+  const days = [...new Set(weeklyOffDays)].sort((a, b) => a - b);
+  await prisma.school.update({ where: { id: schoolId }, data: { weeklyOffDays: days } });
+  res.json({ data: { weeklyOffDays: days } });
 });
 
 // POST /api/school/logo — upload school logo
