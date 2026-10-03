@@ -225,3 +225,59 @@ describe("the public website feed keeps its old shape", () => {
     expect(one).toHaveLength(1);
   });
 });
+
+describe("schools never see or touch each other's calendars (multi-tenancy)", () => {
+  let adminBToken: string;
+  let aEventId: string;
+  let bEventId: string;
+
+  beforeAll(async () => {
+    await createTestUser(schoolB.id, "ADMIN", { email: "admin@rgb.test", password: "Test@123" });
+    adminBToken = (await loginAs("admin@rgb.test")).token;
+    aEventId = (await prisma.calendarEvent.findFirstOrThrow({ where: { schoolId: schoolA.id, title: { startsWith: "Summer Holiday" } } })).id;
+    const b = await request(app).post("/calendar-events").set("Authorization", authHeader(adminBToken))
+      .send({ title: "B Winter Break", date: "2083/09/01", endDate: "2083/09/05", type: "HOLIDAY" }).expect(201);
+    bEventId = b.body.data.id;
+  });
+
+  it("B's range closes B's days only, A's range closes A's days only", async () => {
+    expect((await dayOf(teacherBToken, "2083/09/03")).closed).toBe(true);
+    expect((await dayOf(teacherAToken, "2083/09/03")).closed).toBe(false);
+    expect((await dayOf(teacherBToken, "2083/06/20")).closed).toBe(false);
+    expect((await dayOf(teacherAToken, "2083/06/20")).closed).toBe(true);
+  });
+
+  it("each school's calendar list and staff view contain only its own entries", async () => {
+    const aList = (await request(app).get("/calendar-events?year=2083").set("Authorization", authHeader(adminAToken)).expect(200)).body.data;
+    const bList = (await request(app).get("/calendar-events?year=2083").set("Authorization", authHeader(adminBToken)).expect(200)).body.data;
+    expect(aList.some((e: any) => e.id === bEventId)).toBe(false);
+    expect(bList.some((e: any) => e.id === aEventId)).toBe(false);
+    const bView = (await request(app).get("/calendar-events/view?year=2083").set("Authorization", authHeader(teacherBToken)).expect(200)).body.data.events;
+    expect(bView.some((e: any) => e.id === aEventId)).toBe(false);
+  });
+
+  it("B cannot edit or delete A's entry, and A's entry is unchanged", async () => {
+    const before = await prisma.calendarEvent.findUniqueOrThrow({ where: { id: aEventId } });
+    await request(app).put(`/calendar-events/${aEventId}`).set("Authorization", authHeader(adminBToken)).send({ title: "hijacked", endDate: null }).expect(404);
+    await request(app).delete(`/calendar-events/${aEventId}`).set("Authorization", authHeader(adminBToken)).expect(404);
+    const after = await prisma.calendarEvent.findUniqueOrThrow({ where: { id: aEventId } });
+    expect(after).toMatchObject({ title: before.title, date: before.date, endDate: before.endDate, schoolId: schoolA.id });
+  });
+
+  it("the weekly day-off setting is per school", async () => {
+    await request(app).put("/school/week").set("Authorization", authHeader(adminBToken)).send({ weeklyOffDays: [0, 6] }).expect(200);
+    const sunday = "2083/06/18";
+    expect((await dayOf(teacherBToken, sunday)).reasons.map((r: any) => r.kind)).toContain("WEEKLY_OFF");
+    const a = await prisma.school.findUniqueOrThrow({ where: { id: schoolA.id }, select: { weeklyOffDays: true } });
+    expect(a.weeklyOffDays).toEqual([6]);
+  });
+
+  it("the public feed of one school never contains the other's entries", async () => {
+    const aFeed = (await request(app).get(`/public/calendar/${schoolA.id}`).expect(200)).body.data;
+    expect(aFeed.some((e: any) => e.title === "B Winter Break")).toBe(false);
+    await prisma.school.update({ where: { id: schoolB.id }, data: { websiteUrl: "https://range-b.example.test" } });
+    const bFeed = (await request(app).get(`/public/calendar/${schoolB.id}`).expect(200)).body.data;
+    expect(bFeed.filter((e: any) => e.title === "B Winter Break")).toHaveLength(5);
+    expect(bFeed.some((e: any) => /Summer Holiday/.test(e.title))).toBe(false);
+  });
+});
