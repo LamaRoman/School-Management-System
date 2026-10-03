@@ -22,11 +22,19 @@ const EVENT_TYPES = ["EVENT", "HOLIDAY", "MEETING", "EXAM", "OTHER"] as const;
 
 type EventWindow = { year?: string; from?: string } | undefined;
 
-async function loadMergedEvents(schoolId: string, window: EventWindow) {
+// What parents and students may see: the same types the public website publishes. Internal
+// staff MEETINGs and EXAM schedules stay with staff.
+const FAMILY_VISIBLE_TYPES = ["EVENT", "HOLIDAY"] as const;
+
+async function loadMergedEvents(schoolId: string, window: EventWindow, types?: readonly string[]) {
   // A multi-day entry belongs to every year (and "from" window) it touches, not just the one
   // its first day is in — a break can run across the BS new year.
   const schoolWhere: any = { schoolId };
   const masterWhere: any = {};
+  if (types) {
+    schoolWhere.type = { in: [...types] };
+    masterWhere.type = { in: [...types] };
+  }
   if (window?.year) {
     schoolWhere.OR = [{ date: { startsWith: `${window.year}/` } }, { endDate: { startsWith: `${window.year}/` } }];
     masterWhere.date = { startsWith: `${window.year}/` };
@@ -84,15 +92,17 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
 
 // ─── GET /api/calendar-events/view?year=YYYY — read-only calendar for staff ──
 // The same merged list (school events + national holidays) plus the school's weekly days
-// off, for the teacher and accountant app/screens. Created-by emails are left out: staff
-// only need what is on the calendar, not who entered it.
-router.get("/view", authenticate, authorize("ADMIN", "TEACHER", "ACCOUNTANT"), async (req, res) => {
+// off, for the teacher and accountant app/screens — and, limited to events and holidays, for
+// parents and students. Created-by emails are left out: readers only need what is on the
+// calendar, not who entered it.
+router.get("/view", authenticate, authorize("ADMIN", "TEACHER", "ACCOUNTANT", "PARENT", "STUDENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const year = String(req.query.year ?? "");
   if (!/^\d{4}$/.test(year)) return res.status(400).json({ error: "year (BS, e.g. 2083) is required" });
+  const isFamily = req.user!.role === "PARENT" || req.user!.role === "STUDENT";
 
   const [events, school] = await Promise.all([
-    loadMergedEvents(schoolId, { year }),
+    loadMergedEvents(schoolId, { year }, isFamily ? FAMILY_VISIBLE_TYPES : undefined),
     prisma.school.findUnique({ where: { id: schoolId }, select: { weeklyOffDays: true } }),
   ]);
 
