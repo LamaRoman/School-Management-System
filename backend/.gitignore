@@ -28,3 +28,6 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Real student data for one-off imports (names + marks) — never commit
+prisma/private/
