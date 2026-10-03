@@ -80,7 +80,7 @@ const sh = StyleSheet.create({
   left: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   title: { fontSize: FontSize.sm, fontWeight: FontWeight.bold as any, textTransform: 'uppercase', letterSpacing: 0.5 },
   total: { fontSize: FontSize.sm, fontWeight: FontWeight.bold as any },
-  badge: { backgroundColor: Colors.error, borderRadius: Radius.full, paddingHorizontal: 6, paddingVertical: 2 },
+  badge: { backgroundColor: Colors.danger, borderRadius: Radius.full, paddingHorizontal: 6, paddingVertical: 2 },
   badgeTxt: { color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold as any },
 });
 
@@ -448,7 +448,7 @@ export default function FeeCollectionScreen() {
             {/* Arrears */}
             {invoice.arrearItems.length > 0 && (
               <Card>
-                <SectionHeader title="Arrears" total={invoice.totalArrears} color={Colors.error} badge="MUST PAY" />
+                <SectionHeader title="Arrears" total={invoice.totalArrears} color={Colors.danger} badge="MUST PAY" />
                 <View style={s.arrearsBanner}>
                   <Text style={s.arrearsBannerTxt}>
                     ⚠️ Arrears must be cleared before paying {invoice.month}.
@@ -630,7 +630,7 @@ const s = StyleSheet.create({
   allPaid: { fontSize: FontSize.md, color: Colors.success, fontWeight: FontWeight.medium as any, paddingVertical: Spacing.sm },
   // Arrears banner
   arrearsBanner: { backgroundColor: '#FEF2F2', borderRadius: Radius.sm, padding: Spacing.sm, marginBottom: Spacing.sm },
-  arrearsBannerTxt: { fontSize: FontSize.sm, color: Colors.error, fontWeight: FontWeight.medium as any },
+  arrearsBannerTxt: { fontSize: FontSize.sm, color: Colors.danger, fontWeight: FontWeight.medium as any },
   // Advance stepper
   advanceSub: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.md },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

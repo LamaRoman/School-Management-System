@@ -60,7 +60,7 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
         status: z.enum(["PRESENT", "ABSENT"]),
         remarks: z.string().max(300).nullable().optional(),
       })
-    ).min(1).max(200),
+    ).min(1).max(500),
   });
 
   const { sectionId, date, academicYearId, records } = schema.parse(req.body);

@@ -1,16 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert,
 } from 'react-native';
 import { api, getErrorMessage } from '../../api/client';
-import { Button, EmptyState, LoadingScreen } from '../../components/ui';
+import { Button, EmptyState, ErrorState, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
+import {
+  MarkEntry, ExistingMark, buildMarksForm, emptyEntry,
+  overFullMarks, unparseableMarks, toBulkPayload,
+} from '../../utils/marksForm';
 
-interface Assignment { assignmentId: string; sectionId: string; sectionName: string; gradeId: string; gradeName: string; academicYearId: string; subjectId: string; subjectName: string; fullTheoryMarks: number; fullPracticalMarks: number; }
+interface Assignment {
+  assignmentId: string; sectionId: string; sectionName: string; gradeId: string; gradeName: string;
+  academicYearId: string; subjectId: string; subjectName: string; fullTheoryMarks: number; fullPracticalMarks: number;
+  isTemporary?: boolean; expiresAt?: string | null;
+}
 interface ExamType { id: string; name: string; }
 interface Student { id: string; name: string; rollNo?: number; }
-interface MarkEntry { theoryMarks: string; practicalMarks: string; isAbsent: boolean; }
+
+// 'ready' means the roster AND the existing marks for the selected class + exam both
+// loaded. Saving is only allowed then: a form that failed to load looks empty, and
+// saving it would overwrite real marks with blanks.
+type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 export default function MarksScreen() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -20,122 +32,91 @@ export default function MarksScreen() {
   const [selectedAssignment, setSelectedAssignment] = useState('');
   const [selectedExam, setSelectedExam] = useState('');
   const [loading, setLoading] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [formState, setFormState] = useState<LoadState>('idle');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>('/teacher-assignments/my');
-        const subs = data.subjectAssignments || [];
-        setAssignments(subs);
-        if (subs.length > 0) {
-          const yearId = subs[0].academicYearId;
-          const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${yearId}`);
-          setExamTypes(et);
-        }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+  const loadAssignments = async () => {
+    setLoading(true);
+    setInitError(null);
+    try {
+      const data = await api.get<any>('/teacher-assignments/my');
+      const subs: Assignment[] = data.subjectAssignments || [];
+      setAssignments(subs);
+      if (subs.length > 0) {
+        const et = await api.get<ExamType[]>(`/exam-types?academicYearId=${subs[0].academicYearId}`);
+        setExamTypes(et);
+      }
+    } catch (err) {
+      setInitError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadAssignments(); }, []);
 
   const current = assignments.find(a => a.assignmentId === selectedAssignment);
 
+  // Roster + existing marks for the selected class, subject and exam. Rebuilt from
+  // scratch every time the selection changes — never merged into the previous form.
+  const requestId = useRef(0);
   useEffect(() => {
-    if (!current) return;
-    const loadStudentsAndMarks = async () => {
+    if (!current || !selectedExam) { setFormState('idle'); return; }
+    const mine = ++requestId.current; // a newer selection supersedes this response
+    setMarks({});
+    setStudents([]);
+    setFormError(null);
+    setFormState('loading');
+    (async () => {
       try {
-        const stus = await api.get<Student[]>(`/students?sectionId=${current.sectionId}`);
+        // subjectId narrows an OPTIONAL subject to the students who take it; without
+        // it the server rejects the whole save for every student who doesn't.
+        const [stus, existing] = await Promise.all([
+          api.get<Student[]>(`/students?sectionId=${current.sectionId}&subjectId=${current.subjectId}`),
+          api.get<any[]>(`/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`),
+        ]);
+        if (mine !== requestId.current) return;
+        const saved: ExistingMark[] = (Array.isArray(existing) ? existing : []).map(m => ({
+          studentId: m.studentId, theoryMarks: m.theoryMarks, practicalMarks: m.practicalMarks, isAbsent: !!m.isAbsent,
+        }));
         setStudents(stus);
-
-        // Build initial empty marks
-        const initial: Record<string, MarkEntry> = {};
-        stus.forEach(s => { initial[s.id] = { theoryMarks: '', practicalMarks: '', isAbsent: false }; });
-
-        // Pre-fill existing marks if exam is already selected
-        if (selectedExam) {
-          try {
-            const existing = await api.get<any[]>(`/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`);
-            if (Array.isArray(existing)) {
-              existing.forEach((m: any) => {
-                if (initial[m.studentId]) {
-                  initial[m.studentId] = {
-                    theoryMarks: m.isAbsent ? '' : (m.theoryMarks != null ? String(m.theoryMarks) : ''),
-                    practicalMarks: m.isAbsent ? '' : (m.practicalMarks != null ? String(m.practicalMarks) : ''),
-                    isAbsent: m.isAbsent || false,
-                  };
-                }
-              });
-            }
-          } catch (_) {}
-        }
-        setMarks(initial);
-      } catch (err) { console.error(err); }
-    };
-    loadStudentsAndMarks();
-  }, [selectedAssignment]);
-
-  // Re-fetch marks when exam changes (students already loaded)
-  useEffect(() => {
-    if (!current || !selectedExam || students.length === 0) return;
-    api.get<any[]>(`/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`)
-      .then(existing => {
-        if (!Array.isArray(existing)) return;
-        setMarks(prev => {
-          const updated = { ...prev };
-          existing.forEach((m: any) => {
-            if (updated[m.studentId]) {
-              updated[m.studentId] = {
-                theoryMarks: m.isAbsent ? '' : (m.theoryMarks != null ? String(m.theoryMarks) : ''),
-                practicalMarks: m.isAbsent ? '' : (m.practicalMarks != null ? String(m.practicalMarks) : ''),
-                isAbsent: m.isAbsent || false,
-              };
-            }
-          });
-          return updated;
-        });
-      })
-      .catch(() => {});
-  }, [selectedExam]);
+        setMarks(buildMarksForm(stus.map(s => s.id), saved));
+        setFormState('ready');
+      } catch (err) {
+        if (mine !== requestId.current) return;
+        setFormError(getErrorMessage(err));
+        setFormState('error');
+      }
+    })();
+  }, [selectedAssignment, selectedExam, reload]);
 
   const updateMark = (studentId: string, field: keyof MarkEntry, value: string | boolean) => {
-    setMarks(prev => ({ ...prev, [studentId]: { ...prev[studentId], [field]: value } }));
+    setMarks(prev => ({ ...prev, [studentId]: { ...(prev[studentId] ?? emptyEntry()), [field]: value } }));
   };
 
   const handleSave = async () => {
-    if (!current || !selectedExam) return;
+    if (!current || !selectedExam || formState !== 'ready') return;
 
-    // Validate
-    const invalid = students.filter(s => {
-      const m = marks[s.id];
-      if (!m || m.isAbsent) return false;
-      const theory = parseFloat(m.theoryMarks);
-      const prac = parseFloat(m.practicalMarks);
-      if (m.theoryMarks && !isNaN(theory) && theory > current.fullTheoryMarks) return true;
-      if (m.practicalMarks && !isNaN(prac) && prac > current.fullPracticalMarks) return true;
-      return false;
-    });
-
-    if (invalid.length > 0) {
-      Alert.alert('Invalid marks', `Marks exceed full marks for ${invalid.length} student(s). Please check.`);
+    if (unparseableMarks(marks).length > 0) {
+      Alert.alert('Invalid marks', 'Some marks are not valid numbers. Please check.');
+      return;
+    }
+    const over = overFullMarks(marks, current.fullTheoryMarks, current.fullPracticalMarks);
+    if (over.length > 0) {
+      Alert.alert('Invalid marks', `Marks exceed full marks for ${over.length} student(s). Please check.`);
       return;
     }
 
     setSaving(true);
     try {
-      const marksArray = students.map(s => {
-        const m = marks[s.id] || { theoryMarks: '', practicalMarks: '', isAbsent: false };
-        return {
-          studentId: s.id,
-          theoryMarks: m.isAbsent ? null : (m.theoryMarks ? parseFloat(m.theoryMarks) : null),
-          practicalMarks: m.isAbsent ? null : (m.practicalMarks ? parseFloat(m.practicalMarks) : null),
-          isAbsent: m.isAbsent,
-        };
-      });
-
       await api.post('/marks/bulk', {
         subjectId: current.subjectId,
         examTypeId: selectedExam,
         academicYearId: current.academicYearId,
-        marks: marksArray,
+        marks: toBulkPayload(students.map(s => s.id), marks),
       });
       Alert.alert('Saved', 'Marks saved successfully.');
     } catch (err) {
@@ -144,9 +125,11 @@ export default function MarksScreen() {
   };
 
   if (loading) return <LoadingScreen />;
+  if (initError) return <ErrorState message={initError} onRetry={loadAssignments} />;
   if (assignments.length === 0) return <EmptyState message="No subject assignments found. Contact admin." icon="📝" />;
 
   const hasPractical = current && current.fullPracticalMarks > 0;
+  const ready = formState === 'ready';
 
   return (
     <View style={styles.container}>
@@ -162,11 +145,16 @@ export default function MarksScreen() {
                 onPress={() => setSelectedAssignment(a.assignmentId)}
               >
                 <Text style={[styles.pillText, selectedAssignment === a.assignmentId && styles.pillTextActive]}>
-                  {a.gradeName}-{a.sectionName} • {a.subjectName}
+                  {a.gradeName}-{a.sectionName} • {a.subjectName}{a.isTemporary ? ' (Temporary)' : ''}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+          {current?.isTemporary && (
+            <Text style={styles.tempNote}>
+              Temporary access{current.expiresAt ? ` until ${String(current.expiresAt).slice(0, 10)}` : ''}.
+            </Text>
+          )}
         </View>
 
         {/* Exam selector */}
@@ -187,8 +175,16 @@ export default function MarksScreen() {
           </View>
         )}
 
+        {selectedAssignment && selectedExam && formState === 'loading' && <LoadingScreen />}
+        {selectedAssignment && selectedExam && formState === 'error' && (
+          <ErrorState
+            message={`${formError ?? "Couldn't load the marks."}\nSaving is switched off so nothing already entered is overwritten.`}
+            onRetry={() => setReload(n => n + 1)}
+          />
+        )}
+
         {/* Marks table */}
-        {selectedAssignment && selectedExam && current && (
+        {selectedAssignment && selectedExam && ready && current && students.length > 0 && (
           <>
             {/* Header */}
             <View style={styles.tableHeader}>
@@ -239,12 +235,12 @@ export default function MarksScreen() {
           </>
         )}
 
-        {selectedAssignment && selectedExam && students.length === 0 && (
+        {selectedAssignment && selectedExam && ready && students.length === 0 && (
           <EmptyState message="No students in this section." icon="👥" />
         )}
       </ScrollView>
 
-      {selectedAssignment && selectedExam && students.length > 0 && (
+      {selectedAssignment && selectedExam && ready && students.length > 0 && (
         <View style={styles.saveBar}>
           <Button title={saving ? 'Saving...' : 'Save Marks'} onPress={handleSave} loading={saving} style={styles.saveBtn} />
         </View>
@@ -262,6 +258,7 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs, borderRadius: Radius.full, backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border },
   pillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   pillText: { fontSize: FontSize.sm, color: Colors.textMuted },
+  tempNote: { marginTop: Spacing.xs, fontSize: FontSize.xs, color: Colors.warning },
   pillTextActive: { color: Colors.white, fontWeight: FontWeight.medium },
 
   tableHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, backgroundColor: Colors.primary, borderRadius: Radius.md, marginBottom: 2 },

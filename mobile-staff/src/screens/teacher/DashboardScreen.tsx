@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
-import { api } from '../../api/client';
-import { Card, StatCard, Badge, LoadingScreen, Row, Divider } from '../../components/ui';
+import { api, getErrorMessage } from '../../api/client';
+import { Card, StatCard, Badge, ErrorState, LoadingScreen, Row, Divider } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 export default function TeacherDashboard({ navigation }: any) {
@@ -10,13 +10,15 @@ export default function TeacherDashboard({ navigation }: any) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       const assignments = await api.get<any>('/teacher-assignments/my');
       setData(assignments);
+      setError(null);
     } catch (err) {
-      console.error(err);
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -26,6 +28,7 @@ export default function TeacherDashboard({ navigation }: any) {
   useEffect(() => { fetchData(); }, []);
 
   if (loading) return <LoadingScreen />;
+  if (error && !data) return <ErrorState message={error} onRetry={() => { setLoading(true); fetchData(); }} />;
 
   const sections = data?.classTeacherSections || [];
   const subjects = data?.subjectAssignments || [];

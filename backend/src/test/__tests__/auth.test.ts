@@ -18,6 +18,11 @@ import {
   loginAs,
   authHeader,
 } from "../helpers";
+// Must come AFTER ../helpers: that import loads the app, which installs express-async-errors
+// before any route module is evaluated. Importing a route module first leaves its async
+// handlers unpatched, so a thrown AppError hangs the request instead of returning 401.
+import { REFRESH_GRACE_MS } from "../../routes/auth.routes";
+import { cleanupExpiredAuthRecords } from "../../middleware/auth";
 
 beforeAll(async () => {
   await cleanDatabase();
@@ -379,7 +384,7 @@ describe("POST /auth/refresh", () => {
     expect(res.body.data.refreshToken).not.toBe(refreshToken);
   });
 
-  it("should rotate refresh token (old one becomes invalid)", async () => {
+  it("should rotate refresh token (old one is rejected once the grace window has passed)", async () => {
     const { refreshToken: oldRefresh } = await loginAs("admin@authtest.com");
 
     // Use it once — should work
@@ -388,11 +393,40 @@ describe("POST /auth/refresh", () => {
       .send({ refreshToken: oldRefresh })
       .expect(200);
 
-    // Try to reuse the old refresh token — should fail (rotated)
+    // Age the rotation past the grace window; reusing the old token is now a replay
+    await prisma.refreshToken.updateMany({
+      where: { rotatedAt: { not: null } },
+      data: { rotatedAt: new Date(Date.now() - REFRESH_GRACE_MS - 5_000) },
+    });
     await request(app)
       .post("/auth/refresh")
       .send({ refreshToken: oldRefresh })
       .expect(401);
+  });
+
+  it("should let a just-rotated token retry within the grace window (lost response)", async () => {
+    const { refreshToken: oldRefresh } = await loginAs("admin@authtest.com");
+
+    const first = await request(app).post("/auth/refresh").send({ refreshToken: oldRefresh }).expect(200);
+    // The client never saw `first` (weak network) and retries with the token it still has
+    const retry = await request(app).post("/auth/refresh").send({ refreshToken: oldRefresh }).expect(200);
+
+    expect(retry.body.data.token).toBeTruthy();
+    expect(retry.body.data.refreshToken).not.toBe(oldRefresh);
+    expect(retry.body.data.refreshToken).not.toBe(first.body.data.refreshToken);
+    // ...and the pair it got back is itself usable
+    await request(app).post("/auth/refresh").send({ refreshToken: retry.body.data.refreshToken }).expect(200);
+  });
+
+  it("should sweep rotated tokens older than the grace window", async () => {
+    const { refreshToken } = await loginAs("admin@authtest.com");
+    await request(app).post("/auth/refresh").send({ refreshToken }).expect(200);
+    await prisma.refreshToken.updateMany({
+      where: { rotatedAt: { not: null } },
+      data: { rotatedAt: new Date(Date.now() - 10 * 60 * 1000) },
+    });
+    await cleanupExpiredAuthRecords();
+    expect(await prisma.refreshToken.count({ where: { rotatedAt: { not: null } } })).toBe(0);
   });
 
   it("should reject missing refresh token", async () => {

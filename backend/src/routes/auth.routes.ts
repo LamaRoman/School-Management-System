@@ -82,6 +82,12 @@ function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
+// How long an already-rotated refresh token keeps working. A mobile client on a weak
+// connection can have its refresh succeed server-side but lose the response; without
+// this it would retry with the dead token and be signed out for good. Short on purpose:
+// a replay after this window is rejected exactly as before.
+export const REFRESH_GRACE_MS = 30_000;
+
 async function createRefreshToken(userId: string): Promise<string> {
   const raw = randomBytes(48).toString("base64url"); // 48 bytes = 64 chars
   const tokenHash = hashToken(raw);
@@ -227,6 +233,14 @@ router.post("/refresh", async (req, res) => {
     throw new AppError("Invalid or expired refresh token", 401);
   }
 
+  // Already rotated and past the grace window: a replay, reject it. (Within the
+  // window it is treated as a retry and served a fresh pair below.)
+  if (stored.rotatedAt && Date.now() - stored.rotatedAt.getTime() > REFRESH_GRACE_MS) {
+    clearAccessCookie(res);
+    clearRefreshCookie(res);
+    throw new AppError("Invalid or expired refresh token", 401);
+  }
+
   // Verify user is still active
   const user = await prisma.user.findUnique({
     where: { id: stored.userId },
@@ -239,9 +253,9 @@ router.post("/refresh", async (req, res) => {
     throw new AppError("Account has been deactivated", 401);
   }
 
-  // Rotate: delete old, create new
-  // Use deleteMany so a concurrent refresh does not throw "record not found"
-  await prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  // Rotate: keep the old row, marked, for the grace window (see REFRESH_GRACE_MS);
+  // updateMany so a concurrent refresh does not throw "record not found".
+  await prisma.refreshToken.updateMany({ where: { tokenHash, rotatedAt: null }, data: { rotatedAt: new Date() } });
   const newAccessToken = signAccessToken(user);
   const newRefreshToken = await createRefreshToken(user.id);
 

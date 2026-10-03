@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, getErrorMessage } from '../../api/client';
 import { useAuth } from '../../hooks/useAuth';
-import { Card, StatCard, LoadingScreen, EmptyState } from '../../components/ui';
+import { Card, StatCard, LoadingScreen, EmptyState, ErrorState } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS } from '../../utils/bsDate';
 
@@ -476,6 +476,9 @@ export default function AccountantDashboard({ navigation }: any) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // 'none' | 'partial' (some widgets failed to load) | 'all' (nothing loaded)
+  const [loadIssue, setLoadIssue] = useState<'none' | 'partial' | 'all'>('none');
+  const [loadMessage, setLoadMessage] = useState<string | null>(null);
 
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showAllReceipts, setShowAllReceipts] = useState(false);
@@ -495,15 +498,24 @@ export default function AccountantDashboard({ navigation }: any) {
       const today = getTodayBS();
       const currentMonth = getCurrentBSMonth();
 
+      // A widget that failed must be visible as failed — returning null here used to be
+      // indistinguishable from "no data", and showed Rs 0 collected when the request died.
+      let failures = 0;
+      let lastError: unknown = null;
+      const soft = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+        p.catch((e) => { failures++; lastError = e; return fallback; });
+
       const [cbData, summaryData, recentData, noticeData] = await Promise.all([
-        api.get<any>(`/accountant-reports/daily-cashbook?date=${today}&academicYearId=${active.id}`).catch(() => null),
-        api.get<any>(`/accountant-reports/monthly-summary?academicYearId=${active.id}&month=${currentMonth}`).catch(() => null),
-        api.get<any>('/accountant-reports/payment-history', {
+        soft(api.get<any>(`/accountant-reports/daily-cashbook?date=${today}&academicYearId=${active.id}`), null),
+        soft(api.get<any>(`/accountant-reports/monthly-summary?academicYearId=${active.id}&month=${currentMonth}`), null),
+        soft(api.get<any>('/accountant-reports/payment-history', {
           academicYearId: active.id,
           limit: 20,
-        }).catch(() => null),
-        api.get<any[]>('/notices').catch(() => []),
+        }), null),
+        soft(api.get<any[]>('/notices'), [] as any[]),
       ]);
+      setLoadIssue(failures === 0 ? 'none' : failures >= 4 ? 'all' : 'partial');
+      setLoadMessage(failures > 0 ? getErrorMessage(lastError) : null);
 
       if (cbData) {
         setCashbook({
@@ -533,7 +545,8 @@ export default function AccountantDashboard({ navigation }: any) {
 
       setNotices(Array.isArray(noticeData) ? noticeData.slice(0, 3) : []);
     } catch (err) {
-      console.error('Accountant dashboard error:', getErrorMessage(err));
+      setLoadIssue('all');
+      setLoadMessage(getErrorMessage(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -552,6 +565,7 @@ export default function AccountantDashboard({ navigation }: any) {
   }, [navigation]);
 
   if (loading) return <LoadingScreen />;
+  if (loadIssue === 'all' && !activeYear) return <ErrorState message={loadMessage ?? undefined} onRetry={() => load()} />;
 
   return (
     <>
@@ -580,6 +594,13 @@ export default function AccountantDashboard({ navigation }: any) {
           </View>
         </View>
 
+        {loadIssue !== 'none' && (
+          <ErrorState
+            message={`${loadIssue === 'all' ? "Couldn't load the dashboard" : "Some figures couldn't be loaded"}${loadMessage ? ` — ${loadMessage}` : ''}`}
+            onRetry={() => load(true)}
+          />
+        )}
+
         {/* ── Monthly progress ── */}
         {monthProgress && (
           <View style={s.section}>
@@ -592,12 +613,12 @@ export default function AccountantDashboard({ navigation }: any) {
         <View style={s.statsRow}>
           <StatCard
             label="Collected"
-            value={cashbook ? `Rs ${cashbook.grandTotal.toLocaleString()}` : 'Rs 0'}
+            value={cashbook ? `Rs ${cashbook.grandTotal.toLocaleString()}` : '—'}
             color={Colors.success}
           />
           <StatCard
             label="Receipts"
-            value={cashbook?.totalReceipts ?? 0}
+            value={cashbook?.totalReceipts ?? '—'}
             color={Colors.info}
           />
         </View>

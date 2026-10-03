@@ -40,6 +40,11 @@ export default function MarksEntryPage() {
   const [selectedExam, setSelectedExam] = useState("");
 
   const [marks, setMarks] = useState<Record<string, MarkEntry>>({});
+  // Save is only allowed once the existing marks for the selected class + exam have
+  // loaded. If that load failed silently the form would look empty, and saving would
+  // overwrite real marks with blanks (or write the previous exam's marks to this one).
+  const [marksStatus, setMarksStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [marksReload, setMarksReload] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const currentAssignment = myAssignments.find((a) => a.assignmentId === selectedAssignment);
@@ -58,9 +63,16 @@ export default function MarksEntryPage() {
 
   // Load existing marks
   useEffect(() => {
-    if (!currentAssignment || !selectedExam || students.length === 0) return;
+    if (!currentAssignment || !selectedExam || students.length === 0) {
+      setMarksStatus("idle");
+      return;
+    }
+    let ignore = false; // a newer selection supersedes this response
+    setMarks({});
+    setMarksStatus("loading");
     api.get<any[]>(`/marks?sectionId=${currentAssignment.sectionId}&subjectId=${currentAssignment.subjectId}&examTypeId=${selectedExam}`)
       .then((existing) => {
+        if (ignore) return;
         const map: Record<string, MarkEntry> = {};
         students.forEach((s) => {
           const found = existing.find((m) => m.student.id === s.id);
@@ -69,8 +81,12 @@ export default function MarksEntryPage() {
             : { studentId: s.id, theoryMarks: null, practicalMarks: null, isAbsent: false };
         });
         setMarks(map);
-      }).catch(() => {});
-  }, [currentAssignment, selectedExam, students]);
+        setMarksStatus("ready");
+      })
+      .catch(() => { if (!ignore) setMarksStatus("error"); });
+    return () => { ignore = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssignment, selectedExam, students, marksReload]);
 
   const hasPractical = currentAssignment ? currentAssignment.fullPracticalMarks > 0 : false;
 
@@ -82,7 +98,7 @@ export default function MarksEntryPage() {
   };
 
   const handleSave = async () => {
-    if (!currentAssignment || !selectedExam) return;
+    if (!currentAssignment || !selectedExam || marksStatus !== "ready") return;
     setSaving(true);
     try {
       // Validate marks don't exceed full marks
@@ -207,13 +223,20 @@ export default function MarksEntryPage() {
             <div className="text-sm text-gray-500">
               {students.length} students
             </div>
-            <button onClick={handleSave} disabled={saving} className="btn-primary">
+            <button onClick={handleSave} disabled={saving || marksStatus !== "ready"} className="btn-primary">
               <Save size={16} /> {saving ? "Saving..." : "Save Marks"}
             </button>
           </div>
 
+          {marksStatus === "error" && (
+            <div className="card p-4 mb-4 border-red-200 bg-red-50 text-sm text-red-700 flex items-center justify-between gap-3">
+              <span>Couldn&apos;t load the existing marks. Saving is switched off so nothing already entered is overwritten.</span>
+              <button onClick={() => setMarksReload((n) => n + 1)} className="btn-outline text-xs shrink-0">Retry</button>
+            </div>
+          )}
+
           {/* Mobile: one card per student (the table needs ~500px). */}
-          <div className="md:hidden space-y-2">
+          <div className={`md:hidden space-y-2${marksStatus !== "ready" ? " opacity-50 pointer-events-none" : ""}`}>
             {students.map((s) => {
               const m = marks[s.id] || { studentId: s.id, theoryMarks: null, practicalMarks: null, isAbsent: false };
               const total = (m.theoryMarks || 0) + (m.practicalMarks || 0);
@@ -259,7 +282,7 @@ export default function MarksEntryPage() {
             })}
           </div>
 
-          <div className="card overflow-hidden hidden md:block">
+          <div className={`card overflow-hidden hidden md:block${marksStatus !== "ready" ? " opacity-50 pointer-events-none" : ""}`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="table-header">

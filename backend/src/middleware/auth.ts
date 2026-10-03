@@ -86,6 +86,9 @@ export async function cleanupExpiredAuthRecords(): Promise<void> {
   const now = new Date();
   await prisma.tokenBlocklist.deleteMany({ where: { expiresAt: { lt: now } } });
   await prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } });
+  // Rotated tokens are only kept for the refresh grace window (REFRESH_GRACE_MS in
+  // auth.routes.ts); 5 minutes is comfortably past it.
+  await prisma.refreshToken.deleteMany({ where: { rotatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } } });
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   await prisma.loginAttempt.deleteMany({ where: { updatedAt: { lt: oneHourAgo } } });
 }

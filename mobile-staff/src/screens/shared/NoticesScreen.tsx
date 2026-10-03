@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { api } from '../../api/client';
-import { Badge, EmptyState, LoadingScreen } from '../../components/ui';
+import { api, getErrorMessage } from '../../api/client';
+import { Badge, EmptyState, ErrorState, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Notice {
@@ -20,12 +20,14 @@ export default function NoticesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = async () => {
     try {
       const data = await api.get<Notice[]>('/notices');
       setNotices(data);
-    } catch (err) { console.error(err); } finally {
+      setError(null);
+    } catch (err) { setError(getErrorMessage(err)); } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -34,6 +36,7 @@ export default function NoticesScreen() {
   useEffect(() => { fetch(); }, []);
 
   if (loading) return <LoadingScreen />;
+  if (error && notices.length === 0) return <ErrorState message={error} onRetry={() => { setLoading(true); fetch(); }} />;
 
   return (
     <FlatList
