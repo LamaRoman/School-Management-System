@@ -12,7 +12,7 @@ Audited 2026-10-03 against `main` (a6ce2cc+). Scope: the Expo app in `mobile-sta
 | Replayed the accountant's read calls | 200s, shapes not compared field-by-field |
 | `npm ci` + `tsc --noEmit` | **fails: 3 errors** (finding M4) |
 | `expo-doctor` | 3 packages a patch behind (expo, expo-constants, expo-font) |
-| Ran the app | **not done** — no iOS Simulator (no `simctl`) and no Android emulator on this machine, so no screen has been seen running |
+| Ran the app | initially **not done** (no iOS Simulator / Android emulator); after the fixes it was run as a web build in a browser — see Status |
 | Write paths (`/marks/bulk`, `/daily-attendance/bulk`, fee payments) | payloads compared with the backend zod schemas by reading; **not executed** |
 
 The API contract is healthy: every endpoint the app calls exists, with a compatible role guard.
@@ -110,9 +110,16 @@ Backend — accept a just-rotated token for a short grace window.
 | No tests | partly | 12 unit tests for the mark form, refresh classification and BS date stepping (`npm test`, Node >= 22.18); backend refresh tests added |
 
 ### Still open
-- **The app has not been run on a device or simulator** (none available here). A production web bundle of the
-  whole app builds cleanly (838 modules), `tsc` passes, and the logic that was rewritten is unit-tested,
-  but no screen has been seen working. Do a manual pass on Marks, Attendance and sign-in before release.
+- **Still not run on a real device or simulator** (none available). After the fixes the app *was* run as a
+  web build in a browser against the dev backend with dummy data, and these were verified working:
+  sign-in; the dashboard's Notices action (opens a Notices screen); Mark Entry showing a different, correct
+  form for each exam (switching to Final, which has marks for only 4 students, shows blanks for everyone
+  else and nothing from Second Terminal); with the API stopped, Mark Entry shows "Can't reach the server",
+  hides Save, and Retry recovers once the API is back; reloading with the API stopped keeps the teacher signed
+  in (cached user) with a dashboard error and Retry; Attendance previous/next day, "Today" tag, next disabled
+  on today. **Not exercised:** saving marks/attendance, the unsaved-changes prompt (RN's `Alert` is a no-op on
+  web), refresh-token rotation inside the app, secure storage (web falls back to localStorage), keyboard and
+  touch behaviour, and anything on iOS/Android. Do a manual pass on a phone before release.
 - `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
   values only the project owner has (Expo account, real API URL).
 - Offline mark entry, push notifications and the missing web-parity screens (Results, report cards,
