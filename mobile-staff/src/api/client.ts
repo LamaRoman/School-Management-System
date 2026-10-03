@@ -5,7 +5,7 @@ import { classifyRefreshError, isNetworkError } from './refreshOutcome';
 
 // Reads from app.config.js → extra.apiUrl, which is set per EAS build profile.
 // Fallback to local dev server (no /api prefix — backend routes are at root).
-const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
+export const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
 const client = axios.create({
   baseURL: API_BASE,
   timeout: 15000,

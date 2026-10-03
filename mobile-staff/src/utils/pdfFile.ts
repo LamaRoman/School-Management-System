@@ -1,93 +1,32 @@
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Platform, Linking } from 'react-native';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { api, API_BASE } from '../api/client';
 
 // Getting a report card PDF onto the phone.
-//  - Android: saved straight into a folder the teacher chose once; the choice is remembered.
-//    Android only lets an app write to a folder the user picked, and since Android 11 it
-//    refuses the top-level Downloads folder itself — so the picker opens inside Downloads and
-//    the teacher makes/picks a sub-folder there (e.g. Downloads/Report Cards).
-//  - iPhone: apps cannot write to a Downloads folder, so the system share sheet opens
-//    (it has "Save to Files").
+//  - Android: ask the server for a short-lived download link and open it in the phone's
+//    browser. The browser then downloads it straight into Downloads, like any other download.
+//    (An app cannot write into Downloads itself without a native build, and the link carries
+//    no login — see backend/src/services/pdfLink.service.ts.)
+//  - iPhone: apps cannot write to Downloads, so the PDF is fetched with the app's own login and
+//    the system share sheet opens (it has "Save to Files").
 //  - Browser (testing only): opens in a new tab.
 
-const FOLDER_KEY = 'pdfFolder';
-// Where the folder picker starts, so "Create new folder" lands inside Downloads.
-const DOWNLOADS_HINT = 'content://com.android.externalstorage.documents/document/primary%3ADownload';
-interface SavedFolder { uri: string; name: string }
-
-export type SaveResult =
-  | { kind: 'saved'; filename: string; folderName: string }
-  | { kind: 'shared' }
-  | { kind: 'opened' };
-
-/** The user dismissed the folder picker. Not an error worth showing. */
-export class FolderPickCancelled extends Error {
-  constructor() { super('cancelled'); }
+/** Android: the browser takes over the download. Resolves once the browser has been opened. */
+export async function downloadInBrowser(pdfPath: string): Promise<void> {
+  const { url } = await api.post<{ url: string; expiresInSeconds: number }>('/pdf/link', { path: pdfPath });
+  await Linking.openURL(`${API_BASE}${url}`);
 }
 
-export const canChooseFolder = Platform.OS === 'android';
+export const usesBrowserDownload = Platform.OS === 'android';
 
-export async function getSavedFolderName(): Promise<string | null> {
-  return (await readFolder())?.name ?? null;
-}
-
-async function readFolder(): Promise<SavedFolder | null> {
-  try {
-    const raw = await AsyncStorage.getItem(FOLDER_KEY);
-    return raw ? (JSON.parse(raw) as SavedFolder) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Ask the user for a folder (Android) and remember it. */
-export async function chooseFolder(): Promise<SavedFolder> {
-  let dir: Directory;
-  try {
-    dir = await Directory.pickDirectoryAsync(DOWNLOADS_HINT);
-  } catch {
-    throw new FolderPickCancelled();
-  }
-  const folder = { uri: dir.uri, name: dir.name || 'the chosen folder' };
-  await AsyncStorage.setItem(FOLDER_KEY, JSON.stringify(folder));
-  return folder;
-}
-
-function writeInto(folder: SavedFolder, bytes: Uint8Array, filename: string): void {
-  const file = new Directory(folder.uri).createFile(filename, 'application/pdf');
-  file.write(bytes);
-}
-
-export async function savePdf(bytes: Uint8Array, filename: string): Promise<SaveResult> {
+/** iPhone / browser: hand already-downloaded bytes to the user. */
+export async function openPdfBytes(bytes: Uint8Array, filename: string): Promise<void> {
   if (Platform.OS === 'web') {
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
     window.open(url, '_blank');
-    return { kind: 'opened' };
+    return;
   }
-
-  if (Platform.OS === 'android') {
-    let folder = await readFolder();
-    if (folder) {
-      try {
-        writeInto(folder, bytes, filename);
-        return { kind: 'saved', filename, folderName: folder.name };
-      } catch {
-        // The folder was deleted or its permission revoked — fall through and ask again.
-      }
-    }
-    folder = await chooseFolder();
-    writeInto(folder, bytes, filename);
-    return { kind: 'saved', filename, folderName: folder.name };
-  }
-
-  await sharePdf(bytes, filename);
-  return { kind: 'shared' };
-}
-
-/** Open the system share sheet for a PDF (view, print, send, save to Files). */
-export async function sharePdf(bytes: Uint8Array, filename: string): Promise<void> {
   const file = new File(Paths.cache, filename);
   if (file.exists) file.delete();
   file.create();
