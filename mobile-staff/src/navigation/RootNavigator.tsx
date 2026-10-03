@@ -15,6 +15,7 @@ import MarksScreen from '../screens/teacher/MarksScreen';
 import ResultsScreen from '../screens/teacher/ResultsScreen';
 import StudentsScreen from '../screens/teacher/StudentsScreen';
 import ExamRoutineScreen from '../screens/teacher/ExamRoutineScreen';
+import ObservationsScreen from '../screens/teacher/ObservationsScreen';
 import HomeworkScreen from '../screens/teacher/HomeworkScreen';
 import AccountantDashboard from '../screens/accountant/DashboardScreen';
 import FeeCollectionScreen from '../screens/accountant/FeeCollectionScreen';
@@ -116,6 +117,11 @@ export default function RootNavigator() {
                 name="ExamRoutine"
                 component={ExamRoutineScreen}
                 options={{ headerShown: true, title: 'Exam Routine', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
+              />
+              <Stack.Screen
+                name="Observations"
+                component={ObservationsScreen}
+                options={{ headerShown: true, title: 'Observations', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
               />
               {/* Class teachers mark an exam complete here; reached from the dashboard. */}
               <Stack.Screen
