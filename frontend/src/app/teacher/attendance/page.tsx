@@ -104,8 +104,10 @@ export default function AttendancePage() {
           remarks: r.remarks,
         })),
       });
-      toast.success("Attendance saved");
+      toast.success(`Saved: ${presentCount} present, ${absentCount} absent`);
       setHasChanges(false);
+      // What's on screen is now what's stored, so it is no longer an unsaved default.
+      setRecords((prev) => prev.map((r) => ({ ...r, isMarked: true })));
       // Refresh the cache so a later visit to this day doesn't render what the
       // server held before the save. The grid itself is left alone — it already
       // shows exactly what was just written.
@@ -130,6 +132,10 @@ export default function AttendancePage() {
 
   const presentCount = records.filter((r) => r.status === "PRESENT").length;
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
+  // A day nobody has saved shows every student as present by default. That default is
+  // not a record, so say so — and let it be saved without having to tap something first.
+  const unsavedDay = records.length > 0 && records.some((r) => !r.isMarked);
+  const canSave = (hasChanges || unsavedDay) && !isFutureBS(date);
 
   if (loading) {
     return (
@@ -210,6 +216,13 @@ export default function AttendancePage() {
         </div>
       )}
 
+      {/* Unsaved-day notice */}
+      {unsavedDay && !isFutureBS(date) && !loadingRecords && (
+        <div className="card p-3 mb-4 border-amber-300 bg-amber-50 text-sm text-amber-800">
+          Not saved yet. Everyone is shown present — click a student to mark them absent, then Save.
+        </div>
+      )}
+
       {/* Stats Bar */}
       <div className="flex gap-3 mb-4">
         <div className="flex-1 card p-3 text-center">
@@ -233,7 +246,7 @@ export default function AttendancePage() {
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || !hasChanges || isFutureBS(date) || loadingRecords}
+          disabled={saving || !canSave || loadingRecords}
           className="btn-primary text-xs flex-1"
         >
           <Save size={14} /> {saving ? "Saving..." : "Save Attendance"}
@@ -276,7 +289,7 @@ export default function AttendancePage() {
       </div>
 
       {/* Sticky Save Button for Mobile */}
-      {hasChanges && !isFutureBS(date) && (
+      {canSave && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-lg">
           <button
             onClick={handleSave}
@@ -289,7 +302,7 @@ export default function AttendancePage() {
       )}
 
       {/* Bottom spacer when sticky button is visible */}
-      {hasChanges && !isFutureBS(date) && <div className="h-20" />}
+      {canSave && <div className="h-20" />}
     </div>
   );
 }
