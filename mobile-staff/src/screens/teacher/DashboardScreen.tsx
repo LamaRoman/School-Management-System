@@ -40,6 +40,7 @@ export default function TeacherDashboard({ navigation }: any) {
     { label: 'Results', icon: '📋', screen: 'Results', color: Colors.success },
     { label: 'Exam Routine', icon: '🗓️', screen: 'ExamRoutine', color: Colors.warning },
     { label: 'Observations', icon: '⭐', screen: 'Observations', color: Colors.accent },
+    { label: 'Report Cards', icon: '📄', screen: 'ReportCards', color: Colors.danger },
     { label: 'Homework', icon: '📚', screen: 'Homework', color: Colors.accent },
     { label: 'Notices', icon: '📢', screen: 'Notices', color: Colors.warning },
     { label: 'Calendar', icon: '📅', screen: 'Calendar', color: Colors.primaryLight },

@@ -24,6 +24,9 @@ import {
   defaultColumnSettings,
 } from "../services/pdf.service";
 import type { ReportCardColumnSettings } from "../services/pdf.service";
+import {
+  PDF_LINK_TTL_SECONDS, parsePdfPath, signPdfLink, verifyPdfLink, mintShortAccessToken,
+} from "../services/pdfLink.service";
 import { computeSectionRanks } from "../services/rank.service";
 import type { SectionRanking } from "../services/rank.service";
 
@@ -722,6 +725,47 @@ async function buildFinalReportData(
 }
 
 // ─── ROUTES ─────────────────────────────────────────────
+
+// ─── Download links (for opening a PDF in the phone's browser) ───────────────
+// POST /api/pdf/link { path: "/pdf/term/<student>/<exam>?mode=color" } -> { url, expiresInSeconds }
+// The caller must already be allowed to read that PDF; we check the same school/ownership
+// rules up front so a refusal reaches the app as a normal error instead of a browser page.
+router.post("/link", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const { route, mode } = parsePdfPath(req.body?.path);
+  const [, kind, id1] = route.match(/^\/(term|final|class\/term|class\/final)\/([^/]+)\//)!;
+  if (kind.startsWith("class")) {
+    if (req.user!.role !== "ADMIN" && req.user!.role !== "TEACHER") {
+      throw new AppError("You do not have permission to perform this action", 403);
+    }
+    await verifySection(id1, schoolId);
+    if (req.user!.role === "TEACHER") await verifySectionTeacherAccess(req.user!.userId, id1);
+  } else {
+    await verifyStudent(id1, schoolId);
+    await verifyStudentAccess(req.user!.userId, req.user!.role, id1);
+  }
+  res.json({
+    data: { url: `/pdf/dl/${signPdfLink(req.user!.userId, route, mode)}`, expiresInSeconds: PDF_LINK_TTL_SECONDS },
+  });
+});
+
+// GET /api/pdf/dl/:token — no Authorization header (a browser opens it). Re-enters this
+// router as the linked user, so the real route below does all its own checks.
+router.get("/dl/:token", async (req, res, next) => {
+  const { userId, route, mode } = verifyPdfLink(req.params.token);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, schoolId: true, isActive: true },
+  });
+  if (!user || !user.isActive) throw new AppError("This download link is no longer valid.", 401);
+
+  delete (req as any).cookies?.zs_access_token; // the link's user, not whoever else is signed in in this browser
+  req.headers.authorization = `Bearer ${mintShortAccessToken(user)}`;
+  (req as any).query = { mode };
+  res.setHeader("Cache-Control", "no-store");
+  req.url = route;
+  next();
+});
 
 // GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
 router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {

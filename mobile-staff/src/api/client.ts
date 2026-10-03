@@ -5,7 +5,7 @@ import { classifyRefreshError, isNetworkError } from './refreshOutcome';
 
 // Reads from app.config.js → extra.apiUrl, which is set per EAS build profile.
 // Fallback to local dev server (no /api prefix — backend routes are at root).
-const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
+export const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
 const client = axios.create({
   baseURL: API_BASE,
   timeout: 15000,
@@ -108,6 +108,28 @@ export const api = {
   delete: <T>(path: string) =>
     client.delete<{ data: T }>(path).then((r) => r.data.data),
 };
+
+/**
+ * Download a binary file (a PDF) with the same auth + refresh handling as every other call.
+ * PDF generation can take a while for a whole class, hence the long timeout. When the
+ * server answers with an error, its JSON body arrives as bytes: decode it so the usual
+ * `{ error }` message still reaches the user.
+ */
+export async function getFile(path: string): Promise<{ bytes: Uint8Array; disposition: string | null }> {
+  try {
+    const res = await client.get<ArrayBuffer>(path, { responseType: 'arraybuffer', timeout: 120000 });
+    return { bytes: new Uint8Array(res.data), disposition: (res.headers?.['content-disposition'] as string) ?? null };
+  } catch (err: any) {
+    const data = err?.response?.data;
+    if (data && typeof data === 'object' && 'byteLength' in data) {
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(new Uint8Array(data)));
+        err.response.data = parsed;
+      } catch { /* not JSON — leave as is */ }
+    }
+    throw err;
+  }
+}
 
 export const getErrorMessage = (err: any): string => {
   if (isNetworkError(err)) return "Can't reach the server. Check your connection and try again.";

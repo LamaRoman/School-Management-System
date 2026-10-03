@@ -17,6 +17,15 @@
       "env": {
         "API_URL": "https://api.school.zentaralabs.com"
       }
+    },
+    "production-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "API_URL": "https://api.school.zentaralabs.com"
+      }
     }
   }
 }
