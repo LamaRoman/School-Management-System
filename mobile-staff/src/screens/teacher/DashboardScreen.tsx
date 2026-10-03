@@ -38,6 +38,7 @@ export default function TeacherDashboard({ navigation }: any) {
     { label: 'Enter Marks', icon: '📝', screen: 'Marks', color: Colors.primary },
     { label: 'Homework', icon: '📚', screen: 'Homework', color: Colors.accent },
     { label: 'Notices', icon: '📢', screen: 'Notices', color: Colors.warning },
+    { label: 'Calendar', icon: '📅', screen: 'Calendar', color: Colors.primaryLight },
   ];
 
   return (

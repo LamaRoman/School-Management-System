@@ -587,10 +587,16 @@ export default function AccountantDashboard({ navigation }: any) {
               {activeYear && <Text style={s.bannerYear}>Academic Year {activeYear.yearNp}</Text>}
               <Text style={s.bannerDate}>Today: {getTodayBS()}</Text>
             </View>
-            <TouchableOpacity style={s.searchBtn} onPress={() => setShowStudentSearch(true)}>
-              <Text style={s.searchBtnIcon}>🔍</Text>
-              <Text style={s.searchBtnTxt}>Find Student</Text>
-            </TouchableOpacity>
+            <View style={s.bannerActions}>
+              <TouchableOpacity style={s.searchBtn} onPress={() => setShowStudentSearch(true)}>
+                <Text style={s.searchBtnIcon}>🔍</Text>
+                <Text style={s.searchBtnTxt}>Find Student</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate('Calendar')} accessibilityLabel="School calendar">
+                <Text style={s.searchBtnIcon}>📅</Text>
+                <Text style={s.searchBtnTxt}>Calendar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -813,6 +819,7 @@ const s = StyleSheet.create({
   bannerTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.white },
   bannerYear: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   bannerDate: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  bannerActions: { flexDirection: 'row', gap: Spacing.sm },
   searchBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, alignItems: 'center', gap: 4 },
   searchBtnIcon: { fontSize: 20 },
   searchBtnTxt: { fontSize: 10, color: Colors.white, fontWeight: FontWeight.medium as any },

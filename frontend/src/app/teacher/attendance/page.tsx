@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Save, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import {
   getTodayBS,
@@ -24,7 +25,17 @@ interface AttendanceRecord {
   isMarked: boolean;
 }
 
+interface DayReason { kind: "WEEKLY_OFF" | "SCHOOL_HOLIDAY" | "NATIONAL_HOLIDAY"; title: string }
+interface DayStatus { date: string; closed: boolean; reasons: DayReason[] }
+
+function reasonText(r: DayReason): string {
+  if (r.kind === "WEEKLY_OFF") return `${r.title} (weekly day off)`;
+  if (r.kind === "SCHOOL_HOLIDAY") return `${r.title} (school holiday)`;
+  return `${r.title} (public holiday)`;
+}
+
 export default function AttendancePage() {
+  const confirm = useConfirm();
   const { classTeacherSections: mySections, loading } = useMyAssignments();
   const [pickedSection, setPickedSection] = useState<ClassTeacherSection | null>(null);
   const [date, setDate] = useState(getTodayBS());
@@ -33,6 +44,12 @@ export default function AttendancePage() {
   const [hasChanges, setHasChanges] = useState(false);
 
   const selectedSection = pickedSection ?? mySections[0] ?? null;
+
+  // Weekly day off / school holiday / public holiday? Informational: attendance is never
+  // blocked, but on a closed day nobody has recorded we ask before showing the default
+  // "everyone present" list, so a Saturday or holiday isn't saved by accident.
+  const { data: dayStatus, isLoading: dayLoading } = useSWR<DayStatus>(date ? `/daily-attendance/day?date=${date}` : null);
+  const [confirmedClosed, setConfirmedClosed] = useState<string | null>(null); // the date the teacher said "yes" for
 
   // Save posts `records` against the *currently* selected sectionId and date, so
   // the roster on screen has to belong to that pair. Keying the fetch on both
@@ -134,8 +151,23 @@ export default function AttendancePage() {
   const absentCount = records.filter((r) => r.status === "ABSENT").length;
   // A day nobody has saved shows every student as present by default. That default is
   // not a record, so say so — and let it be saved without having to tap something first.
+  const dayClosed = !!dayStatus?.closed;
+  // Records that already exist for a closed day (an earlier save, or a make-up day) are
+  // never hidden behind the prompt.
+  const hasSavedRecords = (fetchedRecords ?? []).some((r) => r.isMarked);
+  const closedBlocking = dayClosed && !hasSavedRecords && confirmedClosed !== date;
   const unsavedDay = records.length > 0 && records.some((r) => !r.isMarked);
-  const canSave = (hasChanges || unsavedDay) && !isFutureBS(date);
+  const canSave = (hasChanges || unsavedDay) && !isFutureBS(date) && !closedBlocking && !dayLoading;
+
+  const takeAnyway = async () => {
+    const why = (dayStatus?.reasons ?? []).map(reasonText).join(", ");
+    const ok = await confirm({
+      title: "Take attendance on a closed day?",
+      message: `${formatBSDateLong(date)} is closed: ${why}. Recording it will count as a school day in every student's attendance totals.`,
+      confirmLabel: "Take attendance",
+    });
+    if (ok) setConfirmedClosed(date);
+  };
 
   if (loading) {
     return (
@@ -216,6 +248,22 @@ export default function AttendancePage() {
         </div>
       )}
 
+      {/* Closed day */}
+      {dayClosed && !isFutureBS(date) && (
+        <div className="card p-4 mb-4 border-slate-300 bg-slate-50">
+          <p className="font-semibold text-slate-700">Closed: {(dayStatus?.reasons ?? []).map(reasonText).join(", ")}</p>
+          {closedBlocking ? (
+            <>
+              <p className="text-sm text-slate-600 mt-1">No attendance is normally taken on this day.</p>
+              <button onClick={takeAnyway} className="btn-outline text-xs mt-3">Take attendance anyway</button>
+            </>
+          ) : (
+            <p className="text-sm text-slate-600 mt-1">Attendance is being recorded for this day anyway.</p>
+          )}
+        </div>
+      )}
+
+      {closedBlocking || dayLoading ? null : (<>
       {/* Unsaved-day notice */}
       {unsavedDay && !isFutureBS(date) && !loadingRecords && (
         <div className="card p-3 mb-4 border-amber-300 bg-amber-50 text-sm text-amber-800">
@@ -287,6 +335,8 @@ export default function AttendancePage() {
           ))
         )}
       </div>
+
+      </>)}
 
       {/* Sticky Save Button for Mobile */}
       {canSave && (

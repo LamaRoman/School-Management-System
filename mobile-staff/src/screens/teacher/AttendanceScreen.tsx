@@ -6,10 +6,10 @@ import {
 import { api, getErrorMessage } from '../../api/client';
 import { Button, EmptyState, ErrorState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
-import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS } from '../../utils/bsDate';
+import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS, formatBSDateLong } from '../../utils/bsDate';
 import {
   ServerRecord, ShownRecord, withDefaults, toggled, countStatuses,
-  unsavedCount, needsSave, toPayload, savedSummary,
+  unsavedCount, needsSave, toPayload, savedSummary, closedMode, reasonText, DayStatus,
 } from '../../utils/attendanceForm';
 
 interface Section { sectionId: string; sectionName: string; gradeName: string; academicYearId: string; }
@@ -21,6 +21,12 @@ export default function AttendanceScreen() {
   const [date, setDate] = useState(getTodayBS());
   const [loadError, setLoadError] = useState<string | null>(null);
   const todayRef = useRef(getTodayBS());
+  // Weekly day off / school holiday / public holiday? Informational: attendance is never
+  // blocked, but on a closed day nobody has recorded we ask before showing the default
+  // "everyone present" list, so a Saturday or holiday isn't saved by accident.
+  const [day, setDay] = useState<DayStatus | null>(null);
+  const [dayLoading, setDayLoading] = useState(true);
+  const [confirmedFor, setConfirmedFor] = useState<string | null>(null);
   const fetchSeq = useRef(0); // ignore a slow response for a day/section we've since left
   const [records, setRecords] = useState<ShownRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +54,17 @@ export default function AttendanceScreen() {
   useEffect(() => {
     if (selected) fetchAttendance(selected, date);
   }, [selected, date]);
+
+  useEffect(() => {
+    let ignore = false; // a newer date supersedes this response
+    setDayLoading(true);
+    setDay(null);
+    api.get<DayStatus>(`/daily-attendance/day?date=${date}`)
+      .then(d => { if (!ignore) setDay(d); })
+      .catch(() => { if (!ignore) setDay(null); }) // can't tell: treat the day as open, never block on a failed lookup
+      .finally(() => { if (!ignore) setDayLoading(false); });
+    return () => { ignore = true; };
+  }, [date]);
 
   // If the app stays open past midnight, a screen showing "today" should follow the
   // calendar rather than keep saving against yesterday.
@@ -147,7 +164,21 @@ export default function AttendanceScreen() {
 
   const { present: presentCount, absent: absentCount } = countStatuses(records);
   const notSaved = unsavedCount(records);
-  const showSave = needsSave(hasChanges, records) && !isFutureBS(date);
+  const mode = closedMode(day, records.some(r => r.isMarked), confirmedFor, date);
+  const blocking = mode === 'blocking' && !isFutureBS(date);
+  const showSave = needsSave(hasChanges, records) && !isFutureBS(date) && !blocking && !dayLoading;
+
+  const takeAnyway = () => {
+    const why = (day?.reasons ?? []).map(reasonText).join(', ');
+    Alert.alert(
+      'Take attendance on a closed day?',
+      `${formatBSDateLong(date)} is closed: ${why}. Recording it will count as a school day in every student's attendance totals.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take attendance', onPress: () => setConfirmedFor(date) },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -187,13 +218,31 @@ export default function AttendanceScreen() {
             <Text style={styles.dateBtnText}>›</Text>
           </TouchableOpacity>
         </Row>
-        <Row style={styles.countRow}>
+        {!blocking && <Row style={styles.countRow}>
           <View style={styles.countBadge}><Text style={[styles.countNum, { color: Colors.success }]}>{presentCount}</Text><Text style={styles.countLbl}>Present</Text></View>
           <View style={styles.countBadge}><Text style={[styles.countNum, { color: Colors.danger }]}>{absentCount}</Text><Text style={styles.countLbl}>Absent</Text></View>
-        </Row>
+        </Row>}
       </View>
 
+      {/* Closed day */}
+      {mode !== 'open' && !isFutureBS(date) && (
+        <View style={styles.closedCard}>
+          <Text style={styles.closedTitle}>Closed: {(day?.reasons ?? []).map(reasonText).join(', ')}</Text>
+          {blocking ? (
+            <>
+              <Text style={styles.closedText}>No attendance is normally taken on this day.</Text>
+              <TouchableOpacity onPress={takeAnyway} style={styles.closedBtn} accessibilityRole="button">
+                <Text style={styles.closedBtnText}>Take attendance anyway</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.closedText}>Attendance is being recorded for this day anyway.</Text>
+          )}
+        </View>
+      )}
+
       {/* Quick mark all */}
+      {!blocking && !dayLoading && (
       <Row style={styles.markAllRow}>
         <TouchableOpacity style={[styles.markAllBtn, { backgroundColor: Colors.successBg }]} onPress={() => markAll('PRESENT')}>
           <Text style={[styles.markAllText, { color: Colors.success }]}>Mark All Present</Text>
@@ -202,9 +251,10 @@ export default function AttendanceScreen() {
           <Text style={[styles.markAllText, { color: Colors.danger }]}>Mark All Absent</Text>
         </TouchableOpacity>
       </Row>
+      )}
 
       {/* A day nobody has saved yet shows everyone as present: say so, so a default is never mistaken for a record. */}
-      {!fetching && !loadError && notSaved > 0 && !isFutureBS(date) && (
+      {!blocking && !dayLoading && !fetching && !loadError && notSaved > 0 && !isFutureBS(date) && (
         <View style={styles.notSavedBanner}>
           <Text style={styles.notSavedText}>
             Not saved yet. Everyone is shown present — tap a student to mark them absent, then Save.
@@ -213,7 +263,7 @@ export default function AttendanceScreen() {
       )}
 
       {/* Student list */}
-      {fetching ? (
+      {blocking ? null : (fetching || dayLoading) ? (
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
       ) : loadError ? (
         <ErrorState message={loadError} onRetry={() => selected && fetchAttendance(selected, date)} />
@@ -280,6 +330,11 @@ const styles = StyleSheet.create({
   rollBadge: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: Colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
   rollText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
   studentName: { flex: 1, fontSize: FontSize.md, color: Colors.text },
+  closedCard: { marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1' },
+  closedTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: '#334155' },
+  closedText: { fontSize: FontSize.sm, color: '#475569', marginTop: 4, lineHeight: 20 },
+  closedBtn: { alignSelf: 'flex-start', marginTop: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.white },
+  closedBtnText: { color: Colors.primary, fontWeight: FontWeight.semibold, fontSize: FontSize.sm },
   notSavedBanner: { marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warning + '55' },
   notSavedText: { fontSize: FontSize.sm, color: Colors.warning, lineHeight: 20 },
   statusDot: { width: 14, height: 14, borderRadius: 7 },

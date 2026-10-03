@@ -18,6 +18,8 @@ interface Analytics {
     totalTeachers: number;
     todayPresent: number;
     todayAbsent: number;
+    // Is today a weekly day off / holiday? (null if the server couldn't tell)
+    todayStatus?: { closed: boolean; reasons: { kind: string; title: string }[] } | null;
     overallAttendanceRate: number;
   };
   classAverages: { gradeName: string; avgGpa: number; avgPct: number; studentCount: number }[];
@@ -178,6 +180,10 @@ export default function AdminDashboard() {
 
   const s = analytics.summary;
   const totalToday = s.todayPresent + s.todayAbsent;
+  // A closed day nobody recorded: say "Closed" rather than a bare dash. If attendance was
+  // recorded anyway (a make-up day), the real counts are shown instead.
+  const closedToday = !!s.todayStatus?.closed && totalToday === 0;
+  const closedWhy = (s.todayStatus?.reasons ?? []).map((r) => r.title).join(", ");
 
   const lowPassSubjects = [...analytics.subjectStats]
     .filter((ss) => ss.totalStudents > 0)
@@ -378,6 +384,10 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="text-xs text-gray-500 space-y-1">
+                  {closedToday && (
+                    <p className="font-semibold text-slate-700">Closed today{closedWhy ? ` — ${closedWhy}` : ""}</p>
+                  )}
+                  {!closedToday && (<>
                   <p>Present today: <span className="font-semibold text-gray-700">{totalToday > 0 ? s.todayPresent : "—"}</span></p>
                   <p>
                     Absent today:{" "}
@@ -389,6 +399,7 @@ export default function AdminDashboard() {
                       <span className="font-semibold text-gray-700">{totalToday > 0 ? s.todayAbsent : "—"}</span>
                     )}
                   </p>
+                  </>)}
                   <p>Total students: <span className="font-semibold text-gray-700">{s.totalStudents}</span></p>
                 </div>
               </div>

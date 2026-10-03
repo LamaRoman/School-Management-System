@@ -54,3 +54,32 @@ export function toPayload(records: ShownRecord[]): { studentId: string; status: 
 export function savedSummary(present: number, absent: number): string {
   return `Saved: ${present} present, ${absent} absent`;
 }
+
+// ─── Closed days (weekly day off / school holiday / public holiday) ─────────────
+
+export interface DayReason { kind: 'WEEKLY_OFF' | 'SCHOOL_HOLIDAY' | 'NATIONAL_HOLIDAY'; title: string }
+export interface DayStatus { date: string; closed: boolean; reasons: DayReason[] }
+
+export function reasonText(r: DayReason): string {
+  if (r.kind === 'WEEKLY_OFF') return `${r.title} (weekly day off)`;
+  if (r.kind === 'SCHOOL_HOLIDAY') return `${r.title} (school holiday)`;
+  return `${r.title} (public holiday)`;
+}
+
+/**
+ * How the attendance screen treats a day:
+ *  - 'open'      an ordinary school day (or we couldn't tell: never block on a failed lookup)
+ *  - 'blocking'  closed and nothing recorded yet: show "Closed" and ask before taking attendance
+ *  - 'recorded'  closed, but attendance already exists or the teacher confirmed: show it
+ *                (existing records are never hidden behind the prompt)
+ */
+export function closedMode(
+  day: DayStatus | null | undefined,
+  hasSavedRecords: boolean,
+  confirmedFor: string | null,
+  date: string,
+): 'open' | 'blocking' | 'recorded' {
+  if (!day?.closed) return 'open';
+  if (hasSavedRecords || confirmedFor === date) return 'recorded';
+  return 'blocking';
+}

@@ -16,6 +16,7 @@ import HomeworkScreen from '../screens/teacher/HomeworkScreen';
 import AccountantDashboard from '../screens/accountant/DashboardScreen';
 import FeeCollectionScreen from '../screens/accountant/FeeCollectionScreen';
 import NoticesScreen from '../screens/shared/NoticesScreen';
+import CalendarScreen from '../screens/shared/CalendarScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 
 const Stack = createStackNavigator();
@@ -98,9 +99,23 @@ export default function RootNavigator() {
                 component={NoticesScreen}
                 options={{ headerShown: true, title: 'Notices', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
               />
+              <Stack.Screen
+                name="Calendar"
+                component={CalendarScreen}
+                options={{ headerShown: true, title: 'Calendar', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
+              />
             </>
           )
-          : user.role === 'ACCOUNTANT' || user.role === 'ADMIN' ? <Stack.Screen name="Accountant" component={AccountantTabs} />
+          : user.role === 'ACCOUNTANT' || user.role === 'ADMIN' ? (
+            <>
+              <Stack.Screen name="Accountant" component={AccountantTabs} />
+              <Stack.Screen
+                name="Calendar"
+                component={CalendarScreen}
+                options={{ headerShown: true, title: 'Calendar', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
+              />
+            </>
+          )
           : <Stack.Screen name="Wrong" component={WrongAppScreen} />}
       </Stack.Navigator>
     </NavigationContainer>

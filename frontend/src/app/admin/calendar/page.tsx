@@ -51,6 +51,9 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [viewYear, setViewYear] = useState(today.year);
   const [viewMonth, setViewMonth] = useState(today.month);
+  // Weekdays the school is closed every week (0=Sunday .. 6=Saturday). Attendance reads this too.
+  const [weeklyOff, setWeeklyOff] = useState<number[]>([6]);
+  const [savingWeek, setSavingWeek] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,6 +65,27 @@ export default function CalendarPage() {
       setEvents(data);
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  useEffect(() => {
+    api.get<{ weeklyOffDays?: number[] }>("/school")
+      .then((school) => { if (school?.weeklyOffDays?.length) setWeeklyOff(school.weeklyOffDays); })
+      .catch(() => { /* the calendar still works; the week card just shows the default */ });
+  }, []);
+
+  const saveWeek = async (days: number[]) => {
+    const previous = weeklyOff;
+    setWeeklyOff(days);
+    setSavingWeek(true);
+    try {
+      await api.put("/school/week", { weeklyOffDays: days });
+      toast.success(days.length === 2 ? "Saturday and Sunday are now weekly days off" : "Saturday is now the weekly day off");
+    } catch (err: any) {
+      setWeeklyOff(previous);
+      toast.error(err.message);
+    } finally {
+      setSavingWeek(false);
     }
   };
 
@@ -161,6 +185,35 @@ export default function CalendarPage() {
         </button>
       </div>
 
+      {/* School week: which weekdays are closed every week */}
+      <div className="card p-4 mb-6">
+        <h2 className="font-semibold text-primary text-sm mb-1">School week</h2>
+        <p className="text-xs text-gray-500 mb-3">
+          Days the school is closed every week. Attendance shows these as closed (teachers can still confirm and record a make-up day).
+          Add holidays and breaks below as Holiday activities.
+        </p>
+        <div className="flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label="Weekly days off">
+          {[
+            { label: "Saturday only", days: [6] },
+            { label: "Saturday and Sunday", days: [0, 6] },
+          ].map((opt) => {
+            const checked = weeklyOff.length === opt.days.length && opt.days.every((d) => weeklyOff.includes(d));
+            return (
+              <label key={opt.label} className={`flex items-center gap-2 cursor-pointer ${savingWeek ? "opacity-60" : ""}`}>
+                <input
+                  type="radio"
+                  name="weekly-off"
+                  checked={checked}
+                  disabled={savingWeek}
+                  onChange={() => saveWeek(opt.days)}
+                />
+                {opt.label}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Create/Edit Form */}
       {showForm && (
         <div className="card p-5 mb-6">
@@ -223,13 +276,15 @@ export default function CalendarPage() {
               const dayEvents = eventsByDate(dateStr);
               const isToday = today.year === viewYear && today.month === viewMonth && today.day === day;
               const dayOfWeek = (startWeekday + i) % 7;
-              const isSat = dayOfWeek === 6;
+              const isOff = weeklyOff.includes(dayOfWeek);
               const hasHoliday = dayEvents.some((e) => e.type === "HOLIDAY");
               const hasEvents = dayEvents.length > 0;
               const cellBg = hasHoliday
                 ? "bg-red-50 border-red-200"
                 : hasEvents
                 ? "bg-blue-50 border-blue-100"
+                : isOff
+                ? "bg-gray-50 border-gray-200"
                 : "border-gray-100";
 
               return (
@@ -240,7 +295,7 @@ export default function CalendarPage() {
                     isToday ? "ring-2 ring-primary ring-inset" : ""
                   }`}
                 >
-                  <div className={`text-sm sm:text-base font-semibold mb-1 sm:mb-1.5 ${isToday ? "text-primary" : hasHoliday || isSat ? "text-red-500" : "text-gray-700"}`}>
+                  <div className={`text-sm sm:text-base font-semibold mb-1 sm:mb-1.5 ${isToday ? "text-primary" : hasHoliday || isOff ? "text-red-500" : "text-gray-700"}`}>
                     {day}
                   </div>
                   <div className="space-y-1 flex flex-wrap gap-1 sm:block">
