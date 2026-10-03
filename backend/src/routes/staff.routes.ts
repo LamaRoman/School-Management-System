@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { emailField } from "../utils/email";
 import bcrypt from "bcryptjs";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId, invalidateUserCache } from "../middleware/auth";
@@ -22,7 +23,7 @@ router.get("/", authenticate, authorize("ADMIN"), async (req, res) => {
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    email: z.string().email().max(320),
+    email: emailField(),
     password: z.string().min(6, "Password must be at least 6 characters").max(72),
   });
   const { email, password } = schema.parse(req.body);

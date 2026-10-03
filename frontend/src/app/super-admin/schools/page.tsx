@@ -72,13 +72,13 @@ export default function SchoolsPage() {
             <input required minLength={2} placeholder="School Code (e.g. GHS, SPS) — used in receipt numbers *" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} maxLength={6} className="border rounded-lg px-3 py-2 text-sm uppercase" />
             <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
             <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
-            <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
+            <input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.toLowerCase() })} className="border rounded-lg px-3 py-2 text-sm" />
             <input placeholder="Established Year" value={form.estdYear} onChange={(e) => setForm({ ...form, estdYear: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
           </div>
           <hr className="my-2" />
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Admin Account</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input required placeholder="Admin Email *" type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
+            <input required placeholder="Admin Email *" type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value.toLowerCase() })} className="border rounded-lg px-3 py-2 text-sm" />
             <input required placeholder="Admin Password *" type="password" value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
           </div>
           <div className="flex gap-2">

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { emailField } from "../utils/email";
 import prisma from "../utils/prisma";
 import bcrypt from "bcryptjs";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
@@ -18,7 +19,7 @@ const router = Router();
 // POST /api/parents — admin creates a parent user and links to student(s)
 router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schema = z.object({
-    email: z.string().email().max(320),
+    email: emailField(),
     password: z.string().min(6).max(72),
     studentIds: z.array(z.string().min(1)).min(1).max(10),
     relationship: z.string().max(50).optional(),

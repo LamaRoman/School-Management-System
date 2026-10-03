@@ -279,7 +279,7 @@ export default function SchoolDetailPage() {
           <form onSubmit={handleAddAdmin} className="border rounded-lg p-4 mb-4 space-y-3 bg-gray-50">
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input required placeholder="Email" type="email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
+              <input required placeholder="Email" type="email" value={adminForm.email} onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value.toLowerCase() })} className="border rounded-lg px-3 py-2 text-sm" />
               <input required placeholder="Password" type="password" value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} className="border rounded-lg px-3 py-2 text-sm" />
             </div>
             <button type="submit" disabled={saving} className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm disabled:opacity-50">

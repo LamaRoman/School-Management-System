@@ -177,7 +177,7 @@ function TeachersTab() {
             </div>
             <div>
               <label className="label">Email * (used for login)</label>
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="teacher@school.edu.np" />
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.toLowerCase() })} placeholder="teacher@school.edu.np" />
             </div>
             <div>
               <label className="label">Phone</label>
@@ -390,7 +390,7 @@ function AccountantsTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="label">Email *</label>
-              <input required type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="accountant@school.edu.np" />
+              <input required type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.toLowerCase() })} placeholder="accountant@school.edu.np" />
             </div>
             <div>
               <label className="label">Password * (min 6 chars)</label>
