@@ -123,7 +123,7 @@ Backend — accept a just-rotated token for a short grace window.
 - `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
   values only the project owner has (Expo account, real API URL).
 - Offline mark entry, push notifications and the missing web-parity screens (report cards,
-  observations, exam routine) are features, not fixes, and are not done.
+  observations) are features, not fixes, and are not done.
 - Web `getTodayBS()` still uses the browser's clock.
 
 ## Suggested order
@@ -136,3 +136,4 @@ Backend — accept a just-rotated token for a short grace window.
 
 - **Results screen (class teachers):** added — completeness per subject, Mark complete / Re-open (admin publishes on the web). Verified as a web build against the dev backend: loads, shows missing marks, Mark complete and Re-open round-trip (DB back to DRAFT). Not exercised on a phone.
 - **My Students screen (class teachers):** added, read-only — roster in roll order, search, tap for details, tap-to-call guardian. Editing students and assigning roll numbers stay on the web. Verified as a web build against the dev backend (roster, search, expand); tap-to-call not exercised (needs a phone).
+- **Exam Routine screen (teachers):** added, read-only — every grade the teacher teaches, per exam, date/day/time, past exams dimmed. Verified as a web build against the dev backend (two exams switched; all dummy dates are in 2082 so everything showed as past).
