@@ -1,9 +1,16 @@
 // Pure helpers for the attendance screen. No React / React Native imports so they can be
 // unit-tested with plain `node --test` (see attendanceForm.test.ts).
+//
+// The screen shows what the server stored (`ServerRecord`) with the teacher's unsaved taps
+// laid over it (`Edits`), and decides how an unrecorded student looks from the kind of day:
+//   - ordinary school day: shown PRESENT (one tap = absent), like the web portal;
+//   - closed day (weekly day off / holiday): shown GREY (no status). Nobody is assumed
+//     present; the teacher can Mark All Present or tap students individually, and only
+//     students that were actually marked are saved.
 
 export type Status = 'PRESENT' | 'ABSENT';
 
-/** One row as the API returns it: `status` is null for a day that was never saved. */
+/** One row as the API returns it: `status` is null for a student with nothing stored. */
 export interface ServerRecord {
   studentId: string;
   studentName: string;
@@ -12,22 +19,24 @@ export interface ServerRecord {
   isMarked: boolean;
 }
 
-/** One row as the screen shows it: every student has a status. */
+/** Unsaved taps: student id -> the status the teacher chose. */
+export type Edits = Record<string, Status>;
+
+/** One row as shown: `status` is null only for a grey (unrecorded) student on a closed day. */
 export interface ShownRecord extends Omit<ServerRecord, 'status'> {
-  status: Status;
+  status: Status | null;
 }
 
-/**
- * Students nobody has marked yet are shown PRESENT, like the web portal. One tap then
- * means "absent" (the exception), and an untouched day is simply all present. `isMarked`
- * is kept from the server so the screen can still tell "saved" from "just a default".
- */
-export function withDefaults(records: ServerRecord[]): ShownRecord[] {
-  return records.map(r => ({ ...r, status: r.status ?? 'PRESENT' }));
+export function showRecords(raw: ServerRecord[], edits: Edits, closed: boolean): ShownRecord[] {
+  return raw.map(r => ({
+    ...r,
+    status: edits[r.studentId] ?? r.status ?? (closed ? null : 'PRESENT'),
+  }));
 }
 
-export function toggled(status: Status): Status {
-  return status === 'PRESENT' ? 'ABSENT' : 'PRESENT';
+/** First tap on a grey student marks them present; after that a tap flips present/absent. */
+export function nextStatus(current: Status | null): Status {
+  return current === 'PRESENT' ? 'ABSENT' : 'PRESENT';
 }
 
 export function countStatuses(records: { status: Status | null }[]): { present: number; absent: number } {
@@ -38,17 +47,26 @@ export function countStatuses(records: { status: Status | null }[]): { present: 
 }
 
 /** How many students have nothing stored on the server for this day yet. */
-export function unsavedCount(records: { isMarked: boolean }[]): number {
-  return records.filter(r => !r.isMarked).length;
+export function unsavedCount(raw: { isMarked: boolean }[]): number {
+  return raw.filter(r => !r.isMarked).length;
 }
 
-/** The Save bar is needed after an edit, and also for a day nobody has saved yet. */
-export function needsSave(hasChanges: boolean, records: { isMarked: boolean }[]): boolean {
-  return records.length > 0 && (hasChanges || unsavedCount(records) > 0);
+/**
+ * When the Save bar is offered.
+ *  - closed day: only once the teacher has marked something (nothing is implied).
+ *  - ordinary day: after an edit, and also for a day nobody has saved yet, so an
+ *    all-present day can be saved with one press.
+ */
+export function needsSave(hasEdits: boolean, raw: { isMarked: boolean }[], closed: boolean): boolean {
+  if (raw.length === 0) return false;
+  return closed ? hasEdits : hasEdits || unsavedCount(raw) > 0;
 }
 
-export function toPayload(records: ShownRecord[]): { studentId: string; status: Status }[] {
-  return records.map(r => ({ studentId: r.studentId, status: r.status }));
+/** Only students that have a status are sent: on a closed day, grey students are left out. */
+export function toPayload(shown: ShownRecord[]): { studentId: string; status: Status }[] {
+  return shown
+    .filter((r): r is ShownRecord & { status: Status } => r.status !== null)
+    .map(r => ({ studentId: r.studentId, status: r.status }));
 }
 
 export function savedSummary(present: number, absent: number): string {
@@ -66,20 +84,7 @@ export function reasonText(r: DayReason): string {
   return `${r.title} (public holiday)`;
 }
 
-/**
- * How the attendance screen treats a day:
- *  - 'open'      an ordinary school day (or we couldn't tell: never block on a failed lookup)
- *  - 'blocking'  closed and nothing recorded yet: show "Closed" and ask before taking attendance
- *  - 'recorded'  closed, but attendance already exists or the teacher confirmed: show it
- *                (existing records are never hidden behind the prompt)
- */
-export function closedMode(
-  day: DayStatus | null | undefined,
-  hasSavedRecords: boolean,
-  confirmedFor: string | null,
-  date: string,
-): 'open' | 'blocking' | 'recorded' {
-  if (!day?.closed) return 'open';
-  if (hasSavedRecords || confirmedFor === date) return 'recorded';
-  return 'blocking';
+/** A failed or missing lookup is treated as an ordinary day: never grey out on a guess. */
+export function isClosed(day: DayStatus | null | undefined): boolean {
+  return !!day?.closed;
 }

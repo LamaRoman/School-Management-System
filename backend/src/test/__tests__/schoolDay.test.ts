@@ -16,6 +16,9 @@ import {
   createTestSchool,
   createTestUser,
   createTestAcademicYear,
+  createTestGrade,
+  createTestSection,
+  createTestStudent,
   loginAs,
   authHeader,
 } from "../helpers";
@@ -267,5 +270,55 @@ describe("GET /analytics/dashboard — today's closed status", () => {
   it("a malformed todayBS does not break the dashboard", async () => {
     const r = await request(app).get("/analytics/dashboard?todayBS=garbage").set("Authorization", authHeader(adminAToken)).expect(200);
     expect(r.body.data.summary.todayStatus).toBeNull();
+  });
+});
+
+describe("saving attendance on a closed day (partial, only what was marked)", () => {
+  let yearId: string;
+  let sectionId: string;
+  let ids: string[] = [];
+  const SATURDAY = "2083/06/17";
+
+  beforeAll(async () => {
+    // A separate year so this block never interferes with the dashboard tests above.
+    const year = await createTestAcademicYear(schoolA.id, { yearBS: "2090", isActive: false });
+    yearId = year.id;
+    const grade = await createTestGrade(yearId, { name: "Closed" });
+    sectionId = (await createTestSection(grade.id, { name: "A" })).id;
+    for (let i = 1; i <= 3; i++) ids.push((await createTestStudent(sectionId, { name: `Pupil ${i}`, rollNo: i })).id);
+  });
+
+  const save = (records: { studentId: string; status: "PRESENT" | "ABSENT" }[]) =>
+    request(app).post("/daily-attendance/bulk").set("Authorization", authHeader(adminAToken))
+      .send({ sectionId, date: SATURDAY, academicYearId: yearId, records });
+  const read = () =>
+    request(app).get(`/daily-attendance?sectionId=${sectionId}&date=${SATURDAY}&academicYearId=${yearId}`)
+      .set("Authorization", authHeader(adminAToken));
+
+  it("is never refused: the server does not block a closed day", async () => {
+    expect((await request(app).get(`/daily-attendance/day?date=${SATURDAY}`).set("Authorization", authHeader(adminAToken))).body.data.closed).toBe(true);
+    await save([{ studentId: ids[0], status: "PRESENT" }, { studentId: ids[1], status: "ABSENT" }]).expect(200);
+  });
+
+  it("stores only the students that were sent; the rest stay unrecorded", async () => {
+    const r = await read().expect(200);
+    const byName = Object.fromEntries(r.body.data.map((x: any) => [x.studentName, x]));
+    expect(byName["Pupil 1"]).toMatchObject({ status: "PRESENT", isMarked: true });
+    expect(byName["Pupil 2"]).toMatchObject({ status: "ABSENT", isMarked: true });
+    expect(byName["Pupil 3"]).toMatchObject({ status: null, isMarked: false });
+    expect(await prisma.dailyAttendance.count({ where: { date: SATURDAY, academicYearId: yearId } })).toBe(2);
+  });
+
+  it("year-to-date totals count the day only for the students who were recorded", async () => {
+    const totals = await Promise.all(ids.map((studentId) =>
+      prisma.attendance.findUnique({ where: { studentId_academicYearId: { studentId, academicYearId: yearId } } })));
+    expect(totals.map((t) => [t?.totalDays, t?.presentDays, t?.absentDays])).toEqual([[1, 1, 0], [1, 0, 1], [0, 0, 0]]);
+  });
+
+  it("a later save for another student adds to the day without erasing the first", async () => {
+    await save([{ studentId: ids[2], status: "PRESENT" }]).expect(200);
+    const r = await read().expect(200);
+    expect(r.body.data.map((x: any) => x.status)).toEqual(["PRESENT", "ABSENT", "PRESENT"]);
+    expect(await prisma.dailyAttendance.count({ where: { date: SATURDAY, academicYearId: yearId } })).toBe(3);
   });
 });

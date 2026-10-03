@@ -1,70 +1,94 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { withDefaults, toggled, countStatuses, unsavedCount, needsSave, toPayload, savedSummary, closedMode, reasonText } from './attendanceForm.ts';
+import {
+  showRecords, nextStatus, countStatuses, unsavedCount, needsSave, toPayload, savedSummary,
+  isClosed, reasonText, type ServerRecord,
+} from './attendanceForm.ts';
 
-const rec = (id: string, status: 'PRESENT' | 'ABSENT' | null, isMarked: boolean) =>
+const rec = (id: string, status: 'PRESENT' | 'ABSENT' | null, isMarked: boolean): ServerRecord =>
   ({ studentId: id, studentName: id, rollNo: 1, status, isMarked });
 
-test('an unmarked day is shown all PRESENT, so ONE tap makes a student absent', () => {
-  const shown = withDefaults([rec('a', null, false), rec('b', null, false)]);
-  assert.deepEqual(shown.map(r => r.status), ['PRESENT', 'PRESENT']);
-  assert.equal(toggled(shown[0].status), 'ABSENT'); // the first tap
-  assert.equal(toggled('ABSENT'), 'PRESENT');       // and back
+const unrecorded = [rec('a', null, false), rec('b', null, false), rec('c', null, false)];
+
+// ── ordinary school day ─────────────────────────────────────────────────────────────
+test('open day: unrecorded students are shown PRESENT, so ONE tap makes a student absent', () => {
+  const shown = showRecords(unrecorded, {}, false);
+  assert.deepEqual(shown.map(r => r.status), ['PRESENT', 'PRESENT', 'PRESENT']);
+  assert.equal(nextStatus(shown[0].status), 'ABSENT');
 });
 
-test('saved statuses are kept as stored (absent stays absent)', () => {
-  const shown = withDefaults([rec('a', 'ABSENT', true), rec('b', 'PRESENT', true), rec('c', null, false)]);
-  assert.deepEqual(shown.map(r => r.status), ['ABSENT', 'PRESENT', 'PRESENT']);
-  assert.deepEqual(shown.map(r => r.isMarked), [true, true, false]);
+test('open day: stored statuses are kept, edits win over stored', () => {
+  const raw = [rec('a', 'ABSENT', true), rec('b', 'PRESENT', true), rec('c', null, false)];
+  assert.deepEqual(showRecords(raw, {}, false).map(r => r.status), ['ABSENT', 'PRESENT', 'PRESENT']);
+  assert.deepEqual(showRecords(raw, { a: 'PRESENT' }, false).map(r => r.status), ['PRESENT', 'PRESENT', 'PRESENT']);
 });
 
-test('counts and the unsaved count', () => {
-  const shown = withDefaults([rec('a', 'ABSENT', true), rec('b', 'PRESENT', true), rec('c', null, false)]);
+test('open day: Save is offered for an untouched unsaved day (one press saves all present)', () => {
+  assert.equal(needsSave(false, unrecorded, false), true);
+  assert.equal(needsSave(false, [rec('a', 'PRESENT', true)], false), false, 'fully saved, untouched');
+  assert.equal(needsSave(true, [rec('a', 'PRESENT', true)], false), true, 'an edit on a saved day');
+  assert.equal(needsSave(true, [], false), false, 'no students');
+});
+
+test('open day: payload sends everyone', () => {
+  assert.equal(toPayload(showRecords(unrecorded, {}, false)).length, 3);
+});
+
+// ── closed day (weekly day off / holiday) ────────────────────────────────────────────
+test('closed day: unrecorded students are GREY (null), nobody is assumed present', () => {
+  const shown = showRecords(unrecorded, {}, true);
+  assert.deepEqual(shown.map(r => r.status), [null, null, null]);
+  assert.deepEqual(countStatuses(shown), { present: 0, absent: 0 });
+});
+
+test('closed day: the first tap marks a grey student PRESENT, then it flips', () => {
+  assert.equal(nextStatus(null), 'PRESENT');
+  assert.equal(nextStatus('PRESENT'), 'ABSENT');
+  assert.equal(nextStatus('ABSENT'), 'PRESENT');
+});
+
+test('closed day: Mark All Present (edits for every student) turns the whole list present', () => {
+  const edits = { a: 'PRESENT', b: 'PRESENT', c: 'PRESENT' } as const;
+  const shown = showRecords(unrecorded, { ...edits }, true);
+  assert.deepEqual(shown.map(r => r.status), ['PRESENT', 'PRESENT', 'PRESENT']);
+});
+
+test('closed day: records that were already saved keep their stored colours', () => {
+  const raw = [rec('a', 'ABSENT', true), rec('b', 'PRESENT', true), rec('c', null, false)];
+  assert.deepEqual(showRecords(raw, {}, true).map(r => r.status), ['ABSENT', 'PRESENT', null]);
+});
+
+test('closed day: nothing is saved unless the teacher marks something', () => {
+  assert.equal(needsSave(false, unrecorded, true), false, 'a closed day is never an "unsaved day" to nag about');
+  assert.equal(needsSave(true, unrecorded, true), true, 'once something is marked');
+});
+
+test('closed day: only the students that were marked are sent (partial save)', () => {
+  const shown = showRecords(unrecorded, { a: 'PRESENT', c: 'ABSENT' }, true);
+  assert.deepEqual(toPayload(shown), [
+    { studentId: 'a', status: 'PRESENT' },
+    { studentId: 'c', status: 'ABSENT' },
+  ]);
+  assert.deepEqual(toPayload(showRecords(unrecorded, {}, true)), [], 'no taps -> empty payload');
+});
+
+// ── shared ──────────────────────────────────────────────────────────────────────────
+test('counts and unsaved count', () => {
+  const shown = showRecords([rec('a', 'ABSENT', true), rec('b', 'PRESENT', true), rec('c', null, false)], {}, false);
   assert.deepEqual(countStatuses(shown), { present: 2, absent: 1 });
-  assert.equal(unsavedCount(shown), 1);
+  assert.equal(unsavedCount([rec('a', 'ABSENT', true), rec('c', null, false)]), 1);
 });
 
-test('Save is offered for an untouched unsaved day, but not for a fully saved untouched day', () => {
-  const fresh = withDefaults([rec('a', null, false), rec('b', null, false)]);
-  assert.equal(needsSave(false, fresh), true, 'nothing saved yet: allow saving all-present with one press');
-  const saved = withDefaults([rec('a', 'PRESENT', true), rec('b', 'ABSENT', true)]);
-  assert.equal(needsSave(false, saved), false);
-  assert.equal(needsSave(true, saved), true, 'an edit on a saved day');
-  assert.equal(needsSave(true, []), false, 'no students -> nothing to save');
+test('isClosed: a missing or failed lookup is an ordinary day', () => {
+  assert.equal(isClosed(null), false);
+  assert.equal(isClosed(undefined), false);
+  assert.equal(isClosed({ date: 'd', closed: false, reasons: [] }), false);
+  assert.equal(isClosed({ date: 'd', closed: true, reasons: [] }), true);
 });
 
-test('payload carries each student\'s shown status; an untouched day saves everyone present', () => {
-  const shown = withDefaults([rec('a', null, false), rec('b', null, false)]);
-  assert.deepEqual(toPayload(shown), [{ studentId: 'a', status: 'PRESENT' }, { studentId: 'b', status: 'PRESENT' }]);
-  const edited = [{ ...shown[0], status: toggled(shown[0].status) }, shown[1]];
-  assert.deepEqual(toPayload(edited).map(r => r.status), ['ABSENT', 'PRESENT']);
-});
-
-test('savedSummary', () => {
-  assert.equal(savedSummary(9, 1), 'Saved: 9 present, 1 absent');
-});
-
-const sat = { date: '2083/06/17', closed: true, reasons: [{ kind: 'WEEKLY_OFF' as const, title: 'Saturday' }] };
-const open = { date: '2083/06/16', closed: false, reasons: [] };
-
-test('closedMode: an open day, or an unknown one, is never blocked', () => {
-  assert.equal(closedMode(open, false, null, '2083/06/16'), 'open');
-  assert.equal(closedMode(null, false, null, '2083/06/17'), 'open', 'a failed lookup must not block attendance');
-  assert.equal(closedMode(undefined, false, null, '2083/06/17'), 'open');
-});
-
-test('closedMode: a closed day with nothing recorded asks first', () => {
-  assert.equal(closedMode(sat, false, null, '2083/06/17'), 'blocking');
-  assert.equal(closedMode(sat, false, '2083/06/10', '2083/06/17'), 'blocking', 'a confirmation for another date does not carry over');
-});
-
-test('closedMode: confirming, or existing records, show the day', () => {
-  assert.equal(closedMode(sat, false, '2083/06/17', '2083/06/17'), 'recorded');
-  assert.equal(closedMode(sat, true, null, '2083/06/17'), 'recorded', 'saved records are never hidden');
-});
-
-test('reasonText reads naturally for each kind', () => {
+test('reasonText and savedSummary', () => {
   assert.equal(reasonText({ kind: 'WEEKLY_OFF', title: 'Saturday' }), 'Saturday (weekly day off)');
   assert.equal(reasonText({ kind: 'SCHOOL_HOLIDAY', title: "Founders' Day" }), "Founders' Day (school holiday)");
   assert.equal(reasonText({ kind: 'NATIONAL_HOLIDAY', title: 'Dashain' }), 'Dashain (public holiday)');
+  assert.equal(savedSummary(9, 1), 'Saved: 9 present, 1 absent');
 });
