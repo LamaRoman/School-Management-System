@@ -181,7 +181,7 @@ export default function AdminParentsPage() {
             <div>
               <label className="label">Email *</label>
               <input className="input" type="email" placeholder="parent@example.com"
-                value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+                value={form.email} onChange={e => setForm({ ...form, email: e.target.value.toLowerCase() })} />
             </div>
             <div>
               <label className="label">Password *</label>

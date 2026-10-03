@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { emailField } from "../utils/email";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import prisma from "../utils/prisma";
@@ -94,7 +95,7 @@ const createSchoolSchema = z.object({
   websiteUrl: z.string().url().or(z.literal("")).optional(),
   websiteRevalidateSecret: z.string().optional(),
   // Admin account to create with the school
-  adminEmail: z.string().email("Valid admin email required"),
+  adminEmail: emailField("Valid admin email required"),
   adminPassword: z.string().min(6, "Admin password must be at least 6 characters"),
 }).refine((data) => !data.websiteUrl || !!data.code, {
   // S6b — the public gallery/calendar routes accept a `code`-based identifier
@@ -295,7 +296,7 @@ router.get("/schools/:id/admins", async (req, res) => {
 // ─── ADD ADMIN TO SCHOOL ────────────────────────────────────────────────────
 
 const addAdminSchema = z.object({
-  email: z.string().email(),
+  email: emailField(),
   password: z.string().min(6),
 });
 

@@ -50,7 +50,7 @@ export default function LoginScreen() {
           <Input
             label="Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => setEmail(t.toLowerCase())}
             placeholder="admin@school.edu.np"
             keyboardType="email-address"
             autoCapitalize="none"
