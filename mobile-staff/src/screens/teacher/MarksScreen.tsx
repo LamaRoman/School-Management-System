@@ -118,10 +118,32 @@ export default function MarksScreen() {
         academicYearId: current.academicYearId,
         marks: toBulkPayload(students.map(s => s.id), marks),
       });
-      Alert.alert('Saved', 'Marks saved successfully.');
     } catch (err) {
       Alert.alert('Error', getErrorMessage(err));
-    } finally { setSaving(false); }
+      setSaving(false);
+      return;
+    }
+
+    // Read it back: rebuild the form from what the server now holds, so "Saved" and the
+    // screen always agree with what is actually stored.
+    try {
+      const existing = await api.get<any[]>(
+        `/marks?sectionId=${current.sectionId}&subjectId=${current.subjectId}&examTypeId=${selectedExam}`,
+      );
+      const saved: ExistingMark[] = (Array.isArray(existing) ? existing : []).map(m => ({
+        studentId: m.studentId, theoryMarks: m.theoryMarks, practicalMarks: m.practicalMarks, isAbsent: !!m.isAbsent,
+      }));
+      const form = buildMarksForm(students.map(s => s.id), saved);
+      setMarks(form);
+      const entries = Object.values(form);
+      const absent = entries.filter(m => m.isAbsent).length;
+      const withMarks = entries.filter(m => !m.isAbsent && (m.theoryMarks !== '' || m.practicalMarks !== '')).length;
+      Alert.alert('Saved', `${withMarks} of ${students.length} students have marks${absent ? `, ${absent} absent` : ''}.`);
+    } catch {
+      Alert.alert('Saved', "Marks were saved, but we couldn't reload them to double-check. Switch exam and back to refresh.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <LoadingScreen />;

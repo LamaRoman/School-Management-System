@@ -7,9 +7,12 @@ import { api, getErrorMessage } from '../../api/client';
 import { Button, EmptyState, ErrorState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS } from '../../utils/bsDate';
+import {
+  ServerRecord, ShownRecord, withDefaults, toggled, countStatuses,
+  unsavedCount, needsSave, toPayload, savedSummary,
+} from '../../utils/attendanceForm';
 
 interface Section { sectionId: string; sectionName: string; gradeName: string; academicYearId: string; }
-interface Record { studentId: string; studentName: string; rollNo: number | null; status: 'PRESENT' | 'ABSENT' | null; isMarked: boolean; }
 
 
 export default function AttendanceScreen() {
@@ -19,7 +22,7 @@ export default function AttendanceScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const todayRef = useRef(getTodayBS());
   const fetchSeq = useRef(0); // ignore a slow response for a day/section we've since left
-  const [records, setRecords] = useState<Record[]>([]);
+  const [records, setRecords] = useState<ShownRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,7 +69,7 @@ export default function AttendanceScreen() {
     try {
       const data = await api.get<any[]>(`/daily-attendance?sectionId=${sec.sectionId}&date=${d}&academicYearId=${sec.academicYearId}`);
       if (mine !== fetchSeq.current) return;
-      setRecords(Array.isArray(data) ? data : []);
+      setRecords(Array.isArray(data) ? withDefaults(data as ServerRecord[]) : []);
       setHasChanges(false);
       setLoadError(null);
     } catch (err) {
@@ -89,8 +92,7 @@ export default function AttendanceScreen() {
   const toggleStatus = (studentId: string) => {
     setRecords(prev => prev.map(r => {
       if (r.studentId !== studentId) return r;
-      const next = r.status === 'PRESENT' ? 'ABSENT' : 'PRESENT';
-      return { ...r, status: next };
+      return { ...r, status: toggled(r.status) };
     }));
     setHasChanges(true);
   };
@@ -108,13 +110,32 @@ export default function AttendanceScreen() {
         sectionId: selected.sectionId,
         date,
         academicYearId: selected.academicYearId,
-        records: records.map(r => ({ studentId: r.studentId, status: r.status || 'PRESENT' })),
+        records: toPayload(records),
       });
-      Alert.alert('Saved', 'Attendance saved successfully.');
-      setHasChanges(false);
     } catch (err) {
       Alert.alert('Error', getErrorMessage(err));
-    } finally { setSaving(false); }
+      setSaving(false);
+      return;
+    }
+
+    // Read it back: show what the server now holds, not what we think we sent, so
+    // "Saved" and the screen can never disagree with what is actually stored.
+    try {
+      fetchSeq.current++; // supersede any older in-flight load
+      const data = await api.get<ServerRecord[]>(
+        `/daily-attendance?sectionId=${selected.sectionId}&date=${date}&academicYearId=${selected.academicYearId}`,
+      );
+      const stored = withDefaults(Array.isArray(data) ? data : []);
+      setRecords(stored);
+      setHasChanges(false);
+      const { present, absent } = countStatuses(stored);
+      Alert.alert('Saved', savedSummary(present, absent));
+    } catch {
+      setHasChanges(false);
+      Alert.alert('Saved', "Attendance was saved, but we couldn't reload it to double-check. Pull back to this screen to refresh.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <LoadingScreen />;
@@ -124,8 +145,9 @@ export default function AttendanceScreen() {
     return <EmptyState message="You are not assigned as class teacher for any section." icon="🏫" />;
   }
 
-  const presentCount = records.filter(r => r.status === 'PRESENT').length;
-  const absentCount = records.filter(r => r.status === 'ABSENT').length;
+  const { present: presentCount, absent: absentCount } = countStatuses(records);
+  const notSaved = unsavedCount(records);
+  const showSave = needsSave(hasChanges, records) && !isFutureBS(date);
 
   return (
     <View style={styles.container}>
@@ -181,6 +203,15 @@ export default function AttendanceScreen() {
         </TouchableOpacity>
       </Row>
 
+      {/* A day nobody has saved yet shows everyone as present: say so, so a default is never mistaken for a record. */}
+      {!fetching && !loadError && notSaved > 0 && !isFutureBS(date) && (
+        <View style={styles.notSavedBanner}>
+          <Text style={styles.notSavedText}>
+            Not saved yet. Everyone is shown present — tap a student to mark them absent, then Save.
+          </Text>
+        </View>
+      )}
+
       {/* Student list */}
       {fetching ? (
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
@@ -199,7 +230,7 @@ export default function AttendanceScreen() {
                 <Text style={styles.rollText}>{r.rollNo ?? '—'}</Text>
               </View>
               <Text style={styles.studentName}>{r.studentName}</Text>
-              <View style={[styles.statusDot, { backgroundColor: r.status === 'PRESENT' ? Colors.success : r.status === 'ABSENT' ? Colors.danger : Colors.border }]} />
+              <View style={[styles.statusDot, { backgroundColor: r.status === 'ABSENT' ? Colors.danger : Colors.success }]} />
             </TouchableOpacity>
           ))}
           {records.length === 0 && !loadError && <EmptyState message="No students found in this section." icon="👥" />}
@@ -207,9 +238,9 @@ export default function AttendanceScreen() {
       )}
 
       {/* Save button */}
-      {hasChanges && (
+      {showSave && (
         <View style={styles.saveBar}>
-          <Button title={saving ? 'Saving...' : 'Save Attendance'} onPress={handleSave} loading={saving} style={styles.saveBtn} />
+          <Button title={saving ? 'Saving...' : `Save Attendance (${presentCount} present, ${absentCount} absent)`} onPress={handleSave} loading={saving} style={styles.saveBtn} />
         </View>
       )}
     </View>
@@ -249,6 +280,8 @@ const styles = StyleSheet.create({
   rollBadge: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: Colors.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
   rollText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.primary },
   studentName: { flex: 1, fontSize: FontSize.md, color: Colors.text },
+  notSavedBanner: { marginHorizontal: Spacing.lg, marginTop: Spacing.sm, padding: Spacing.md, borderRadius: Radius.md, backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warning + '55' },
+  notSavedText: { fontSize: FontSize.sm, color: Colors.warning, lineHeight: 20 },
   statusDot: { width: 14, height: 14, borderRadius: 7 },
 
   saveBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.lg, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.border },
