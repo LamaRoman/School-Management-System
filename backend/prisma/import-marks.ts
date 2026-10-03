@@ -40,11 +40,15 @@ async function main() {
       const code = arg("school-code");
       const sections = await prisma.section.findMany({
         where: code ? { grade: { academicYear: { school: { code } } } } : {},
-        include: { grade: { include: { academicYear: { include: { school: { select: { name: true, code: true } } } } } }, _count: { select: { students: true } } },
+        include: {
+          grade: { include: { academicYear: { include: { school: { select: { name: true, code: true } } } } } },
+          teachers: { where: { isClassTeacher: true }, include: { teacher: { select: { name: true } } } },
+          _count: { select: { students: true } },
+        },
         orderBy: [{ grade: { displayOrder: "asc" } }, { name: "asc" }],
       });
       for (const s of sections) {
-        console.log(`${s.id}  ${s.grade.academicYear.school.name} ${s.grade.academicYear.yearBS}${s.grade.academicYear.isActive ? "*" : ""}  ${s.grade.name}-${s.name}  (${s._count.students} students)`);
+        console.log(`${s.id}  ${s.grade.academicYear.school.name} ${s.grade.academicYear.yearBS}${s.grade.academicYear.isActive ? "*" : ""}  ${s.grade.name}-${s.name}  (${s._count.students} students)  class teacher: ${[...new Set(s.teachers.map((t) => t.teacher.name))].join(", ") || "none"}`);
       }
       return;
     }
