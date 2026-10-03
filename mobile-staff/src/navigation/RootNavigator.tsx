@@ -12,6 +12,7 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import TeacherDashboard from '../screens/teacher/DashboardScreen';
 import AttendanceScreen from '../screens/teacher/AttendanceScreen';
 import MarksScreen from '../screens/teacher/MarksScreen';
+import ResultsScreen from '../screens/teacher/ResultsScreen';
 import HomeworkScreen from '../screens/teacher/HomeworkScreen';
 import AccountantDashboard from '../screens/accountant/DashboardScreen';
 import FeeCollectionScreen from '../screens/accountant/FeeCollectionScreen';
@@ -103,6 +104,12 @@ export default function RootNavigator() {
                 name="Calendar"
                 component={CalendarScreen}
                 options={{ headerShown: true, title: 'Calendar', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
+              />
+              {/* Class teachers mark an exam complete here; reached from the dashboard. */}
+              <Stack.Screen
+                name="Results"
+                component={ResultsScreen}
+                options={{ headerShown: true, title: 'Results', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
               />
             </>
           )
