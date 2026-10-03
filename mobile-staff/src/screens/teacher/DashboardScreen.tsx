@@ -36,6 +36,7 @@ export default function TeacherDashboard({ navigation }: any) {
   const quickActions = [
     { label: 'Take Attendance', icon: '✅', screen: 'Attendance', color: Colors.success },
     { label: 'Enter Marks', icon: '📝', screen: 'Marks', color: Colors.primary },
+    { label: 'My Students', icon: '🎓', screen: 'Students', color: Colors.primary },
     { label: 'Results', icon: '📋', screen: 'Results', color: Colors.success },
     { label: 'Homework', icon: '📚', screen: 'Homework', color: Colors.accent },
     { label: 'Notices', icon: '📢', screen: 'Notices', color: Colors.warning },
