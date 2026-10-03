@@ -4,7 +4,7 @@ import {
   Alert, TextInput, Modal, ScrollView, RefreshControl,
 } from 'react-native';
 import { api, getErrorMessage } from '../../api/client';
-import { Card, Button, Badge, EmptyState, LoadingScreen } from '../../components/ui';
+import { Card, Button, Badge, EmptyState, ErrorState, LoadingScreen } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Assignment {
@@ -23,6 +23,8 @@ interface Subject { id: string; name: string }
 export default function HomeworkScreen() {
   const [homework, setHomework] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formDataError, setFormDataError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [sections, setSections] = useState<Section[]>([]);
@@ -41,8 +43,9 @@ export default function HomeworkScreen() {
     try {
       const data = await api.get<Assignment[]>('/homework');
       setHomework(Array.isArray(data) ? data : []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Homework load error:', err);
+      setLoadError(getErrorMessage(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -76,8 +79,9 @@ export default function HomeworkScreen() {
       });
       setSections(secs);
       setSubjects(subs);
+      setFormDataError(null);
     } catch (err) {
-      console.error('Form data load error:', err);
+      setFormDataError(getErrorMessage(err));
     }
   };
 
@@ -141,6 +145,7 @@ export default function HomeworkScreen() {
   };
 
   if (loading) return <LoadingScreen />;
+  if (loadError && homework.length === 0) return <ErrorState message={loadError} onRetry={() => load()} />;
 
   return (
     <View style={s.container}>
@@ -200,6 +205,13 @@ export default function HomeworkScreen() {
             <Text style={s.fieldLabel}>Due Date * (YYYY/MM/DD)</Text>
             <TextInput style={s.textInput} value={dueDate} onChangeText={setDueDate} placeholder="2082/03/15" placeholderTextColor={Colors.textLight} />
 
+            {formDataError && (
+              <TouchableOpacity onPress={loadFormData} accessibilityRole="button">
+                <Text style={{ color: Colors.danger, marginBottom: Spacing.sm }}>
+                  Couldn't load your classes and subjects ({formDataError}). Tap to retry.
+                </Text>
+              </TouchableOpacity>
+            )}
             <Text style={s.fieldLabel}>Section *</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
               {sections.map(sec => (

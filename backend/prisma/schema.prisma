@@ -974,6 +974,10 @@ model RefreshToken {
   userId    String   @map("user_id")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
+  // Set when this token is exchanged for a new one. A rotated token stays usable
+  // for REFRESH_GRACE_MS so a client whose refresh response was lost (weak mobile
+  // network) can retry; after that it is rejected and swept.
+  rotatedAt DateTime? @map("rotated_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -89,7 +89,17 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!user ? <Stack.Screen name="Login" component={LoginScreen} />
-          : user.role === 'TEACHER' ? <Stack.Screen name="Teacher" component={TeacherTabs} />
+          : user.role === 'TEACHER' ? (
+            <>
+              <Stack.Screen name="Teacher" component={TeacherTabs} />
+              {/* Reached from the dashboard's "Notices" quick action (teachers have no Notices tab). */}
+              <Stack.Screen
+                name="Notices"
+                component={NoticesScreen}
+                options={{ headerShown: true, title: 'Notices', headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white }}
+              />
+            </>
+          )
           : user.role === 'ACCOUNTANT' || user.role === 'ADMIN' ? <Stack.Screen name="Accountant" component={AccountantTabs} />
           : <Stack.Screen name="Wrong" component={WrongAppScreen} />}
       </Stack.Navigator>

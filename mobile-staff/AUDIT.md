@@ -90,6 +90,35 @@ Backend — accept a just-rotated token for a short grace window.
 | Observations | no | yes (`/observations/results/bulk`) |
 | Exam routine | no | yes (`/exam-routine`) |
 
+## Status — fixes applied in this PR
+
+| Finding | Status | How |
+| --- | --- | --- |
+| H1 exam switch leaks marks | fixed | form rebuilt from scratch per class + exam (`utils/marksForm.ts`, unit-tested) |
+| H2 failed load then Save overwrites marks | fixed (app **and web**) | Save only enabled once marks loaded; visible error + Retry; stale responses ignored |
+| H3 optional-subject roster | fixed | `/students?...&subjectId=` like the web |
+| H4 network error logs the teacher out | fixed | app signs out only on a 401/403 from `/auth/refresh`; opens offline from a cached user; backend keeps a rotated refresh token usable for 30 s (`rotated_at` migration, tested) |
+| M1 Notices quick action | fixed | Notices is now a stack screen for teachers |
+| M2 attendance locked to today | fixed | previous/next day, no future days, follows midnight, confirm before discarding edits |
+| M3 silent load errors | fixed | shared `ErrorState` with Retry on every teacher screen, Notices, and the accountant dashboard (which no longer shows "Rs 0" when the cashbook failed) |
+| M4 type errors | fixed | `Colors.error` -> `Colors.danger`; `tsc` is clean |
+| M5 tokens in AsyncStorage | fixed | `expo-secure-store`, with one-time migration from the old location |
+| Temporary assignments not shown | fixed | "(Temporary)" label + expiry on Mark Entry |
+| Device-timezone "today" | fixed | BS "today" computed in Asia/Kathmandu (app only; the web still uses the browser clock) |
+| 200-record attendance cap | fixed | backend limit raised to 500 |
+| Expo packages a patch behind | fixed | `expo-doctor` 18/18 |
+| No tests | partly | 12 unit tests for the mark form, refresh classification and BS date stepping (`npm test`, Node >= 22.18); backend refresh tests added |
+
+### Still open
+- **The app has not been run on a device or simulator** (none available here). A production web bundle of the
+  whole app builds cleanly (838 modules), `tsc` passes, and the logic that was rewritten is unit-tested,
+  but no screen has been seen working. Do a manual pass on Marks, Attendance and sign-in before release.
+- `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
+  values only the project owner has (Expo account, real API URL).
+- Offline mark entry, push notifications and the missing web-parity screens (Results, report cards,
+  My Students, observations, exam routine) are features, not fixes, and are not done.
+- Web `getTodayBS()` still uses the browser's clock.
+
 ## Suggested order
 
 1. H1–H4 and M1 (all small; H1/H3 are a few lines each) — makes the existing four screens safe.

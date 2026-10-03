@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator,
+  Alert, ActivityIndicator, AppState,
 } from 'react-native';
 import { api, getErrorMessage } from '../../api/client';
-import { Button, EmptyState, LoadingScreen, Row } from '../../components/ui';
+import { Button, EmptyState, ErrorState, LoadingScreen, Row } from '../../components/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
-import { getTodayBS } from '../../utils/bsDate';
+import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS } from '../../utils/bsDate';
 
 interface Section { sectionId: string; sectionName: string; gradeName: string; academicYearId: string; }
 interface Record { studentId: string; studentName: string; rollNo: number | null; status: 'PRESENT' | 'ABSENT' | null; isMarked: boolean; }
@@ -15,35 +15,75 @@ interface Record { studentId: string; studentName: string; rollNo: number | null
 export default function AttendanceScreen() {
   const [sections, setSections] = useState<Section[]>([]);
   const [selected, setSelected] = useState<Section | null>(null);
-  const [date] = useState(getTodayBS());
+  const [date, setDate] = useState(getTodayBS());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const todayRef = useRef(getTodayBS());
+  const fetchSeq = useRef(0); // ignore a slow response for a day/section we've since left
   const [records, setRecords] = useState<Record[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await api.get<any>('/teacher-assignments/my');
-        const secs = data.classTeacherSections || [];
-        setSections(secs);
-        if (secs.length > 0) { setSelected(secs[0]); }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
-    })();
-  }, []);
+  const loadSections = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await api.get<any>('/teacher-assignments/my');
+      const secs = data.classTeacherSections || [];
+      setSections(secs);
+      if (secs.length > 0) setSelected(secs[0]);
+    } catch (err) {
+      setLoadError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadSections(); }, []);
 
   useEffect(() => {
     if (selected) fetchAttendance(selected, date);
-  }, [selected]);
+  }, [selected, date]);
+
+  // If the app stays open past midnight, a screen showing "today" should follow the
+  // calendar rather than keep saving against yesterday.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      const now = getTodayBS();
+      if (now === todayRef.current) return;
+      const wasOnToday = todayRef.current;
+      todayRef.current = now;
+      setDate(prev => (prev === wasOnToday ? now : prev));
+    });
+    return () => sub.remove();
+  }, []);
 
   const fetchAttendance = async (sec: Section, d: string) => {
+    const mine = ++fetchSeq.current;
     setFetching(true);
     try {
       const data = await api.get<any[]>(`/daily-attendance?sectionId=${sec.sectionId}&date=${d}&academicYearId=${sec.academicYearId}`);
+      if (mine !== fetchSeq.current) return;
       setRecords(Array.isArray(data) ? data : []);
       setHasChanges(false);
-    } catch (err) { console.error(err); } finally { setFetching(false); }
+      setLoadError(null);
+    } catch (err) {
+      if (mine !== fetchSeq.current) return;
+      setRecords([]);
+      setLoadError(getErrorMessage(err));
+    } finally { if (mine === fetchSeq.current) setFetching(false); }
+  };
+
+  // Move to another day, asking first if there are unsaved marks on this one.
+  const goToDate = (next: string) => {
+    if (next === date || isFutureBS(next)) return;
+    if (!hasChanges) { setDate(next); return; }
+    Alert.alert('Discard changes?', 'You have unsaved attendance for this day.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => setDate(next) },
+    ]);
   };
 
   const toggleStatus = (studentId: string) => {
@@ -61,7 +101,7 @@ export default function AttendanceScreen() {
   };
 
   const handleSave = async () => {
-    if (!selected) return;
+    if (!selected || isFutureBS(date)) return;
     setSaving(true);
     try {
       await api.post('/daily-attendance/bulk', {
@@ -78,6 +118,7 @@ export default function AttendanceScreen() {
   };
 
   if (loading) return <LoadingScreen />;
+  if (loadError && sections.length === 0) return <ErrorState message={loadError} onRetry={loadSections} />;
 
   if (sections.length === 0) {
     return <EmptyState message="You are not assigned as class teacher for any section." icon="🏫" />;
@@ -107,7 +148,23 @@ export default function AttendanceScreen() {
 
       {/* Date + stats */}
       <View style={styles.statsBar}>
-        <Text style={styles.dateText}>{date}</Text>
+        <Row style={styles.dateNav}>
+          <TouchableOpacity onPress={() => goToDate(getPreviousDayBS(date))} style={styles.dateBtn} accessibilityLabel="Previous day">
+            <Text style={styles.dateBtnText}>‹</Text>
+          </TouchableOpacity>
+          <View style={styles.dateCenter}>
+            <Text style={styles.dateText}>{date}</Text>
+            {isTodayBS(date) && <Text style={styles.todayTag}>Today</Text>}
+          </View>
+          <TouchableOpacity
+            onPress={() => goToDate(getNextDayBS(date))}
+            disabled={isTodayBS(date) || isFutureBS(date)}
+            style={[styles.dateBtn, (isTodayBS(date) || isFutureBS(date)) && styles.dateBtnDisabled]}
+            accessibilityLabel="Next day"
+          >
+            <Text style={styles.dateBtnText}>›</Text>
+          </TouchableOpacity>
+        </Row>
         <Row style={styles.countRow}>
           <View style={styles.countBadge}><Text style={[styles.countNum, { color: Colors.success }]}>{presentCount}</Text><Text style={styles.countLbl}>Present</Text></View>
           <View style={styles.countBadge}><Text style={[styles.countNum, { color: Colors.danger }]}>{absentCount}</Text><Text style={styles.countLbl}>Absent</Text></View>
@@ -127,6 +184,8 @@ export default function AttendanceScreen() {
       {/* Student list */}
       {fetching ? (
         <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
+      ) : loadError ? (
+        <ErrorState message={loadError} onRetry={() => selected && fetchAttendance(selected, date)} />
       ) : (
         <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 100 }}>
           {records.map(r => (
@@ -143,7 +202,7 @@ export default function AttendanceScreen() {
               <View style={[styles.statusDot, { backgroundColor: r.status === 'PRESENT' ? Colors.success : r.status === 'ABSENT' ? Colors.danger : Colors.border }]} />
             </TouchableOpacity>
           ))}
-          {records.length === 0 && <EmptyState message="No students found in this section." icon="👥" />}
+          {records.length === 0 && !loadError && <EmptyState message="No students found in this section." icon="👥" />}
         </ScrollView>
       )}
 
@@ -168,6 +227,12 @@ const styles = StyleSheet.create({
   sectionPillTextActive: { color: Colors.white },
 
   statsBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  dateNav: { alignItems: 'center', gap: Spacing.sm },
+  dateBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center' },
+  dateBtnDisabled: { opacity: 0.35 },
+  dateBtnText: { fontSize: 22, lineHeight: 24, color: Colors.primary, fontWeight: FontWeight.bold },
+  dateCenter: { alignItems: 'center', minWidth: 96 },
+  todayTag: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.medium },
   dateText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.primary },
   countRow: { gap: Spacing.lg },
   countBadge: { alignItems: 'center' },

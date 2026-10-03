@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from '../api/client';
+import { api, onAuthExpired } from '../api/client';
+import { tokenStore } from '../api/tokenStore';
 
 interface User {
   id: string;
@@ -23,16 +23,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // The server definitively rejected our refresh token (revoked / expired / account
+  // disabled): back to the login screen.
+  useEffect(() => onAuthExpired(() => setUser(null)), []);
+
   useEffect(() => {
     (async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
+        const token = await tokenStore.get('token');
         if (token) {
-          const me = await api.get<User>('/auth/me');
-          setUser(me);
+          try {
+            const me = await api.get<User>('/auth/me');
+            setUser(me);
+            await tokenStore.setUser(me);
+          } catch {
+            // Only a definitive rejection has cleared the tokens by now (see client.ts).
+            // If they are still there, we simply couldn't reach the server — open the
+            // app from the cached user so a teacher with no signal isn't locked out.
+            if (await tokenStore.get('token')) {
+              const cached = await tokenStore.getUser<User>();
+              if (cached) setUser(cached);
+            }
+          }
         }
-      } catch {
-        await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
       } finally {
         setLoading(false);
       }
@@ -41,10 +54,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.post<{ token: string; refreshToken: string; user: User }>('/auth/login', { email, password });
-    await AsyncStorage.setItem('token', res.token);
-    await AsyncStorage.setItem('refreshToken', res.refreshToken);
+    await tokenStore.set('token', res.token);
+    await tokenStore.set('refreshToken', res.refreshToken);
     const me = await api.get<User>('/auth/me');
     setUser(me);
+    await tokenStore.setUser(me);
   };
 
   const logout = async () => {
@@ -53,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Server logout is best-effort — clear local state either way
     }
-    await AsyncStorage.multiRemove(['token', 'refreshToken', 'user']);
+    await tokenStore.clear();
     setUser(null);
   };
 
