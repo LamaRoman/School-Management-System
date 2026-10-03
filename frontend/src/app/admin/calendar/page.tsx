@@ -189,8 +189,8 @@ export default function CalendarPage() {
       <div className="card p-4 mb-6">
         <h2 className="font-semibold text-primary text-sm mb-1">School week</h2>
         <p className="text-xs text-gray-500 mb-3">
-          Days the school is closed every week. Attendance shows these as closed (teachers can still confirm and record a make-up day).
-          Add holidays and breaks below as Holiday activities.
+          Days the school is closed every week. Attendance shows these days greyed out (teachers can still mark attendance if school is held).
+          Add holidays and breaks below as Holiday activities, one activity for each day the school is closed (a 7-day break is 7 activities).
         </p>
         <div className="flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label="Weekly days off">
           {[
