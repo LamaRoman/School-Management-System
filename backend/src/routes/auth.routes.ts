@@ -7,6 +7,7 @@ import prisma from "../utils/prisma";
 import { authenticate, invalidateBlocklistCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import logger from "../utils/logger";
+import { emailField } from "../utils/email";
 
 const router = Router();
 
@@ -131,9 +132,23 @@ async function recordFailedAttempt(email: string): Promise<void> {
 }
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email").max(320),
+  email: emailField(),
   password: z.string().min(1, "Password is required").max(MAX_PASSWORD),
 });
+
+/**
+ * `email` arrives already lower-cased. New accounts are stored lower-case, but older ones may
+ * have a capital in them (an admin typed it that way), so fall back to a case-insensitive match
+ * — and only when it is unambiguous: if two accounts differ only by case we refuse to guess
+ * which one is meant.
+ */
+async function findUserForLogin(email: string) {
+  const exact = await prisma.user.findUnique({ where: { email } });
+  if (exact) return exact;
+  const loose = await prisma.user.findMany({ where: { email: { equals: email, mode: "insensitive" } }, take: 2 });
+  if (loose.length > 1) logger.warn({ email }, "Login: several accounts differ only by email case; refusing to guess");
+  return loose.length === 1 ? loose[0] : null;
+}
 
 // ─── POST /api/auth/login ────────────────────────────────
 router.post("/login", async (req, res) => {
@@ -151,7 +166,7 @@ router.post("/login", async (req, res) => {
     await prisma.loginAttempt.deleteMany({ where: { email } });
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await findUserForLogin(email);
   if (!user || !user.isActive) {
     // Dummy compare so this path takes ~the same time as a real password check.
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH);

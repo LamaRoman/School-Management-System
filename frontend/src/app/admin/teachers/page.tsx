@@ -232,7 +232,7 @@ export default function AdminTeachersPage() {
             </div>
             <div>
               <label className="label">Email * (used for login)</label>
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="teacher@school.edu.np" />
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.toLowerCase() })} placeholder="teacher@school.edu.np" />
             </div>
             <div>
               <label className="label">Phone</label>
@@ -274,7 +274,7 @@ export default function AdminTeachersPage() {
             {needsAccount && (
               <div className="flex-1">
                 <label className="label">Login Email</label>
-                <input className="input" type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="teacher@school.edu.np" />
+                <input className="input" type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value.toLowerCase())} placeholder="teacher@school.edu.np" />
               </div>
             )}
             <div className="flex-1">

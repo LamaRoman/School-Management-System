@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { emailField } from "../utils/email";
 import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
@@ -66,7 +67,7 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     name: z.string().min(1).max(200),
     nameNp: z.string().max(200).optional(),
     phone: z.string().max(30).optional(),
-    email: z.string().email("Valid email required for teacher login").max(320),
+    email: emailField("Valid email required for teacher login"),
     password: z.string().min(6, "Password must be at least 6 characters").max(72),
   });
 
@@ -128,7 +129,7 @@ router.put("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
     name: z.string().min(1).max(200).optional(),
     nameNp: z.string().max(200).nullable().optional(),
     phone: z.string().max(30).nullable().optional(),
-    email: z.string().email().max(320).optional(),
+    email: emailField().optional(),
     isActive: z.boolean().optional(),
   });
 
@@ -245,7 +246,7 @@ router.post("/:id/reset-password", authenticate, authorize("ADMIN"), async (req,
       newPassword: z.string().min(6).max(72),
       // Only consulted when provisioning; required if the teacher record has no
       // email of its own to use as the login address.
-      email: z.string().email().max(320).optional(),
+      email: emailField().optional(),
     })
     .parse(req.body);
 
@@ -263,7 +264,8 @@ router.post("/:id/reset-password", authenticate, authorize("ADMIN"), async (req,
   }
 
   // ─── Provision a missing account ───
-  const loginEmail = email || teacher.email;
+  // An older teacher record may still hold capitals; the login address is always lower case.
+  const loginEmail = (email || teacher.email)?.trim().toLowerCase();
   if (!loginEmail) {
     throw new AppError(
       `${teacher.name} has no login account and no email on record. Provide an email address to create one.`,
