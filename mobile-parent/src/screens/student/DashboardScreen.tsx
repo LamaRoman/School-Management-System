@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl,
+  View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity,
 } from 'react-native';
 import { api } from '../../api/client';
 import { Card, Badge, StatCard, EmptyState, LoadingScreen } from '../../components/ui';
@@ -15,7 +15,7 @@ interface AttendanceSummary { present: number; absent: number; total: number }
 interface HomeworkItem { id: string; title: string; dueDate: string; subject: { name: string } }
 interface Notice { id: string; title: string; content: string; createdAt: string }
 
-export default function StudentDashboard() {
+export default function StudentDashboard({ navigation }: any) {
   const { user } = useAuth();
   const [student, setStudent] = useState<StudentInfo | null>(null);
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
@@ -116,6 +116,13 @@ export default function StudentDashboard() {
         </Card>
       )}
 
+      {/* School calendar: events, holidays and the weekly days off */}
+      <TouchableOpacity activeOpacity={0.8} onPress={() => navigation.navigate('Calendar')} style={s.calendarLink} accessibilityRole="button" accessibilityLabel="Open school calendar">
+        <Text style={s.calendarIcon}>📅</Text>
+        <Text style={s.calendarText}>School Calendar</Text>
+        <Text style={s.calendarChev}>›</Text>
+      </TouchableOpacity>
+
       {/* Upcoming homework */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>📚 Recent Homework</Text>
@@ -180,4 +187,8 @@ const s = StyleSheet.create({
   noticeCard: { gap: Spacing.xs },
   noticeTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text },
   noticeContent: { fontSize: FontSize.sm, color: Colors.textMuted },
+  calendarLink: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginHorizontal: Spacing.lg, marginTop: Spacing.lg, padding: Spacing.lg, minHeight: 56, backgroundColor: Colors.white, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border },
+  calendarIcon: { fontSize: 22 },
+  calendarText: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.primary },
+  calendarChev: { fontSize: 24, color: Colors.textMuted },
 });

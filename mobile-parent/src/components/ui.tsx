@@ -113,6 +113,21 @@ export function EmptyState({ message, icon }: { message: string; icon?: string }
   );
 }
 
+// ─── ErrorState ──────────────────────────────────────────
+// Shown when a screen's data could not be loaded, with a retry.
+export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
+  return (
+    <View style={styles.errorBox}>
+      <Text style={styles.errorText}>{message || "Couldn't load this. Check your connection and try again."}</Text>
+      {onRetry && (
+        <TouchableOpacity onPress={onRetry} style={styles.errorRetry} accessibilityRole="button">
+          <Text style={styles.errorRetryText}>Retry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 // ─── LoadingScreen ───────────────────────────────────────
 export function LoadingScreen() {
   return (
@@ -193,6 +208,10 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.primary },
   sectionSubtitle: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 3 },
 
+  errorBox: { margin: Spacing.lg, padding: Spacing.lg, backgroundColor: Colors.dangerBg, borderWidth: 1, borderColor: Colors.danger, borderRadius: Radius.md, alignItems: 'center', gap: Spacing.md },
+  errorText: { fontSize: FontSize.md, color: Colors.danger, textAlign: 'center', lineHeight: 22 },
+  errorRetry: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.danger, minHeight: 44, justifyContent: 'center' },
+  errorRetryText: { color: Colors.danger, fontWeight: FontWeight.semibold, fontSize: FontSize.md },
   empty: { alignItems: 'center', paddingVertical: Spacing.xxxl, paddingHorizontal: Spacing.xl },
   emptyIcon: { fontSize: 40, marginBottom: Spacing.md },
   emptyText: { fontSize: FontSize.md, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
