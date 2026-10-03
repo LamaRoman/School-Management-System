@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../utils/prisma";
 import { publicCache, publicSchoolFilter } from "../services/publicOrigins.service";
+import { expandRange } from "../services/bsRange.service";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get("/:identifier", publicCache, async (req, res) => {
   const [schoolEvents, masterEvents] = await Promise.all([
     prisma.calendarEvent.findMany({
       where: { schoolId, type: { in: [...PUBLIC_EVENT_TYPES] } },
-      select: { id: true, title: true, description: true, date: true, type: true },
+      select: { id: true, title: true, description: true, date: true, endDate: true, type: true },
       orderBy: { date: "asc" },
     }),
     prisma.masterCalendarEvent.findMany({
@@ -39,8 +40,18 @@ router.get("/:identifier", publicCache, async (req, res) => {
     }),
   ]);
 
+  // The public website expects ONE date per entry, so a multi-day entry (a vacation) is
+  // handed out as one entry per day — the feed's shape is exactly what it always was and
+  // no website needs to change. The first day keeps the entry's id; later days are suffixed
+  // so ids stay unique.
+  const schoolDays = schoolEvents.flatMap(({ endDate, ...e }) =>
+    endDate
+      ? expandRange(e.date, endDate).map((day, i) => ({ ...e, id: i === 0 ? e.id : `${e.id}:${day}`, date: day }))
+      : [e],
+  );
+
   const merged = [
-    ...schoolEvents.map((e) => ({ ...e, isMaster: false as const })),
+    ...schoolDays.map((e) => ({ ...e, isMaster: false as const })),
     ...masterEvents.map((e) => ({ ...e, isMaster: true as const })),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 

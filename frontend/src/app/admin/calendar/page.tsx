@@ -18,7 +18,8 @@ interface CalendarEvent {
   id: string;
   title: string;
   description?: string;
-  date: string; // BS "YYYY/MM/DD"
+  date: string; // BS "YYYY/MM/DD" (first day)
+  endDate?: string | null; // last day (inclusive) of a multi-day entry such as a vacation
   type: string;
   isMaster?: boolean; // national/holiday from the super-admin master calendar — read-only here
   source?: string;
@@ -57,7 +58,7 @@ export default function CalendarPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", date: "", type: "EVENT" });
+  const [form, setForm] = useState({ title: "", description: "", date: "", endDate: "", type: "EVENT" });
 
   const fetchEvents = async (year: number) => {
     try {
@@ -98,7 +99,7 @@ export default function CalendarPage() {
   }, [viewYear]);
 
   const resetForm = () => {
-    setForm({ title: "", description: "", date: "", type: "EVENT" });
+    setForm({ title: "", description: "", date: "", endDate: "", type: "EVENT" });
     setEditingId(null);
     setShowForm(false);
   };
@@ -110,7 +111,7 @@ export default function CalendarPage() {
   };
 
   const handleEdit = (ev: CalendarEvent) => {
-    setForm({ title: ev.title, description: ev.description || "", date: ev.date, type: ev.type });
+    setForm({ title: ev.title, description: ev.description || "", date: ev.date, endDate: ev.endDate || "", type: ev.type });
     setEditingId(ev.id);
     setShowForm(true);
   };
@@ -120,11 +121,17 @@ export default function CalendarPage() {
       toast.error("Title and date are required");
       return;
     }
+    if (form.endDate && form.endDate < form.date) {
+      toast.error("The last day can't be before the first day");
+      return;
+    }
     try {
       const payload = {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         date: form.date,
+        // null (not omitted) so editing a break back to a single day clears the end date
+        endDate: form.endDate || null,
         type: form.type,
       };
       if (editingId) {
@@ -164,11 +171,15 @@ export default function CalendarPage() {
   const daysInMonth = getDaysInBSMonth(viewYear, viewMonth);
   const startWeekday = getStartWeekday(viewYear, viewMonth);
 
-  const eventsByDate = (date: string) => events.filter((e) => e.date === date);
+  // BS dates are zero-padded "YYYY/MM/DD", so plain string comparison orders them correctly.
+  const covers = (e: CalendarEvent, date: string) => e.date <= date && (e.endDate ?? e.date) >= date;
+  const eventsByDate = (date: string) => events.filter((e) => covers(e, date));
 
+  // An entry belongs to every month it touches, so a vacation that runs past month end still
+  // shows up in the month it continues into.
   const monthPrefix = `${viewYear}/${String(viewMonth).padStart(2, "0")}/`;
   const monthEvents = [...events]
-    .filter((e) => e.date.startsWith(monthPrefix))
+    .filter((e) => e.date <= `${monthPrefix}32` && (e.endDate ?? e.date) >= `${monthPrefix}01`)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
@@ -189,8 +200,8 @@ export default function CalendarPage() {
       <div className="card p-4 mb-6">
         <h2 className="font-semibold text-primary text-sm mb-1">School week</h2>
         <p className="text-xs text-gray-500 mb-3">
-          Days the school is closed every week. Attendance shows these as closed (teachers can still confirm and record a make-up day).
-          Add holidays and breaks below as Holiday activities.
+          Days the school is closed every week. Attendance shows these days greyed out (teachers can still mark attendance if school is held).
+          For a vacation or festival, add one Holiday activity and choose its first and last day; every day in between is greyed out on attendance too.
         </p>
         <div className="flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label="Weekly days off">
           {[
@@ -232,10 +243,19 @@ export default function CalendarPage() {
               <textarea className="input min-h-[70px]" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional details..." />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="label">Date (BS) *</label>
+                <label className="label">{form.endDate ? "First day (BS) *" : "Date (BS) *"}</label>
                 <BSDatePicker value={form.date} onChange={(date) => setForm({ ...form, date })} placeholder="2082/01/15" />
+              </div>
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>Last day <span className="font-normal text-gray-400">(optional)</span></span>
+                  {form.endDate && (
+                    <button type="button" onClick={() => setForm({ ...form, endDate: "" })} className="text-xs font-normal text-primary hover:underline">Clear</button>
+                  )}
+                </label>
+                <BSDatePicker value={form.endDate} onChange={(endDate) => setForm({ ...form, endDate })} placeholder="Just one day" />
               </div>
               <div>
                 <label className="label">Type</label>
@@ -323,7 +343,9 @@ export default function CalendarPage() {
               <div key={ev.id} className={`border rounded-lg p-3 ${typeColors[ev.type] || typeColors.OTHER}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium opacity-70">{formatBSDateLong(ev.date)}</div>
+                    <div className="text-xs font-medium opacity-70">
+                      {formatBSDateLong(ev.date)}{ev.endDate ? ` → ${formatBSDateLong(ev.endDate)}` : ""}
+                    </div>
                     <div className="font-semibold text-sm truncate flex items-center gap-1">
                       {ev.isMaster && <Lock size={11} className="opacity-60 shrink-0" />}
                       {ev.title}

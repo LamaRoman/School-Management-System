@@ -6,7 +6,8 @@ export interface CalEvent {
   id: string;
   title: string;
   description?: string | null;
-  date: string; // BS "YYYY/MM/DD"
+  date: string; // BS "YYYY/MM/DD" (first day)
+  endDate?: string | null; // last day (inclusive) of a multi-day entry such as a vacation
   type: string; // EVENT, HOLIDAY, MEETING, EXAM, OTHER
   isMaster?: boolean; // national / super-admin calendar
 }
@@ -23,6 +24,11 @@ export interface DayCell {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** True when `date` falls inside the entry. BS dates are zero-padded, so string order is date order. */
+export function coversDate(e: { date: string; endDate?: string | null }, date: string): boolean {
+  return e.date <= date && (e.endDate ?? e.date) >= date;
+}
+
 export function buildMonthCells(args: {
   year: number;
   month: number; // 1-12
@@ -33,16 +39,11 @@ export function buildMonthCells(args: {
   today: string; // BS "YYYY/MM/DD"
 }): DayCell[] {
   const { year, month, daysInMonth, startWeekday, weeklyOffDays, events, today } = args;
-  const byDate = new Map<string, CalEvent[]>();
-  for (const e of events) {
-    const list = byDate.get(e.date);
-    if (list) list.push(e); else byDate.set(e.date, [e]);
-  }
   const cells: DayCell[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     const date = `${year}/${pad(month)}/${pad(day)}`;
     const weekday = (startWeekday + day - 1) % 7;
-    const dayEvents = byDate.get(date) ?? [];
+    const dayEvents = events.filter(e => coversDate(e, date));
     cells.push({
       day, date, weekday,
       isWeeklyOff: weeklyOffDays.includes(weekday),
@@ -65,8 +66,9 @@ export function toWeeks(cells: DayCell[], startWeekday: number): (DayCell | null
 
 /** This month's events in date order (the list under the grid). */
 export function monthEvents(events: CalEvent[], year: number, month: number): CalEvent[] {
+  // An entry belongs to every month it touches, so a vacation shows in the month it continues into.
   const prefix = `${year}/${pad(month)}/`;
-  return events.filter(e => e.date.startsWith(prefix)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.title.localeCompare(b.title)));
+  return events.filter(e => e.date <= `${prefix}32` && (e.endDate ?? e.date) >= `${prefix}01`).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.title.localeCompare(b.title)));
 }
 
 /** Month navigation across year boundaries. */

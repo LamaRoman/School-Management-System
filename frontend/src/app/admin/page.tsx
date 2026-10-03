@@ -36,6 +36,7 @@ interface UpcomingEvent {
   id: string;
   title: string;
   date: string;
+  endDate?: string | null; // last day of a multi-day entry (a vacation)
   type: string;
   isMaster: boolean;
 }
@@ -330,7 +331,7 @@ export default function AdminDashboard() {
               <div key={ev.id} className="flex items-center gap-3 text-sm">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${eventTypeDot[ev.type] || eventTypeDot.OTHER}`} />
                 <span className="text-gray-700 flex-1 min-w-0 truncate">{ev.title}</span>
-                <span className="text-xs text-gray-400 shrink-0">{formatBSDateLong(ev.date)}</span>
+                <span className="text-xs text-gray-400 shrink-0">{formatBSDateLong(ev.date)}{ev.endDate ? ` → ${formatBSDateLong(ev.endDate)}` : ""}</span>
               </div>
             ))}
           </div>

@@ -793,7 +793,9 @@ model CalendarEvent {
   schoolId    String   @map("school_id")
   title       String
   description String?
-  date        String                                  // BS date "YYYY/MM/DD"
+  date        String                                  // BS date "YYYY/MM/DD" (first day)
+  // Last day (inclusive) of a multi-day entry such as a vacation. Null = a single day.
+  endDate     String?  @map("end_date")
   type        String   @default("EVENT")               // EVENT, HOLIDAY, MEETING, EXAM, OTHER
   createdById String   @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
