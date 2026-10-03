@@ -122,8 +122,7 @@ Backend — accept a just-rotated token for a short grace window.
   touch behaviour, and anything on iOS/Android. Do a manual pass on a phone before release.
 - `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
   values only the project owner has (Expo account, real API URL).
-- Offline mark entry, push notifications and the missing web-parity screens (report cards,
-  observations) are features, not fixes, and are not done.
+- Offline mark entry, push notifications and the missing web-parity screen (report cards) are features, not fixes, and are not done.
 - Web `getTodayBS()` still uses the browser's clock.
 
 ## Suggested order
@@ -137,3 +136,4 @@ Backend — accept a just-rotated token for a short grace window.
 - **Results screen (class teachers):** added — completeness per subject, Mark complete / Re-open (admin publishes on the web). Verified as a web build against the dev backend: loads, shows missing marks, Mark complete and Re-open round-trip (DB back to DRAFT). Not exercised on a phone.
 - **My Students screen (class teachers):** added, read-only — roster in roll order, search, tap for details, tap-to-call guardian. Editing students and assigning roll numbers stay on the web. Verified as a web build against the dev backend (roster, search, expand); tap-to-call not exercised (needs a phone).
 - **Exam Routine screen (teachers):** added, read-only — every grade the teacher teaches, per exam, date/day/time, past exams dimmed. Verified as a web build against the dev backend (two exams switched; all dummy dates are in 2082 so everything showed as past).
+- **Observations screen (class teachers):** added — one category at a time, big grade buttons, "fill all empty with…", only changed cells are sent, read-back after Save. Verified as a web build against the dev backend (graded two students, saved, DB checked; the dummy rows were left). Like the web, a saved grade can be changed but not cleared. The discard-changes prompt (RN `Alert`) is not exercised on web. Not run on a phone.
