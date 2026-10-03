@@ -281,3 +281,65 @@ describe("schools never see or touch each other's calendars (multi-tenancy)", ()
     expect(bFeed.some((e: any) => /Summer Holiday/.test(e.title))).toBe(false);
   });
 });
+
+describe("families can read the calendar, but only the public part, only their school's", () => {
+  let parentAToken: string;
+  let studentAToken: string;
+  let parentBToken: string;
+
+  beforeAll(async () => {
+    await createTestUser(schoolA.id, "PARENT", { email: "parent@rga.test", password: "Test@123" });
+    await createTestUser(schoolA.id, "STUDENT", { email: "student@rga.test", password: "Test@123" });
+    await createTestUser(schoolB.id, "PARENT", { email: "parent@rgb.test", password: "Test@123" });
+    parentAToken = (await loginAs("parent@rga.test")).token;
+    studentAToken = (await loginAs("student@rga.test")).token;
+    parentBToken = (await loginAs("parent@rgb.test")).token;
+    // School A already has an EXAM range ("Terminal exams", 2083/07/02..06) from earlier tests;
+    // add a staff MEETING and a plain EVENT so every type is represented.
+    await request(app).post("/calendar-events").set("Authorization", authHeader(adminAToken))
+      .send({ title: "Staff meeting", date: "2083/07/10", type: "MEETING" }).expect(201);
+    await request(app).post("/calendar-events").set("Authorization", authHeader(adminAToken))
+      .send({ title: "Sports Day", date: "2083/07/12", type: "EVENT" }).expect(201);
+  });
+
+  const view = (token: string) =>
+    request(app).get("/calendar-events/view?year=2083").set("Authorization", authHeader(token)).expect(200);
+
+  it("a parent and a student get events and holidays, with the weekly days off and ranges", async () => {
+    for (const token of [parentAToken, studentAToken]) {
+      const { weeklyOffDays, events } = (await view(token)).body.data;
+      expect(weeklyOffDays).toEqual([6]);
+      const titles = events.map((e: any) => e.title);
+      expect(titles).toContain("Sports Day");
+      expect(events.find((e: any) => /Summer Holiday/.test(e.title))).toMatchObject({ type: "HOLIDAY", endDate: expect.any(String) });
+      expect(Object.keys(events[0]).sort()).toEqual(["date", "description", "endDate", "id", "isMaster", "title", "type"]);
+    }
+  });
+
+  it("staff-only types (MEETING, EXAM) are not shown to families, but staff still see them", async () => {
+    const family = (await view(parentAToken)).body.data.events;
+    expect(family.some((e: any) => e.type === "MEETING" || e.type === "EXAM")).toBe(false);
+    expect(family.some((e: any) => e.title === "Staff meeting" || e.title === "Terminal exams")).toBe(false);
+    const staff = (await view(teacherAToken)).body.data.events.map((e: any) => e.title);
+    expect(staff).toContain("Staff meeting");
+    expect(staff).toContain("Terminal exams");
+  });
+
+  it("a family only sees its own school's calendar", async () => {
+    const b = (await view(parentBToken)).body.data.events;
+    expect(b.some((e: any) => !e.isMaster && e.title !== "B Winter Break")).toBe(false);
+    expect(b.some((e: any) => e.title === "B Winter Break")).toBe(true);
+    const a = (await view(parentAToken)).body.data.events;
+    expect(a.some((e: any) => e.title === "B Winter Break")).toBe(false);
+  });
+
+  it("families cannot create, edit or delete calendar entries, or read the admin list", async () => {
+    const id = (await prisma.calendarEvent.findFirstOrThrow({ where: { schoolId: schoolA.id, title: "Sports Day" } })).id;
+    const auth = { Authorization: authHeader(parentAToken) };
+    await request(app).post("/calendar-events").set(auth).send({ title: "x", date: "2083/07/20", type: "HOLIDAY" }).expect(403);
+    await request(app).put(`/calendar-events/${id}`).set(auth).send({ title: "x" }).expect(403);
+    await request(app).delete(`/calendar-events/${id}`).set(auth).expect(403);
+    await request(app).get("/calendar-events?year=2083").set(auth).expect(403);
+    await request(app).put("/school/week").set(auth).send({ weeklyOffDays: [0, 6] }).expect(403);
+  });
+});
