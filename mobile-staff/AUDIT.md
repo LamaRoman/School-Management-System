@@ -122,7 +122,7 @@ Backend — accept a just-rotated token for a short grace window.
   touch behaviour, and anything on iOS/Android. Do a manual pass on a phone before release.
 - `eas.json`: the preview profile still points at a LAN address and `extra.eas.projectId` is empty. Both need
   values only the project owner has (Expo account, real API URL).
-- Offline mark entry, push notifications and the are features, not fixes, and are not done. Every screen the web teacher portal has now exists on the phone.
+- Offline mark entry and push notifications are features, not fixes, and are not done. Every screen the web teacher portal has now exists on the phone.
 - Web `getTodayBS()` still uses the browser's clock.
 
 ## Suggested order
