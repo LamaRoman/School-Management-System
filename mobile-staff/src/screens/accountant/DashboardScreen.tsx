@@ -675,6 +675,7 @@ export default function AccountantDashboard({ navigation }: any) {
           {[
             { icon: 'cash-outline' as const, label: 'Collect Fee', action: () => navigation.navigate('Collect') },
             { icon: 'receipt-outline' as const, label: 'Find Receipt', action: () => setShowReceiptSearch(true) },
+            { icon: 'people-outline' as const, label: 'Students', action: () => navigation.navigate('StudentsLookup') },
             { icon: 'stats-chart-outline' as const, label: 'Reports', action: () => navigation.navigate('Reports') },
             { icon: 'megaphone-outline' as const, label: 'Notices', action: () => navigation.navigate('Notices') },
           ].map(item => (
