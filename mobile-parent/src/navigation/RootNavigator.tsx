@@ -14,6 +14,7 @@ import StudentDashboard from '../screens/student/DashboardScreen';
 import StudentReportScreen from '../screens/student/ReportCardScreen';
 import StudentHomeworkScreen from '../screens/student/HomeworkScreen';
 import NoticesScreen from '../screens/shared/NoticesScreen';
+import CalendarScreen from '../screens/shared/CalendarScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 
 const Stack = createStackNavigator();
@@ -51,6 +52,12 @@ function StudentTabs() {
   );
 }
 
+// Calendar opens on top of the tabs from a dashboard tile, so it gets its own header.
+const calendarOptions = {
+  headerShown: true, title: 'Calendar',
+  headerStyle: { backgroundColor: Colors.primary }, headerTintColor: Colors.white,
+};
+
 function WrongAppScreen() {
   const { logout } = useAuth();
   return (
@@ -70,8 +77,18 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!user ? <Stack.Screen name="Login" component={LoginScreen} />
-          : user.role === 'PARENT' ? <Stack.Screen name="Parent" component={ParentTabs} />
-          : user.role === 'STUDENT' ? <Stack.Screen name="Student" component={StudentTabs} />
+          : user.role === 'PARENT' ? (
+            <>
+              <Stack.Screen name="Parent" component={ParentTabs} />
+              <Stack.Screen name="Calendar" component={CalendarScreen} options={calendarOptions} />
+            </>
+          )
+          : user.role === 'STUDENT' ? (
+            <>
+              <Stack.Screen name="Student" component={StudentTabs} />
+              <Stack.Screen name="Calendar" component={CalendarScreen} options={calendarOptions} />
+            </>
+          )
           : <Stack.Screen name="Wrong" component={WrongAppScreen} />}
       </Stack.Navigator>
     </NavigationContainer>

@@ -61,6 +61,7 @@ export default function ParentDashboard({ navigation }: any) {
     { label: 'Report Card', icon: '📊', screen: 'Report' },
     { label: 'Fee Status', icon: '💰', screen: 'Fees' },
     { label: 'Notices', icon: '📢', screen: 'Notices' },
+    { label: 'Calendar', icon: '📅', screen: 'Calendar' },
   ];
 
   return (
