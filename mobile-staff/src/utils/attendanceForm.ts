@@ -19,8 +19,11 @@ export interface ServerRecord {
   isMarked: boolean;
 }
 
-/** Unsaved taps: student id -> the status the teacher chose. */
-export type Edits = Record<string, Status>;
+/**
+ * Unsaved taps: student id -> the status the teacher chose. `null` means "put back to grey"
+ * (delete the stored row); it only ever appears on a closed day, for a student who has one.
+ */
+export type Edits = Record<string, Status | null>;
 
 /** One row as shown: `status` is null only for a grey (unrecorded) student on a closed day. */
 export interface ShownRecord extends Omit<ServerRecord, 'status'> {
@@ -30,13 +33,40 @@ export interface ShownRecord extends Omit<ServerRecord, 'status'> {
 export function showRecords(raw: ServerRecord[], edits: Edits, closed: boolean): ShownRecord[] {
   return raw.map(r => ({
     ...r,
-    status: edits[r.studentId] ?? r.status ?? (closed ? null : 'PRESENT'),
+    // `in`, not `??`: an edit of null (back to grey) must beat the stored status.
+    status: r.studentId in edits ? edits[r.studentId] : r.status ?? (closed ? null : 'PRESENT'),
   }));
 }
 
-/** First tap on a grey student marks them present; after that a tap flips present/absent. */
-export function nextStatus(current: Status | null): Status {
-  return current === 'PRESENT' ? 'ABSENT' : 'PRESENT';
+/**
+ * First tap on a grey student marks them present; after that a tap flips present/absent.
+ * On a closed day a third tap goes back to grey (not recorded), so a mistaken mark can be undone.
+ */
+export function nextStatus(current: Status | null, closed = false): Status | null {
+  if (current === 'PRESENT') return 'ABSENT';
+  if (current === 'ABSENT' && closed) return null;
+  return 'PRESENT';
+}
+
+/**
+ * Lay one tap over the edits. An edit that lands back on what the server holds is dropped,
+ * so tapping around to the start leaves nothing to save.
+ */
+export function withEdit(edits: Edits, record: ServerRecord, next: Status | null): Edits {
+  const out = { ...edits };
+  if (next === record.status) delete out[record.studentId];
+  else out[record.studentId] = next;
+  return out;
+}
+
+/** "Set all back to grey": an edit for every student that has something stored. */
+export function clearAllEdits(raw: ServerRecord[]): Edits {
+  return Object.fromEntries(raw.filter(r => r.isMarked).map(r => [r.studentId, null])) as Edits;
+}
+
+/** Students whose stored row the teacher put back to grey. */
+export function toClears(edits: Edits): string[] {
+  return Object.keys(edits).filter(id => edits[id] === null);
 }
 
 export function countStatuses(records: { status: Status | null }[]): { present: number; absent: number } {

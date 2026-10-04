@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   showRecords, nextStatus, countStatuses, unsavedCount, needsSave, toPayload, savedSummary,
-  isClosed, reasonText, type ServerRecord,
+  isClosed, reasonText, withEdit, clearAllEdits, toClears, type ServerRecord,
 } from './attendanceForm.ts';
 
 const rec = (id: string, status: 'PRESENT' | 'ABSENT' | null, isMarked: boolean): ServerRecord =>
@@ -70,6 +70,38 @@ test('closed day: only the students that were marked are sent (partial save)', (
     { studentId: 'c', status: 'ABSENT' },
   ]);
   assert.deepEqual(toPayload(showRecords(unrecorded, {}, true)), [], 'no taps -> empty payload');
+});
+
+test('closed day: a third tap puts a student back to grey; an open day never goes grey', () => {
+  assert.equal(nextStatus('ABSENT', true), null);
+  assert.equal(nextStatus('ABSENT', false), 'PRESENT');
+  assert.equal(nextStatus('PRESENT', true), 'ABSENT');
+});
+
+test('closed day: a grey edit beats the stored status and is sent as a clear, not a record', () => {
+  const raw = [rec('a', 'PRESENT', true), rec('b', 'ABSENT', true), rec('c', null, false)];
+  const edits = withEdit({}, raw[0], null);
+  const shown = showRecords(raw, edits, true);
+  assert.deepEqual(shown.map(r => r.status), [null, 'ABSENT', null]);
+  assert.deepEqual(toPayload(shown), [{ studentId: 'b', status: 'ABSENT' }]);
+  assert.deepEqual(toClears(edits), ['a']);
+  assert.equal(needsSave(true, raw, true), true);
+});
+
+test('withEdit drops an edit that lands back on what is stored, so a full tap cycle saves nothing', () => {
+  const grey = rec('c', null, false);
+  let edits = withEdit({}, grey, nextStatus(null, true));        // grey -> present
+  assert.deepEqual(edits, { c: 'PRESENT' });
+  edits = withEdit(edits, grey, nextStatus('PRESENT', true));    // -> absent
+  edits = withEdit(edits, grey, nextStatus('ABSENT', true));     // -> grey again
+  assert.deepEqual(edits, {});
+});
+
+test('Set All Grey clears only the students that have something stored', () => {
+  const raw = [rec('a', 'PRESENT', true), rec('b', null, false), rec('c', 'ABSENT', true)];
+  const edits = clearAllEdits(raw);
+  assert.deepEqual(toClears(edits), ['a', 'c']);
+  assert.deepEqual(showRecords(raw, edits, true).map(r => r.status), [null, null, null]);
 });
 
 // ── shared ──────────────────────────────────────────────────────────────────────────
