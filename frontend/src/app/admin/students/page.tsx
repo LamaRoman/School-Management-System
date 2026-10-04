@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { useGrades } from "@/hooks/useReferenceData";
 import toast from "react-hot-toast";
-import { Trash2, Edit2, X, Save, Search, Camera, UserPlus } from "lucide-react";
+import { Trash2, Edit2, X, Save, Search, Camera, UserPlus, UserMinus, RotateCcw } from "lucide-react";
 import BSDatePicker from "@/components/ui/BSDatePicker";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
@@ -33,6 +33,9 @@ export default function StudentsPage() {
   const editIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  // Deactivated students are hidden from every list; this is the one place to find them
+  // again — to reactivate, or to delete permanently.
+  const [showDeactivated, setShowDeactivated] = useState(false);
 
   // Nothing is selected until the grade list arrives, so the first grade and
   // its first section are the default rather than something an effect writes
@@ -48,7 +51,9 @@ export default function StudentsPage() {
     data: studentsData,
     isLoading: loadingStudents,
     mutate: reloadStudents,
-  } = useSWR<Student[]>(selectedSection ? `/students?sectionId=${selectedSection}` : null);
+  } = useSWR<Student[]>(
+    selectedSection ? `/students?sectionId=${selectedSection}${showDeactivated ? "&status=deactivated" : ""}` : null
+  );
   const students = studentsData ?? [];
 
   const handleGradeChange = (gId: string) => {
@@ -86,6 +91,43 @@ export default function StudentsPage() {
     if (!await confirm({ title: "Deactivate student", message: "The student will be deactivated and will not appear in active lists.", confirmLabel: "Deactivate", variant: "warning" })) return;
     try { await api.delete(`/students/${id}`); toast.success("Student deactivated"); reloadStudents(); } catch (err: any) { toast.error(err.message); }
   };
+
+  const handleReactivate = async (s: Student) => {
+    try { await api.put(`/students/${s.id}`, { isActive: true }); toast.success(`${s.name} reactivated`); reloadStudents(); } catch (err: any) { toast.error(err.message); }
+  };
+
+  // Irreversible. Says what will be erased, with this student's numbers, and needs the
+  // phrase typed; the server checks the phrase and that the student is deactivated too.
+  const handlePermanentDelete = async (s: Student) => {
+    let impact: { marks: number; attendanceDays: number; feePayments: number; feeAmount: number; parentLoginsRemoved: number };
+    try { impact = await api.get(`/students/${s.id}/delete-impact`); } catch (err: any) { toast.error(err.message); return; }
+    const lines = [
+      `${s.name} and everything attached will be erased for good:`,
+      `• ${impact.marks} marks, ${impact.attendanceDays} days of attendance, report cards`,
+      `• ${impact.feePayments} fee payment${impact.feePayments === 1 ? "" : "s"} (Rs ${impact.feeAmount.toLocaleString()}) and their receipts`,
+      `• the student's login${impact.parentLoginsRemoved ? `, and ${impact.parentLoginsRemoved} parent login${impact.parentLoginsRemoved === 1 ? "" : "s"} with no other children` : ""}`,
+      "This cannot be undone.",
+    ];
+    if (!await confirm({ title: "Delete permanently", message: lines.join("\n"), confirmLabel: "Delete permanently", variant: "danger", typeToConfirm: "delete permanently" })) return;
+    try {
+      await api.delete(`/students/${s.id}/permanent`, { confirm: "delete permanently" });
+      toast.success(`${s.name} permanently deleted`);
+      reloadStudents();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const rowActions = (s: Student, size: number, pad: string) =>
+    showDeactivated ? (
+      <>
+        <button title="Reactivate" aria-label="Reactivate student" onClick={(e) => { e.stopPropagation(); handleReactivate(s); }} className={`${pad} hover:bg-emerald-50 rounded-lg text-gray-400 hover:text-emerald-600`}><RotateCcw size={size} /></button>
+        <button title="Delete permanently" aria-label="Delete student permanently" onClick={(e) => { e.stopPropagation(); handlePermanentDelete(s); }} className={`${pad} hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600`}><Trash2 size={size} /></button>
+      </>
+    ) : (
+      <>
+        <button title="Edit" aria-label="Edit student" onClick={(e) => { e.stopPropagation(); startEdit(s); }} className={`${pad} hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600`}><Edit2 size={size} /></button>
+        <button title="Deactivate" aria-label="Deactivate student" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className={`${pad} hover:bg-amber-50 rounded-lg text-gray-400 hover:text-amber-600`}><UserMinus size={size} /></button>
+      </>
+    );
 
   const filtered = students.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -186,18 +228,29 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input className="input pl-9" placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      {/* Search + deactivated toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input className="input pl-9" placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer shrink-0">
+          <input type="checkbox" checked={showDeactivated} onChange={(e) => setShowDeactivated(e.target.checked)} className="rounded" />
+          Show deactivated
+        </label>
       </div>
+      {showDeactivated && (
+        <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-4">
+          Deactivated students in this section. Reactivate to restore them and their login, or delete permanently.
+        </p>
+      )}
 
       {/* Mobile: one card per student (the table needs ~640px). */}
       <div className="md:hidden space-y-2">
         {loadingGrades || loadingStudents ? (
           <div className="card text-center py-8 text-gray-400 animate-pulse">Loading students...</div>
         ) : filtered.length === 0 ? (
-          <div className="card text-center py-8 text-gray-400">{selectedSection ? "No students in this section" : "Select a grade and section"}</div>
+          <div className="card text-center py-8 text-gray-400">{selectedSection ? (showDeactivated ? "No deactivated students in this section" : "No students in this section") : "Select a grade and section"}</div>
         ) : filtered.map((s) => (
           <div
             key={s.id}
@@ -214,10 +267,7 @@ export default function StudentsPage() {
                 {[s.gender, s.dateOfBirth, s.guardianPhone].filter(Boolean).join(" · ") || "—"}
               </div>
             </div>
-            <div className="flex items-center shrink-0">
-              <button aria-label="Edit student" onClick={(e) => { e.stopPropagation(); startEdit(s); }} className="p-2.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600"><Edit2 size={16} /></button>
-              <button aria-label="Delete student" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-2.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
-            </div>
+            <div className="flex items-center shrink-0">{rowActions(s, 16, "p-2.5")}</div>
           </div>
         ))}
       </div>
@@ -238,7 +288,7 @@ export default function StudentsPage() {
             {loadingGrades || loadingStudents ? (
               <tr><td colSpan={6} className="text-center py-8 text-gray-400 animate-pulse">Loading students...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">{selectedSection ? "No students in this section" : "Select a grade and section"}</td></tr>
+              <tr><td colSpan={6} className="text-center py-8 text-gray-400">{selectedSection ? (showDeactivated ? "No deactivated students in this section" : "No students in this section") : "Select a grade and section"}</td></tr>
             ) : filtered.map((s) => (
               <tr
                 key={s.id}
@@ -261,10 +311,7 @@ export default function StudentsPage() {
                 <td className="px-5 py-3 text-gray-500">{s.gender || "—"}</td>
                 <td className="px-5 py-3 text-gray-500 text-xs">{s.guardianPhone || "—"}</td>
                 <td className="px-5 py-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); startEdit(s); }} className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600 transition-all"><Edit2 size={14} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-all"><Trash2 size={14} /></button>
-                  </div>
+                  <div className="flex items-center justify-end gap-1">{rowActions(s, 14, "p-1.5")}</div>
                 </td>
               </tr>
             ))}

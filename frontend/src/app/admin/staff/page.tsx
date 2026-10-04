@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, Edit2, X, KeyRound, UserCheck, UserX, ShieldOff, Shield, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit2, X, KeyRound, UserCheck, UserX, ShieldOff, Shield, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 // ─── Types ──────────────────────────────────────────────
@@ -140,6 +140,17 @@ function TeachersTab() {
     try { await api.put(`/teachers/${id}`, { isActive: true }); toast.success("Reactivated"); fetchTeachers(); } catch (e: any) { toast.error(e.message); }
   };
 
+  // Irreversible; only offered for a deactivated teacher (the server checks too).
+  const handlePermanentDelete = async (id: string, name: string) => {
+    const message = [
+      `${name} will be removed for good, with their class and subject assignments.`,
+      "Marks they entered, and homework, notices and photos they posted, stay. Their login stays locked.",
+      "This cannot be undone.",
+    ].join("\n");
+    if (!await confirm({ title: "Delete permanently", message, confirmLabel: "Delete permanently", variant: "danger", typeToConfirm: "delete permanently" })) return;
+    try { await api.delete(`/teachers/${id}/permanent`, { confirm: "delete permanently" }); toast.success(`${name} permanently deleted`); fetchTeachers(); } catch (e: any) { toast.error(e.message); }
+  };
+
   const handleResetPassword = async () => {
     if (!resetPasswordId || !newPassword.trim()) return;
     try {
@@ -255,7 +266,10 @@ function TeachersTab() {
                   {t.isActive ? (
                     <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Deactivate"><UserX size={16} /></button>
                   ) : (
-                    <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
+                    <>
+                      <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" aria-label="Reactivate"><UserCheck size={16} /></button>
+                      <button onClick={() => handlePermanentDelete(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" aria-label="Delete permanently"><Trash2 size={16} /></button>
+                    </>
                   )}
                 </div>
               </div>
@@ -318,7 +332,10 @@ function TeachersTab() {
                       {t.isActive ? (
                         <button onClick={() => handleDeactivate(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" title="Deactivate"><UserX size={14} /></button>
                       ) : (
-                        <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" title="Reactivate"><UserCheck size={14} /></button>
+                        <>
+                          <button onClick={() => handleReactivate(t.id)} className="p-1.5 hover:bg-emerald-50 rounded text-gray-400 hover:text-emerald-600" title="Reactivate"><UserCheck size={14} /></button>
+                          <button onClick={() => handlePermanentDelete(t.id, t.name)} className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-600" title="Delete permanently"><Trash2 size={14} /></button>
+                        </>
                       )}
                     </div>
                   </td>

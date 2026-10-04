@@ -9,6 +9,8 @@ interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
   variant?: Variant;
+  /** For irreversible actions: the confirm button stays disabled until this is typed (any letter case). */
+  typeToConfirm?: string;
 }
 
 interface DialogState extends ConfirmOptions {
@@ -35,7 +37,9 @@ export function useConfirm() {
 // ─── Dialog mount — add once to root layout ──────────────
 export function ConfirmDialogMount() {
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [typed, setTyped] = useState("");
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const typedRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     _listener = setDialog;
@@ -44,7 +48,9 @@ export function ConfirmDialogMount() {
 
   // Focus confirm button when dialog opens
   useEffect(() => {
-    if (dialog) setTimeout(() => confirmRef.current?.focus(), 50);
+    if (!dialog) return;
+    setTyped("");
+    setTimeout(() => (dialog.typeToConfirm ? typedRef.current : confirmRef.current)?.focus(), 50);
   }, [dialog]);
 
   // Close on Escape
@@ -79,7 +85,8 @@ export function ConfirmDialogMount() {
     },
   }[variant];
 
-  const handleConfirm = () => { dialog.resolve(true); setDialog(null); };
+  const unlocked = !dialog.typeToConfirm || typed.trim().toLowerCase() === dialog.typeToConfirm.toLowerCase();
+  const handleConfirm = () => { if (!unlocked) return; dialog.resolve(true); setDialog(null); };
   const handleCancel = () => { dialog.resolve(false); setDialog(null); };
 
   return (
@@ -99,9 +106,26 @@ export function ConfirmDialogMount() {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 text-base leading-tight">{dialog.title}</h3>
-            <p className="text-sm text-gray-500 mt-1 leading-relaxed">{dialog.message}</p>
+            <p className="text-sm text-gray-500 mt-1 leading-relaxed whitespace-pre-line">{dialog.message}</p>
           </div>
         </div>
+
+        {dialog.typeToConfirm && (
+          <div className="mt-4">
+            <label className="text-xs text-gray-600">
+              Type <span className="font-mono font-semibold text-red-600">{dialog.typeToConfirm}</span> to confirm
+            </label>
+            <input
+              ref={typedRef}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleConfirm(); }}
+              className="input mt-1 w-full"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2 mt-5">
@@ -114,7 +138,8 @@ export function ConfirmDialogMount() {
           <button
             ref={confirmRef}
             onClick={handleConfirm}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${variantStyles.confirmBtn}`}
+            disabled={!unlocked}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${variantStyles.confirmBtn}`}
           >
             {dialog.confirmLabel ?? "Confirm"}
           </button>

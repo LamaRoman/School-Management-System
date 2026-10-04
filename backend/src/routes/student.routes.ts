@@ -195,7 +195,11 @@ router.get("/", authenticate, async (req, res) => {
   const { sectionId, gradeId, search, subjectId, page, limit } = req.query;
   const pageNum = Math.max(1, parseInt(String(page || "1"), 10) || 1);
   const pageSize = Math.min(1000, Math.max(1, parseInt(String(limit || "1000"), 10) || 1000));
-  const where: any = { isActive: true, section: { grade: { academicYear: { schoolId } } } };
+  // ?status=deactivated lists deactivated students instead (admin only) — the only way
+  // to find one again to reactivate or permanently delete.
+  const deactivated = req.query.status === "deactivated";
+  if (deactivated && user.role !== "ADMIN") throw new AppError("Only an admin can list deactivated students", 403);
+  const where: any = { isActive: !deactivated, section: { grade: { academicYear: { schoolId } } } };
   if (search) where.name = { contains: String(search), mode: "insensitive" };
   if (sectionId) {
     await verifySection(String(sectionId), schoolId);
@@ -681,6 +685,79 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   if (linkedUser) invalidateUserCache(linkedUser.id);
 
   res.json({ data: { message: "Student deactivated" } });
+});
+
+/** What an admin types to confirm a permanent delete (any letter case). */
+const PERMANENT_DELETE_PHRASE = "delete permanently";
+
+/**
+ * Everything a permanent delete would erase, so the confirmation can say so with numbers
+ * rather than in general terms.
+ */
+async function studentDeleteImpact(studentId: string) {
+  const [marks, attendanceDays, payments, parents] = await Promise.all([
+    prisma.mark.count({ where: { studentId } }),
+    prisma.dailyAttendance.count({ where: { studentId } }),
+    prisma.feePayment.aggregate({ where: { studentId }, _count: true, _sum: { amount: true } }),
+    prisma.parentStudent.findMany({
+      where: { studentId },
+      select: { parentId: true, parent: { select: { _count: { select: { parentLinks: true } } } } },
+    }),
+  ]);
+  return {
+    marks,
+    attendanceDays,
+    feePayments: payments._count,
+    feeAmount: payments._sum.amount ?? 0,
+    // A parent whose only child in the school is this student loses their login too.
+    parentLoginsRemoved: parents.filter((p) => p.parent._count.parentLinks <= 1).map((p) => p.parentId),
+  };
+}
+
+// GET /api/students/:id/delete-impact — what a permanent delete would erase (admin only)
+router.get("/:id/delete-impact", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
+  const impact = await studentDeleteImpact(req.params.id);
+  res.json({ data: { ...impact, parentLoginsRemoved: impact.parentLoginsRemoved.length } });
+});
+
+// DELETE /api/students/:id/permanent { confirm: "delete permanently" } (admin only)
+//
+// Irreversible: the student and everything attached — marks, attendance, report-card
+// snapshots, fee payments and receipts, parent links — plus the student's login, and the
+// login of any parent left with no children in the school. Only a deactivated student can
+// be deleted, so it always takes two deliberate steps.
+router.delete("/:id/permanent", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  await verifyStudent(req.params.id, schoolId);
+  const confirm = typeof req.body?.confirm === "string" ? req.body.confirm : "";
+  if (confirm.trim().toLowerCase() !== PERMANENT_DELETE_PHRASE) {
+    throw new AppError(`Type "${PERMANENT_DELETE_PHRASE}" to confirm`, 400);
+  }
+
+  const student = await prisma.student.findUniqueOrThrow({
+    where: { id: req.params.id },
+    select: { id: true, name: true, isActive: true, photo: true },
+  });
+  if (student.isActive) throw new AppError("Deactivate the student first, then delete permanently", 400);
+
+  const { parentLoginsRemoved } = await studentDeleteImpact(student.id);
+  const studentLogins = await prisma.user.findMany({ where: { studentId: student.id }, select: { id: true } });
+  const removedUserIds = [...studentLogins.map((u) => u.id), ...parentLoginsRemoved];
+
+  await prisma.$transaction(async (tx) => {
+    // Logins first: User.studentId is SET NULL on delete, which would otherwise leave
+    // an orphaned student login behind.
+    if (removedUserIds.length > 0) await tx.user.deleteMany({ where: { id: { in: removedUserIds } } });
+    await tx.student.delete({ where: { id: student.id } }); // cascades everything attached
+  });
+
+  for (const id of removedUserIds) invalidateUserCache(id);
+  if (student.photo) await deleteStudentPhoto(student.photo).catch((err) => logger.warn({ err }, "Photo cleanup failed"));
+  logger.info({ studentId: student.id, by: req.user!.userId }, "Student permanently deleted");
+
+  res.json({ data: { message: `${student.name} permanently deleted` } });
 });
 
 export default router;
