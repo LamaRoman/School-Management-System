@@ -64,6 +64,13 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               placeholder="Enter password"
               secureTextEntry={!showPassword}
+              // A password is typed exactly as stored: some Android keyboards (Samsung's) otherwise
+              // capitalise the first letter or autocorrect/suggest-and-append a space.
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              autoComplete="password"
+              textContentType="password"
               style={{ marginBottom: 0 }}
             />
             <TouchableOpacity
