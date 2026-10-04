@@ -1,3 +1,4 @@
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
@@ -38,8 +39,8 @@ export default function MarksScreen() {
   const [reload, setReload] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  const loadAssignments = async () => {
-    setLoading(true);
+  const loadAssignments = async (silent = false) => {
+    if (!silent) setLoading(true);
     setInitError(null);
     try {
       const data = await api.get<any>('/teacher-assignments/my');
@@ -63,6 +64,7 @@ export default function MarksScreen() {
   // Roster + existing marks for the selected class, subject and exam. Rebuilt from
   // scratch every time the selection changes — never merged into the previous form.
   const requestId = useRef(0);
+  const loadedForm = useRef(''); // the form as last fetched, to tell typed-but-unsaved marks from untouched ones
   useEffect(() => {
     if (!current || !selectedExam) { setFormState('idle'); return; }
     const mine = ++requestId.current; // a newer selection supersedes this response
@@ -83,7 +85,9 @@ export default function MarksScreen() {
           studentId: m.studentId, theoryMarks: m.theoryMarks, practicalMarks: m.practicalMarks, isAbsent: !!m.isAbsent,
         }));
         setStudents(stus);
-        setMarks(buildMarksForm(stus.map(s => s.id), saved));
+        const built = buildMarksForm(stus.map(s => s.id), saved);
+        loadedForm.current = JSON.stringify(built);
+        setMarks(built);
         setFormState('ready');
       } catch (err) {
         if (mine !== requestId.current) return;
@@ -92,6 +96,15 @@ export default function MarksScreen() {
       }
     })();
   }, [selectedAssignment, selectedExam, reload]);
+
+  // Back on this tab: pick up what changed on the web. The subject list (full marks) always
+  // refreshes; the marks themselves only when nothing typed here is waiting to be saved.
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  useRefreshOnFocus(() => {
+    loadAssignments(true);
+    if (formState === 'ready' && JSON.stringify(marksRef.current) === loadedForm.current) setReload(n => n + 1);
+  });
 
   const updateMark = (studentId: string, field: keyof MarkEntry, value: string | boolean) => {
     setMarks(prev => ({ ...prev, [studentId]: { ...(prev[studentId] ?? emptyEntry()), [field]: value } }));
