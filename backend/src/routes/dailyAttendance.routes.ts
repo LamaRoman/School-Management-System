@@ -69,10 +69,17 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
         status: z.enum(["PRESENT", "ABSENT"]),
         remarks: z.string().max(300).nullable().optional(),
       })
-    ).min(1).max(500),
+    ).max(500).default([]),
+    // Students to put back to "nothing recorded" (grey). Only accepted on a closed day, where
+    // a teacher may have marked someone by mistake and an absent/present row is a claim the
+    // school never made. On an open day every student is implicitly present, so there is no
+    // "unrecorded" state to return to.
+    clearStudentIds: z.array(z.string().min(1)).max(500).default([]),
+  }).refine((b) => b.records.length + b.clearStudentIds.length > 0, {
+    message: "Nothing to save",
   });
 
-  const { sectionId, date, academicYearId, records } = schema.parse(req.body);
+  const { sectionId, date, academicYearId, records, clearStudentIds } = schema.parse(req.body);
   const schoolId = getSchoolId(req);
   await verifySection(sectionId, schoolId);
   await verifyAcademicYear(academicYearId, schoolId);
@@ -100,7 +107,7 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   // This is also the server-side backstop for the client-side race where the
   // section selector changes mid-fetch and the page saves against a roster it
   // is no longer showing: that now fails cleanly instead of corrupting data.
-  const uniqueStudentIds = [...new Set(records.map((r) => r.studentId))];
+  const uniqueStudentIds = [...new Set([...records.map((r) => r.studentId), ...clearStudentIds])];
   const validStudentCount = await prisma.student.count({
     where: { id: { in: uniqueStudentIds }, sectionId },
   });
@@ -131,8 +138,20 @@ router.post("/bulk", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
     (r) => Prisma.sql`(${r.studentId}::text, ${r.status}::"AttendanceStatus", ${r.remarks || null}::text)`
   );
 
+  if (clearStudentIds.length > 0 && !(await getDayStatus(schoolId, date)).closed) {
+    throw new AppError("Attendance can only be cleared on a closed day", 400);
+  }
+  // A student both marked and cleared in one request is a client bug; the mark wins.
+  const markedIds = new Set(records.map((r) => r.studentId));
+  const toClear = [...new Set(clearStudentIds)].filter((id) => !markedIds.has(id));
+
   const saved = await prisma.$transaction(async (tx) => {
-    const written = await tx.$executeRaw`
+    if (toClear.length > 0) {
+      await tx.dailyAttendance.deleteMany({
+        where: { studentId: { in: toClear }, date, academicYearId },
+      });
+    }
+    const written = rows.length === 0 ? 0 : await tx.$executeRaw`
       INSERT INTO daily_attendances
         (id, student_id, date, academic_year_id, status, remarks, marked_by_id, created_at, updated_at)
       SELECT gen_random_uuid()::text, v.student_id, ${date}::text, ${academicYearId}::text,

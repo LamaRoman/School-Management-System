@@ -313,3 +313,50 @@ describe("POST /daily-attendance/bulk — totals recompute", () => {
     expect(row.remarks).toBe("left early");
   });
 });
+
+describe("POST /daily-attendance/bulk — clearStudentIds (back to grey on a closed day)", () => {
+  // 2083/06/17 is a Saturday, the default weekly day off; 2083/06/16 is a Friday.
+  const SATURDAY = "2083/06/17";
+  const FRIDAY = "2083/06/16";
+
+  it("deletes the stored row, leaves the others and recomputes the totals", async () => {
+    const [first, second] = otherStudentIds;
+    await save({
+      sectionId: otherSectionId, date: SATURDAY, academicYearId: yearId,
+      records: roster(otherStudentIds, [first]),
+    }).expect(200);
+    expect(await totalsFor(first)).toMatchObject({ totalDays: 1, absentDays: 1 });
+
+    await save({
+      sectionId: otherSectionId, date: SATURDAY, academicYearId: yearId,
+      records: [], clearStudentIds: [first],
+    }).expect(200);
+
+    expect(await prisma.dailyAttendance.count({ where: { studentId: first, date: SATURDAY } })).toBe(0);
+    expect(await prisma.dailyAttendance.count({ where: { studentId: second, date: SATURDAY } })).toBe(1);
+    expect(await totalsFor(first)).toMatchObject({ totalDays: 0, presentDays: 0, absentDays: 0 });
+    expect(await totalsFor(second)).toMatchObject({ totalDays: 1, presentDays: 1 });
+  });
+
+  it("refuses to clear on an open day and keeps the row", async () => {
+    const [first] = otherStudentIds;
+    await save({
+      sectionId: otherSectionId, date: FRIDAY, academicYearId: yearId,
+      records: roster(otherStudentIds),
+    }).expect(200);
+
+    await save({
+      sectionId: otherSectionId, date: FRIDAY, academicYearId: yearId,
+      records: [], clearStudentIds: [first],
+    }).expect(400);
+    expect(await prisma.dailyAttendance.count({ where: { studentId: first, date: FRIDAY } })).toBe(1);
+  });
+
+  it("rejects an empty request and students from another section", async () => {
+    await save({ sectionId: otherSectionId, date: SATURDAY, academicYearId: yearId, records: [] }).expect(400);
+    await save({
+      sectionId: otherSectionId, date: SATURDAY, academicYearId: yearId,
+      records: [], clearStudentIds: [smallStudentIds[0]],
+    }).expect(400);
+  });
+});

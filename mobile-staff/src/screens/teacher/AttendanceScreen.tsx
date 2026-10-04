@@ -8,7 +8,7 @@ import { Button, EmptyState, ErrorState, LoadingScreen, Row } from '../../compon
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 import { getTodayBS, getNextDayBS, getPreviousDayBS, isFutureBS, isTodayBS } from '../../utils/bsDate';
 import {
-  ServerRecord, Edits, Status, showRecords, nextStatus, countStatuses,
+  ServerRecord, Edits, Status, showRecords, nextStatus, withEdit, clearAllEdits, toClears, countStatuses,
   unsavedCount, needsSave, toPayload, savedSummary, isClosed, reasonText, DayStatus,
 } from '../../utils/attendanceForm';
 
@@ -114,13 +114,18 @@ export default function AttendanceScreen() {
   const shown = showRecords(raw, edits, closed);
 
   const toggleStatus = (studentId: string) => {
+    const record = raw.find(r => r.studentId === studentId);
     const current = shown.find(r => r.studentId === studentId)?.status ?? null;
-    setEdits(prev => ({ ...prev, [studentId]: nextStatus(current) }));
+    if (!record) return;
+    setEdits(prev => withEdit(prev, record, nextStatus(current, closed)));
   };
 
   const markAll = (status: Status) => {
     setEdits(Object.fromEntries(raw.map(r => [r.studentId, status])) as Edits);
   };
+
+  // Closed day only: every stored mark goes back to grey (not recorded) on the next Save.
+  const clearAll = () => setEdits(clearAllEdits(raw));
 
   const handleSave = async () => {
     if (!selected || isFutureBS(date)) return;
@@ -131,6 +136,7 @@ export default function AttendanceScreen() {
         date,
         academicYearId: selected.academicYearId,
         records: toPayload(shown),
+        clearStudentIds: toClears(edits),
       });
     } catch (err) {
       Alert.alert('Error', getErrorMessage(err));
@@ -219,7 +225,7 @@ export default function AttendanceScreen() {
         <View style={styles.closedCard}>
           <Text style={styles.closedTitle}>Closed: {closedWhy}</Text>
           <Text style={styles.closedText}>
-            Attendance isn't normally taken on this day. Mark All Present, or tap students individually, only if school was held.
+            Attendance isn't normally taken on this day. Mark All Present, or tap students individually, only if school was held. Tap a marked student again to set them back to grey.
           </Text>
         </View>
       )}
@@ -233,6 +239,11 @@ export default function AttendanceScreen() {
         <TouchableOpacity style={[styles.markAllBtn, { backgroundColor: Colors.dangerBg }]} onPress={() => markAll('ABSENT')}>
           <Text style={[styles.markAllText, { color: Colors.danger }]}>Mark All Absent</Text>
         </TouchableOpacity>
+        {closed && raw.some(r => r.isMarked) && (
+          <TouchableOpacity style={[styles.markAllBtn, { backgroundColor: Colors.borderLight }]} onPress={clearAll}>
+            <Text style={[styles.markAllText, { color: Colors.textMuted }]}>Set All Grey</Text>
+          </TouchableOpacity>
+        )}
       </Row>
       )}
 
