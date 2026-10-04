@@ -87,19 +87,17 @@ export type StudentResult = "Pass" | "Fail" | "Incomplete";
 
 /**
  * A student's result for an exam (or the year), as printed on the report card and used to
- * decide who is ranked. Incomplete if any subject is absent or not yet entered; otherwise
- * the style's pass rule — marks-based: every subject at its pass mark and the overall grade
- * not D/E (overallResult); credit-grade: no subject's final grade D/E.
+ * decide who is ranked — the same rule for both card styles (decided 2026-10-04; the
+ * credit-hour card used to fail a subject only on grade D/E, i.e. below 30%, so 30–39%
+ * passed there while failing the school's 40% pass mark). Incomplete if any subject is
+ * absent or not yet entered; otherwise every subject must reach its pass mark and the
+ * overall grade must not be D/E (overallResult).
  */
 export function studentResult(
   overallGrade: string,
-  subjects: { hasPassed?: boolean; grade?: string; isAbsent?: boolean; notEntered?: boolean }[],
-  style: "MARKS_BASED" | "CREDIT_GRADE_BASED" = "MARKS_BASED",
+  subjects: { hasPassed?: boolean; isAbsent?: boolean; notEntered?: boolean }[],
 ): StudentResult {
   if (subjects.some((s) => s.isAbsent || s.notEntered)) return "Incomplete";
-  if (style === "CREDIT_GRADE_BASED") {
-    return subjects.some((s) => s.grade !== undefined && !isPassingGrade(s.grade)) ? "Fail" : "Pass";
-  }
   return overallResult(overallGrade, subjects);
 }
 

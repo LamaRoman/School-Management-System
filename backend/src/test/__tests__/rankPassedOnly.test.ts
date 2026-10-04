@@ -36,9 +36,9 @@ describe("studentResult", () => {
     expect(studentResult("B", [{ hasPassed: true }, { hasPassed: true }])).toBe("Pass");
   });
 
-  it("credit-grade decides per subject by grade", () => {
-    expect(studentResult("", [{ grade: "B" }, { grade: "D" }], "CREDIT_GRADE_BASED")).toBe("Fail");
-    expect(studentResult("", [{ grade: "B" }, { grade: "D+" }], "CREDIT_GRADE_BASED")).toBe("Pass");
+  it("uses the pass mark, not the grade — a D+ (30–39%) below a 40% pass mark is a Fail", () => {
+    // 17/50 = 34% = D+, which the credit-hour card used to pass.
+    expect(studentResult("", [{ hasPassed: true }, { hasPassed: false }])).toBe("Fail");
   });
 });
 

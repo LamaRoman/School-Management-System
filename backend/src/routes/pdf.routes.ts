@@ -379,6 +379,8 @@ async function buildTermReportData(
         practicalGrade: practicalResult?.grade ?? null,
         finalGrade: finalResult.grade,
         gradePoint: finalResult.gpa,
+        // The result uses the pass mark on both card styles (studentResult), not the grade.
+        hasPassed: hasPassed(total, subject.passMarks),
         isAbsent: m?.isAbsent ?? false,
         // Distinct from isAbsent: the student was not recorded absent, the mark
         // simply has not been entered. Scores 0 like an absence, but prints "—"
@@ -615,6 +617,7 @@ async function buildFinalReportData(
         practicalGrade: practicalPct === null ? null : getGradeFromPercentage(practicalPct).grade,
         finalGrade: consolidatedSubject.grade,
         gradePoint: consolidatedSubject.gpa,
+        hasPassed: consolidatedSubject.hasPassed,
         isAbsent: allAbsent,
       };
     });

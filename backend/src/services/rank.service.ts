@@ -78,16 +78,9 @@ export interface SectionRanking {
   totalStudents: number;
 }
 
-async function gradingStyleOfSection(sectionId: string) {
-  const section = await prisma.section.findUniqueOrThrow({
-    where: { id: sectionId },
-    select: { gradeId: true, grade: { select: { academicYear: { select: { schoolId: true } } } } },
-  });
-  const settings = await prisma.reportCardSettings.findUnique({
-    where: { schoolId: section.grade.academicYear.schoolId },
-    select: { gradingStyle: true },
-  });
-  return { gradeId: section.gradeId, style: settings?.gradingStyle ?? ("MARKS_BASED" as const) };
+async function gradeOfSection(sectionId: string) {
+  const section = await prisma.section.findUniqueOrThrow({ where: { id: sectionId }, select: { gradeId: true } });
+  return section.gradeId;
 }
 
 function finish(
@@ -117,12 +110,12 @@ export async function computeSectionRanks(
   examTypeId: string,
   academicYearId: string
 ): Promise<SectionRanking> {
-  const [students, { gradeId, style }] = await Promise.all([
+  const [students, gradeId] = await Promise.all([
     prisma.student.findMany({
       where: { sectionId, isActive: true },
       select: { id: true },
     }),
-    gradingStyleOfSection(sectionId),
+    gradeOfSection(sectionId),
   ]);
 
   if (students.length === 0) {
@@ -195,7 +188,6 @@ export async function computeSectionRanks(
           // students whose printed percentages are equal).
           percentage: round1(exact),
           fullMarks,
-          grade: getGradeFromPercentage(exact).grade,
           hasPassed: hasPassed(obtained, subject.passMarks),
           isAbsent: mark?.isAbsent ?? false,
           notEntered: !mark,
@@ -205,7 +197,7 @@ export async function computeSectionRanks(
     return {
       studentId: student.id,
       pct,
-      result: studentResult(getGradeFromPercentage(pct).grade, counted, style),
+      result: studentResult(getGradeFromPercentage(pct).grade, counted),
       hasAnyMarks: (studentMarks?.size ?? 0) > 0,
     };
   });
@@ -224,9 +216,9 @@ export async function computeFinalSectionRanks(
   sectionId: string,
   academicYearId: string
 ): Promise<SectionRanking> {
-  const [students, { gradeId, style }] = await Promise.all([
+  const [students, gradeId] = await Promise.all([
     prisma.student.findMany({ where: { sectionId, isActive: true }, select: { id: true } }),
-    gradingStyleOfSection(sectionId),
+    gradeOfSection(sectionId),
   ]);
   if (students.length === 0) return { ranks: new Map(), totalStudents: 0 };
 
@@ -259,7 +251,6 @@ export async function computeFinalSectionRanks(
       return {
         percentage: round1(exact),
         fullMarks,
-        grade: getGradeFromPercentage(exact).grade,
         hasPassed: fullMarks > 0 && exact >= (subject.passMarks / fullMarks) * 100,
         // Same as the annual report builders: absent in every weighted term.
         isAbsent: termMarks.length > 0 && termMarks.every((m) => m?.isAbsent === true),
@@ -269,7 +260,7 @@ export async function computeFinalSectionRanks(
     return {
       studentId: student.id,
       pct,
-      result: studentResult(getGradeFromPercentage(pct).grade, counted, style),
+      result: studentResult(getGradeFromPercentage(pct).grade, counted),
       hasAnyMarks: allMarks.some((m) => m.studentId === student.id),
     };
   });

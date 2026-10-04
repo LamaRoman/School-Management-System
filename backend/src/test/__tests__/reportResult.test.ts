@@ -79,3 +79,15 @@ describe("an absent subject on the printed card (no grade point for a paper not 
     expect(resultCell(html, "GPA")).toBe("2.06");
   });
 });
+
+it("credit-hour card: a subject below its pass mark fails the student even at grade D+", () => {
+  const html = buildReportCardHtml({
+    ...card([]), gradingStyle: "CREDIT_GRADE_BASED", hasPracticalSubjects: false, overallGpa: 2.2,
+    subjects: [
+      // 17/50 = 34% → D+ (a pass by grade alone) but below the 20/50 pass mark.
+      { subjectName: "English", creditHour: 4, theoryGrade: "D+", practicalGrade: null, finalGrade: "D+", gradePoint: 1.6, hasPassed: false, isAbsent: false, notEntered: false },
+      { subjectName: "Nepali", creditHour: 4, theoryGrade: "B", practicalGrade: null, finalGrade: "B", gradePoint: 2.8, hasPassed: true, isAbsent: false, notEntered: false },
+    ],
+  }, "color");
+  expect(html.match(/>Result<\/td><td[^>]*>([^<]*)</)?.[1]).toBe("Fail");
+});

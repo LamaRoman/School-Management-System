@@ -1,6 +1,6 @@
 import puppeteer, { Browser } from "puppeteer";
 import NepaliDate from "nepali-date-converter";
-import { GRADING_SCALE, isPassingGrade, overallResult } from "./grading.service";
+import { GRADING_SCALE, overallResult, studentResult } from "./grading.service";
 import logger from "../utils/logger";
 
 let browserInstance: Browser | null = null;
@@ -797,15 +797,11 @@ function buildCreditGradeReportCardHtml(
           ${theadMid}
           ${resultHeaders}`;
 
-  // A student fails the term if any subject landed in a failing band — see
-  // FAILING_GRADES in grading.service. Keyed off the grade rather than a
-  // percentage because the credit-grade payload carries grades, not marks.
-  // Same reasoning as the marks-based template above.
+  // Same rule as the marks-based card (studentResult): Incomplete on an absent or missing
+  // paper, otherwise Fail if any subject is below its pass mark. The grade alone used to
+  // decide here (D/E fails), which let 30–39% pass while below a 40% pass mark.
   const anyAbsentCG = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
-  const anyFailed = !anyAbsentCG && (reportData.subjects || []).some(
-    (s: any) => !s.isAbsent && !isPassingGrade(s.finalGrade),
-  );
-  const cgResult = anyAbsentCG ? "Incomplete" : (anyFailed ? "Fail" : "Pass");
+  const cgResult = studentResult("", reportData.subjects || []);
   const cgResultColor = cgResult === "Pass" ? t.positive : t.accent;
   const resultSummaryHtml = `
     <div style="margin-bottom:8px;">
