@@ -631,11 +631,6 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
 
   await authorizeForSection(user, sectionId);
 
-  const rollNumbers = assignments.map((a) => a.rollNo);
-  if (new Set(rollNumbers).size !== rollNumbers.length) {
-    throw new AppError("Duplicate roll numbers found in the input");
-  }
-
   const studentIds = assignments.map((a) => a.studentId);
   const studentsInSection = await prisma.student.findMany({
     where: { id: { in: studentIds }, sectionId },
@@ -645,14 +640,44 @@ router.post("/assign-rolls", authenticate, async (req, res) => {
     throw new AppError("Some students do not belong to this section");
   }
 
-  await prisma.$transaction(
-    assignments.map((a) =>
-      prisma.student.update({
-        where: { id: a.studentId },
-        data: { rollNo: a.rollNo },
-      })
-    )
-  );
+  // Two students given the same number in the form: name them, not just "duplicate".
+  const byRoll = new Map<number, string[]>();
+  for (const a of assignments) byRoll.set(a.rollNo, [...(byRoll.get(a.rollNo) ?? []), a.studentId]);
+  const repeated = [...byRoll.entries()].filter(([, ids]) => ids.length > 1);
+  if (repeated.length > 0) {
+    const names = new Map(
+      (await prisma.student.findMany({ where: { id: { in: repeated.flatMap(([, ids]) => ids) } }, select: { id: true, name: true } }))
+        .map((st) => [st.id, st.name])
+    );
+    const [roll, ids] = repeated[0];
+    throw new AppError(`Roll ${roll} is given to more than one student: ${ids.map((id) => names.get(id)).join(", ")}`);
+  }
+
+  // A number can also be held by a student who is not in the form. An active one is a
+  // real clash the teacher has to resolve; a deactivated one no longer needs a roll
+  // number, so theirs is released.
+  const holders = await prisma.student.findMany({
+    where: { sectionId, id: { notIn: studentIds }, rollNo: { in: [...byRoll.keys()] } },
+    select: { id: true, name: true, rollNo: true, isActive: true },
+  });
+  const activeHolder = holders.find((h) => h.isActive);
+  if (activeHolder) {
+    throw new AppError(`Roll ${activeHolder.rollNo} already belongs to ${activeHolder.name}, who is not in this list`);
+  }
+
+  // Each roll number is unique within a section, and the numbers are being reshuffled
+  // among the same students (1↔2 and so on). Writing them one by one would collide
+  // halfway through — that was the "a record with this data already exists" error. So:
+  // clear them all first, then set the new ones, in one transaction.
+  await prisma.$transaction([
+    prisma.student.updateMany({
+      where: { id: { in: [...studentIds, ...holders.map((h) => h.id)] } },
+      data: { rollNo: null },
+    }),
+    ...assignments.map((a) =>
+      prisma.student.update({ where: { id: a.studentId }, data: { rollNo: a.rollNo } })
+    ),
+  ]);
 
   res.json({ data: { message: `Roll numbers assigned to ${assignments.length} students` } });
 });
