@@ -18,6 +18,7 @@ import { authenticate, authorize, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { verifySection, verifyExamType, verifyAcademicYear, verifyGrade } from "../utils/schoolScope";
 import { getCompleteness, isClassTeacherOf } from "../services/resultStatus.service";
+import { freezeExamAttendance } from "../services/examAttendance.service";
 
 const router = Router();
 
@@ -285,9 +286,19 @@ router.post("/publish", authenticate, authorize("ADMIN"), async (req, res) => {
   if (sectionIds.length === 0) throw new AppError("No sections to publish", 400);
 
   const now = new Date();
-  await prisma.$transaction(
-    sectionIds.map((sectionId) =>
-      prisma.examResultStatus.upsert({
+  await prisma.$transaction(async (tx) => {
+    // Sections already out keep the attendance they were released with; publishing
+    // another grade (or "all") later must not quietly change their cards.
+    const alreadyOut = new Set(
+      (
+        await tx.examResultStatus.findMany({
+          where: { examTypeId: body.examTypeId, sectionId: { in: sectionIds }, status: "PUBLISHED" },
+          select: { sectionId: true },
+        })
+      ).map((r) => r.sectionId)
+    );
+    for (const sectionId of sectionIds) {
+      await tx.examResultStatus.upsert({
         where: { examTypeId_sectionId: { examTypeId: body.examTypeId, sectionId } },
         update: { status: "PUBLISHED", publishedById: req.user!.userId, publishedAt: now },
         create: {
@@ -297,9 +308,11 @@ router.post("/publish", authenticate, authorize("ADMIN"), async (req, res) => {
           publishedById: req.user!.userId,
           publishedAt: now,
         },
-      })
-    )
-  );
+      });
+    }
+    // Freeze the report card's attendance as of this moment (examAttendance.service).
+    await freezeExamAttendance(tx, examType, sectionIds.filter((id) => !alreadyOut.has(id)));
+  }, { timeout: 30000 });
 
   // W1f — Notice already has isPublished, targetAudience and gradeId; this
   // wires it to the moment results actually go out instead of leaving the

@@ -267,7 +267,7 @@ function cardMinHeight(isA5: boolean): string {
  * The table targets a fixed slot count (A4 = 14, A5 = 12) rather than
  * stretching to fill the entire page. With max ~12 subjects, this keeps a
  * small ruled margin below the last subject while leaving room for the
- * bottom section (Result, Grading Scale, signatures) to render at a
+ * bottom section (GPA and attendance, Grading Scale, signatures) to render at a
  * comfortable size instead of being squeezed into whatever's left over.
  *
  * Each filler row uses the same cell padding as the real data rows, so its
@@ -415,13 +415,7 @@ export function buildReportCardHtml(
   // An absent or not-yet-entered paper scores 0 in the GPA, so while any is missing the GPA
   // prints "—" rather than a figure that would read as the student's standing.
   const gpaPending = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
-  const resultSummaryHtml = `
-    <div style="margin-bottom:8px;">
-      <table style="border-collapse:collapse;width:auto;table-layout:auto;">
-        <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${gpaPending ? "—" : esc(reportData.overallGpa ?? "—")}</td></tr>
-      </table>
-    </div>`;
+
 
   const gradingScaleHtml = `
     <div style="margin-bottom:8px;">
@@ -453,16 +447,17 @@ export function buildReportCardHtml(
       ? `<div style="text-align:center;padding:6px;background:${t.promoBg};border:1px solid ${t.promoBorder};border-radius:4px;font-size:${fs.footer};font-weight:700;color:${t.positive};margin-bottom:10px;">✓ ${esc(reportData.promotedTo || "Promoted")}</div>`
       : "";
 
-  let bottomInfoHtml = "";
-  const infoParts: string[] = [];
+  // One line under the subject table, as on the school's own printed sheets:
+  // "Grade Points Average: 2.18    Attendance: 54/58" (that term's present / total days).
+  const summaryParts = [
+    `<span style="font-weight:600;font-size:${fs.footer};">Grade Points Average: <b style="color:${t.primary};">${gpaPending ? "—" : esc(reportData.overallGpa ?? "—")}</b></span>`,
+  ];
   if (cols.showAttendance && reportData.attendance) {
-    infoParts.push(
-      `<span style="font-weight:600;color:${t.primary};font-size:${fs.footer};">Attendance:</span> <span style="font-size:${fs.footer};">Total: <b>${esc(reportData.attendance.totalDays)}</b></span> <span style="font-size:${fs.footer};">Present: <b>${esc(reportData.attendance.presentDays)}</b></span> <span style="font-size:${fs.footer};">Absent: <b>${esc(reportData.attendance.absentDays)}</b></span>`,
+    summaryParts.push(
+      `<span style="font-weight:600;font-size:${fs.footer};">Attendance: <b style="color:${t.primary};">${esc(reportData.attendance.presentDays)}/${esc(reportData.attendance.totalDays)}</b></span>`,
     );
   }
-  if (infoParts.length > 0) {
-    bottomInfoHtml = `<div style="display:flex;gap:16px;align-items:center;font-size:${fs.footer};margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;flex-wrap:wrap;">${infoParts.join('<span style="color:#ccc;margin:0 4px;">|</span>')}</div>`;
-  }
+  const summaryLineHtml = `<div style="display:flex;gap:${isA5 ? "24px" : "40px"};align-items:center;margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;flex-wrap:wrap;">${summaryParts.join("")}</div>`;
 
   const infoFields = [
     ["Student", reportData.student?.name || "—"],
@@ -561,10 +556,9 @@ export function buildReportCardHtml(
     </table>
     <div style="flex:1;padding:${pad.bottom};border-top:2px solid ${t.primary};display:flex;flex-direction:column;justify-content:space-between;">
       <div>
-        ${bottomInfoHtml}
+        ${summaryLineHtml}
         <div style="display:flex;gap:${isA5 ? "12px" : "20px"};flex-wrap:wrap;margin-bottom:8px;">
           ${observationHtml}
-          ${resultSummaryHtml}
           ${gradingScaleHtml}
         </div>
         ${commentsHtml}
