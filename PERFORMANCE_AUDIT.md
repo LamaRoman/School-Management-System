@@ -1315,7 +1315,7 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 
 ### [x] X9. One report card: credit hour + grade point; no pass / fail, no rank
 
-> **Done 2026-10-04** (owner decision). The marks-based card, the grading-style setting, pass marks, the Pass/Fail/Incomplete result and every ranking are gone from the backend, web app and parent app. The ranking items above (R7, P3, R8's subject pass/fail panel, `rank.service.ts`) describe code that no longer exists; they stay as history.
+> **Done 2026-10-04** (owner decision) — PR #83. The marks-based card, the grading-style setting, pass marks, the Pass/Fail/Incomplete result and every ranking are gone from the backend, web app and parent app. The ranking items above (R7, P3, R8's subject pass/fail panel, `rank.service.ts`) describe code that no longer exists; they stay as history.
 
 Deliberately **not** done, and why:
 
