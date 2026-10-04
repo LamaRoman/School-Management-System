@@ -188,6 +188,39 @@ describe("what a family sees before results are published (W1e)", () => {
     }
   });
 
+  it("refuses the on-screen preview (?format=html) as well", async () => {
+    for (const token of [studentToken, parentToken]) {
+      await request(app)
+        .get(`/pdf/term/${studentId}/${firstTermId}?format=html`)
+        .set("Authorization", authHeader(token))
+        .expect(403);
+    }
+  });
+
+  it("gives the class teacher the preview as the PDF's own HTML, in the school's grading style", async () => {
+    const preview = () => request(app)
+      .get(`/pdf/term/${studentId}/${firstTermId}?format=html`)
+      .set("Authorization", authHeader(classTeacherToken))
+      .expect(200);
+
+    const marks = await preview();
+    expect(marks.headers["content-type"]).toMatch(/json/);
+    expect(marks.body.data.html).toContain("Aarav Sharma");
+    expect(marks.body.data.html).not.toContain("Credit Hr.");
+
+    const schoolId = (await prisma.student.findUniqueOrThrow({
+      where: { id: studentId }, select: { section: { select: { grade: { select: { academicYear: { select: { schoolId: true } } } } } } },
+    })).section.grade.academicYear.schoolId;
+    await prisma.reportCardSettings.upsert({
+      where: { schoolId }, update: { gradingStyle: "CREDIT_GRADE_BASED" }, create: { schoolId, gradingStyle: "CREDIT_GRADE_BASED" },
+    });
+    try {
+      expect((await preview()).body.data.html).toContain("Credit Hr.");
+    } finally {
+      await prisma.reportCardSettings.update({ where: { schoolId }, data: { gradingStyle: "MARKS_BASED" } });
+    }
+  });
+
   it("leaves admins and the student's own teachers seeing everything, unaffected by the publish gate (W1g)", async () => {
     for (const token of [adminToken, classTeacherToken]) {
       const res = await termReport(token).expect(200);
