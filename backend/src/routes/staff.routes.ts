@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, getSchoolId, invalidateUserCache } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { afterAdminPasswordReset } from "../utils/passwordReset";
 
 const router = Router();
 
@@ -71,6 +72,7 @@ router.put("/:id/reset-password", authenticate, authorize("ADMIN"), async (req, 
 
   const hashed = await bcrypt.hash(password, 10);
   await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
+  await afterAdminPasswordReset(user.id, user.email);
   res.json({ data: { message: "Password reset successfully" } });
 });
 
