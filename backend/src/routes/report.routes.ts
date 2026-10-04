@@ -17,17 +17,15 @@ const router = Router();
 router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
-  await verifyStudent(studentId, schoolId);
-  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyStudentAccess(req.user!.userId, req.user!.role, studentId),
+  ]);
 
-  const student = await prisma.student.findUniqueOrThrow({
-    where: { id: studentId },
-    include: { section: { include: { grade: true } } },
-  });
-
-  const examType = await prisma.examType.findUniqueOrThrow({
-    where: { id: examTypeId },
-  });
+  const [student, examType] = await Promise.all([
+    prisma.student.findUniqueOrThrow({ where: { id: studentId }, select: { name: true, sectionId: true } }),
+    prisma.examType.findFirstOrThrow({ where: { id: examTypeId, academicYear: { schoolId } } }),
+  ]);
 
   // W1e — a family sees an explicit pending state, not a live number computed
   // from half-entered marks and not a bare error. 200 with a pending payload
@@ -55,8 +53,10 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
 router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
-  await verifyStudent(studentId, schoolId);
-  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyStudentAccess(req.user!.userId, req.user!.role, studentId),
+  ]);
 
   const student = await prisma.student.findUniqueOrThrow({
     where: { id: studentId },

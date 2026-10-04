@@ -137,9 +137,48 @@ export async function loadTermReportBatch(
 }
 
 /**
+ * The same shape as a class batch, for one student — in two rounds of parallel queries
+ * rather than a dozen one after another. Each query is a network round trip to the
+ * database, so for a single card the number of *rounds* is what the teacher waits on.
+ */
+async function loadStudentBatch(studentId: string, examTypeId: string, schoolId: string): Promise<TermReportBatch> {
+  const [student, examType, marks, optional, school] = await Promise.all([
+    prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: { section: { include: { grade: true } } },
+    }),
+    // S5 — scoped to the school rather than looked up by bare id: an unguarded hole in a
+    // boundary this codebase is otherwise rigorous about.
+    prisma.examType.findFirstOrThrow({ where: { id: examTypeId, academicYear: { schoolId } } }),
+    prisma.mark.findMany({
+      where: { studentId, examTypeId },
+      include: { subject: true },
+      orderBy: { subject: { displayOrder: "asc" } },
+    }),
+    prisma.studentOptionalSubject.findMany({ where: { studentId }, select: { subjectId: true } }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS }),
+  ]);
+  const [academicYear, gradeSubjects, attendanceByStudent] = await Promise.all([
+    prisma.academicYear.findUniqueOrThrow({ where: { id: examType.academicYearId } }),
+    prisma.subject.findMany({ where: { gradeId: student.section.gradeId }, orderBy: { displayOrder: "asc" } }),
+    termAttendance([studentId], examType),
+  ]);
+  return {
+    examType,
+    academicYear,
+    school,
+    gradeSubjects,
+    studentsById: new Map([[studentId, student]]),
+    marksByStudent: new Map([[studentId, marks]]),
+    optionalByStudent: new Map([[studentId, new Set(optional.map((o) => o.subjectId))]]),
+    attendanceByStudent,
+  };
+}
+
+/**
  * One student's term report. `batch` lets a bulk caller supply data already fetched for
- * the whole class; without it this fetches everything itself, which is what the
- * single-student routes want. Returns null when the student has no marks for the exam.
+ * the whole class; without it this loads the same data for the one student. Returns null
+ * when the student has no marks for the exam.
  */
 export async function buildTermReportData(
   studentId: string,
@@ -147,78 +186,25 @@ export async function buildTermReportData(
   schoolId: string,
   batch?: TermReportBatch
 ) {
-  const student =
-    batch?.studentsById.get(studentId) ??
-    (await prisma.student.findUniqueOrThrow({
-      where: { id: studentId },
-      include: { section: { include: { grade: true } } },
-    }));
-
-  // S5 — scoped to the school rather than looked up by bare id. Not currently
-  // exploitable (the marks query is scoped by student, so a foreign exam type
-  // returns nothing and 404s), but it is an unguarded hole in a boundary this
-  // codebase is otherwise rigorous about, and it is one refactor away from
-  // mattering.
-  const examType =
-    batch?.examType ??
-    (await prisma.examType.findFirstOrThrow({
-      where: { id: examTypeId, academicYear: { schoolId } },
-    }));
-
-  const academicYear =
-    batch?.academicYear ??
-    (await prisma.academicYear.findUniqueOrThrow({
-      where: { id: examType.academicYearId },
-    }));
-
-  const marks =
-    batch?.marksByStudent.get(studentId) ??
-    (batch
-      ? []
-      : await prisma.mark.findMany({
-          where: { studentId, examTypeId },
-          include: { subject: true },
-          orderBy: { subject: { displayOrder: "asc" } },
-        }));
-
-  if (marks.length === 0) return null;
+  const b = batch ?? (await loadStudentBatch(studentId, examTypeId, schoolId));
+  const student = b.studentsById.get(studentId);
+  const marks = b.marksByStudent.get(studentId) ?? [];
+  if (!student || marks.length === 0) return null;
+  const { examType, academicYear, school } = b;
 
   // Every subject in the grade, not just the ones this student has a mark row for.
   // A subject whose marks have not been entered yet still counts as 0 toward the
   // GPA (R7), so it has to appear on the card — otherwise the printed rows do not
   // add up to the printed GPA, which is precisely the hand-checkability R4 was about.
   const markBySubjectId = new Map(marks.map((m: any) => [m.subjectId, m]));
-  // With a batch, a student missing from the map takes no electives — that is an
-  // answer, not a cache miss. Falling through to a query on `undefined` would put a
-  // round trip back on every student who has no optional subjects, which is most of
-  // them, and quietly undo the batching.
-  const takesOptional = batch
-    ? batch.optionalByStudent.get(studentId) ?? new Set<string>()
-    : new Set(
-        (
-          await prisma.studentOptionalSubject.findMany({
-            where: { studentId },
-            select: { subjectId: true },
-          })
-        ).map((e) => e.subjectId)
-      );
-  const gradeSubjects = (
-    batch?.gradeSubjects ??
-    (await prisma.subject.findMany({
-      where: { gradeId: student.section.gradeId },
-      orderBy: { displayOrder: "asc" },
-    }))
-  ).filter(
+  // A student missing from the map takes no electives — that is an answer, not a miss.
+  const takesOptional = b.optionalByStudent.get(studentId) ?? new Set<string>();
+  const gradeSubjects = b.gradeSubjects.filter(
     // An optional subject appears on this card only if the student is enrolled in it
     // (R7a). Once it does appear it behaves like any other subject: a missing mark
     // means "not entered yet" and scores 0, rather than quietly vanishing.
     (subject: any) => !subject.isOptional || takesOptional.has(subject.id)
   );
-
-  const school =
-    batch !== undefined
-      ? batch.school
-      : await prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS });
 
   // Theory and Practical are each graded on their own full marks, then a Final Grade is
   // derived from the combined percentage — algebraically the same as weighting the two
@@ -259,9 +245,7 @@ export async function buildTermReportData(
   });
 
   // That term's days only, frozen when the exam was published (examAttendance.service).
-  const attendance = batch
-    ? batch.attendanceByStudent.get(studentId)
-    : (await termAttendance([studentId], examType)).get(studentId);
+  const attendance = b.attendanceByStudent.get(studentId);
 
   return {
     _studentId: studentId,
@@ -298,35 +282,33 @@ export async function buildFinalReportData(
   academicYearId: string,
   schoolId: string
 ) {
-  const student = await prisma.student.findUniqueOrThrow({
-    where: { id: studentId },
-    include: { section: { include: { grade: true } } },
-  });
-
+  // Two rounds of parallel queries, not one after another (see loadStudentBatch).
+  const [student, academicYear, allMarks, school, consolidated, finalExamType] = await Promise.all([
+    prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: { section: { include: { grade: true } } },
+    }),
+    prisma.academicYear.findUniqueOrThrow({ where: { id: academicYearId } }),
+    prisma.mark.findMany({ where: { studentId, academicYearId } }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS }),
+    prisma.consolidatedResult.findUnique({
+      where: { studentId_academicYearId: { studentId, academicYearId } },
+    }),
+    prisma.examType.findFirst({ where: { isFinal: true, academicYearId } }),
+  ]);
   const gradeId = student.section.grade.id;
-
-  const academicYear = await prisma.academicYear.findUniqueOrThrow({
-    where: { id: academicYearId },
-  });
-
-  const policies = await prisma.gradingPolicy.findMany({
-    where: { gradeId },
-    include: { examType: true },
-    orderBy: { examType: { displayOrder: "asc" } },
-  });
+  const [policies, gradeSubjects, attendance] = await Promise.all([
+    prisma.gradingPolicy.findMany({
+      where: { gradeId },
+      include: { examType: true },
+      orderBy: { examType: { displayOrder: "asc" } },
+    }),
+    prisma.subject.findMany({ where: { gradeId }, orderBy: { displayOrder: "asc" } }),
+    // The whole year, frozen when the Final is published.
+    yearAttendance(studentId, academicYearId, finalExamType?.id ?? null),
+  ]);
 
   if (policies.length === 0) return null;
-
-  const gradeSubjects = await prisma.subject.findMany({
-    where: { gradeId },
-    orderBy: { displayOrder: "asc" },
-  });
-
-  const allMarks = await prisma.mark.findMany({
-    where: { studentId, academicYearId },
-  });
-
-  const school = await prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS });
 
   // Grades are derived weighted-marks-first: each component's term marks are combined
   // using the grading policy's weightages, and the resulting percentage is graded once.
@@ -370,16 +352,6 @@ export async function buildFinalReportData(
       notEntered: false,
     };
   });
-
-  const consolidated = await prisma.consolidatedResult.findUnique({
-    where: { studentId_academicYearId: { studentId, academicYearId } },
-  });
-
-  const finalExamType = await prisma.examType.findFirst({
-    where: { isFinal: true, academicYearId },
-  });
-  // The whole year, frozen when the Final is published.
-  const attendance = await yearAttendance(studentId, academicYearId, finalExamType?.id ?? null);
 
   return {
     _studentId: studentId,

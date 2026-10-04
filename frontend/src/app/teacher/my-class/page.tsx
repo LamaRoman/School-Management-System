@@ -28,7 +28,6 @@ export default function TeacherMyClassPage() {
   const [selectedExam, setSelectedExam] = useState<ExamType | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [reportData, setReportData] = useState<any>(null);
   const [mode, setMode] = useState<"color" | "bw">("color");
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -46,7 +45,6 @@ export default function TeacherMyClassPage() {
     setSelectedSection(section);
     setSelectedExam(null);
     setSelectedStudent(null);
-    setReportData(null);
     try {
       const [studentList, etList] = await Promise.all([
         api.get<Student[]>(`/students?sectionId=${section.sectionId}`),
@@ -63,24 +61,13 @@ export default function TeacherMyClassPage() {
   const handleExamSelect = (et: ExamType) => {
     setSelectedExam(et);
     setSelectedStudent(null);
-    setReportData(null);
   };
 
-  const handleStudentSelect = async (student: Student) => {
+  // Teachers always see results (no publish gate), so the card is fetched directly: one
+  // request, and the preview itself shows "Loading…" or the reason there is no card.
+  const handleStudentSelect = (student: Student) => {
     if (!selectedExam || !selectedSection) return;
     setSelectedStudent(student);
-    try {
-      let data: any;
-      if (selectedExam.isFinal) {
-        data = await api.get(`/reports/final/${student.id}/${selectedSection.academicYearId}`);
-      } else {
-        data = await api.get(`/reports/term/${student.id}/${selectedExam.id}`);
-      }
-      setReportData(data);
-    } catch {
-      setReportData(null);
-      toast.error("No report data found for this student");
-    }
   };
 
   const openPdf = async (pdfMode: "color" | "bw", action: "print" | "download") => {
@@ -204,39 +191,31 @@ export default function TeacherMyClassPage() {
         <div>
           {/* Back + action buttons */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <button onClick={() => { setSelectedStudent(null); setReportData(null); }}
+            <button onClick={() => setSelectedStudent(null)}
               className="btn-ghost text-xs self-start whitespace-nowrap">
               <ChevronLeft size={14} /> Back to Student List
             </button>
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setMode(mode === "color" ? "bw" : "color")}
                 className="btn-ghost text-xs">{mode === "color" ? "🖨️ B&W" : "🎨 Color"}</button>
-              {reportData && (
-                <>
-                  <button onClick={() => openPdf(mode, "print")} disabled={downloading} className="btn-outline text-xs">
-                    <Printer size={14} /> {downloading ? "..." : `Print (${selectedExam?.paperSize || "A4"})`}
-                  </button>
-                  <button onClick={() => openPdf("color", "download")} disabled={downloading} className="btn-primary text-xs">
-                    <Download size={14} /> {downloading ? "Generating..." : "PDF (Color)"}
-                  </button>
-                  <button onClick={() => openPdf("bw", "download")} disabled={downloading} className="btn-ghost text-xs border border-gray-300">
-                    <Download size={14} /> {downloading ? "..." : "PDF (B&W)"}
-                  </button>
-                </>
-              )}
+              <button onClick={() => openPdf(mode, "print")} disabled={downloading} className="btn-outline text-xs">
+                <Printer size={14} /> {downloading ? "..." : `Print (${selectedExam?.paperSize || "A4"})`}
+              </button>
+              <button onClick={() => openPdf("color", "download")} disabled={downloading} className="btn-primary text-xs">
+                <Download size={14} /> {downloading ? "Generating..." : "PDF (Color)"}
+              </button>
+              <button onClick={() => openPdf("bw", "download")} disabled={downloading} className="btn-ghost text-xs border border-gray-300">
+                <Download size={14} /> {downloading ? "..." : "PDF (B&W)"}
+              </button>
             </div>
           </div>
 
-          {reportData ? (
-            <ReportCardPreview
-              mode={mode}
-              path={selectedExam?.isFinal
-                ? `/pdf/final/${selectedStudent.id}/${selectedSection?.academicYearId}`
-                : `/pdf/term/${selectedStudent.id}/${selectedExam?.id}`}
-            />
-          ) : (
-            <div className="card p-8 text-center text-gray-400">No report data available for this student.</div>
-          )}
+          <ReportCardPreview
+            mode={mode}
+            path={selectedExam?.isFinal
+              ? `/pdf/final/${selectedStudent.id}/${selectedSection?.academicYearId}`
+              : `/pdf/term/${selectedStudent.id}/${selectedExam?.id}`}
+          />
         </div>
       )}
     </div>

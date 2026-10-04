@@ -103,19 +103,18 @@ export async function freezeExamAttendance(db: Db, exam: ExamRef, sectionIds: st
  * number of students, so a whole class prints without a query per student.
  */
 export async function termAttendance(studentIds: string[], exam: ExamRef): Promise<Map<string, Days>> {
-  const frozen = await prisma.examAttendance.findMany({
-    where: { examTypeId: exam.id, studentId: { in: studentIds } },
-    select: { studentId: true, presentDays: true, totalDays: true },
-  });
+  // All three in parallel: one round trip instead of two. The live counts are cheap
+  // grouped queries, so fetching them for students who turn out to be frozen costs little.
+  const [frozen, now, before] = await Promise.all([
+    prisma.examAttendance.findMany({
+      where: { examTypeId: exam.id, studentId: { in: studentIds } },
+      select: { studentId: true, presentDays: true, totalDays: true },
+    }),
+    cumulativeNow(prisma, studentIds, exam.academicYearId),
+    coveredBefore(prisma, studentIds, exam),
+  ]);
   const out = new Map<string, Days>(frozen.map((f) => [f.studentId, { present: f.presentDays, total: f.totalDays }]));
-  const live = studentIds.filter((id) => !out.has(id));
-  if (live.length > 0) {
-    const [now, before] = await Promise.all([
-      cumulativeNow(prisma, live, exam.academicYearId),
-      coveredBefore(prisma, live, exam),
-    ]);
-    for (const id of live) out.set(id, minus(now.get(id)!, before.get(id)));
-  }
+  for (const id of studentIds) if (!out.has(id)) out.set(id, minus(now.get(id)!, before.get(id)));
   return out;
 }
 
