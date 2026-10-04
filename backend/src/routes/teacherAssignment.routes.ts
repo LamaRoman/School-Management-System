@@ -173,6 +173,9 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       throw new AppError("This teacher is already assigned to this subject for this section.");
     }
   }
+  // The checks above are read-then-write, so two requests at once (a double click) can both pass
+  // them. A partial unique index (class teacher per section) is the real guard; turn its
+  // violation into the same message the check gives instead of a 500.
   const assignment = await prisma.teacherAssignment.create({
     data: {
       teacherId: data.teacherId,
@@ -187,6 +190,11 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
       section: { include: { grade: { select: { name: true } } } },
       subject: { select: { name: true } },
     },
+  }).catch((err) => {
+    if (data.isClassTeacher && err?.code === "P2002") {
+      throw new AppError("This section already has a class teacher. Remove the existing one first.");
+    }
+    throw err;
   });
 
   res.status(201).json({ data: assignment });
