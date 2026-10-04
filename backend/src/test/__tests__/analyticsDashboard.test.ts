@@ -103,21 +103,19 @@ beforeAll(async () => {
 
   mathsId = (
     await prisma.subject.create({
-      data: { name: "Maths", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+      data: { name: "Maths", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0 },
     })
   ).id;
   scienceId = (
     await prisma.subject.create({
-      data: { name: "Science", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+      data: { name: "Science", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0 },
     })
   ).id;
 
   firstTermId = (await addExamType("First Terminal", 1)).id;
   finalExamId = (await addExamType("Final", 2)).id;
 
-  // Final exam, Maths: 80, 30, 90, 20 → 2 pass / 2 fail at passMarks 40.
   const mathsFinal = [80, 30, 90, 20];
-  // Final exam, Science: all comfortably passing.
   const scienceFinal = [70, 60, 75, 65];
   for (let i = 0; i < gradeOneStudents.length; i++) {
     await addMark(gradeOneStudents[i], mathsId, finalExamId, mathsFinal[i]);
@@ -174,10 +172,9 @@ describe("GET /analytics/dashboard — numbers", () => {
     const gradeTwo = d.classAverages.find((c: { gradeName: string }) => c.gradeName === "Grade II");
     expect(gradeTwo).toMatchObject({ avgGpa: 0, avgPct: 0, studentCount: 1 });
 
-    expect(d.topPerformers[0]).toMatchObject({ rank: 1, percentage: 90, gradeName: "Grade I" });
-
-    const maths = d.subjectStats.find((s: { subjectName: string }) => s.subjectName === "Maths");
-    expect(maths).toMatchObject({ totalStudents: 4, passed: 2, failed: 2, passRate: 50 });
+    // No ranking and no pass / fail anywhere in the system.
+    expect(d).not.toHaveProperty("topPerformers");
+    expect(d).not.toHaveProperty("subjectStats");
 
     // First Terminal: everyone scored 50/100 in one subject → 50%.
     const firstTerm = d.termComparison.find((t: { examName: string }) => t.examName === "First Terminal");
@@ -186,74 +183,6 @@ describe("GET /analytics/dashboard — numbers", () => {
     // Final: per-student averages of (maths, science) → 75, 45, 82.5, 42.5 → 61.3.
     const final = d.termComparison.find((t: { examName: string }) => t.examName === "Final");
     expect(final).toMatchObject({ avgPercentage: 61.3, studentCount: 4 });
-  });
-});
-
-describe("GET /analytics/dashboard — R8/R8a: which exam the pass/fail panel is about", () => {
-  afterEach(async () => {
-    await prisma.examType.updateMany({ where: { academicYearId: yearId }, data: { isFinal: false } });
-    await prisma.examType.deleteMany({ where: { academicYearId: yearId, name: "Makeup" } });
-    clearDashboardCache();
-  });
-
-  it("names the exam it used", async () => {
-    // Final has 8 marks entered (Maths + Science × 4 students) against First
-    // Terminal's 4 (Maths only) — Final wins on marks entered here, same as
-    // it would have under the old displayOrder rule, but for a different
-    // reason (see the next test, where the two rules disagree).
-    const res = await dashboard(adminToken).expect(200);
-    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final" });
-  });
-
-  it("picks the exam with the most marks entered, not the one flagged final or sorting last (R8a)", async () => {
-    // Owner decision (2026-08-17): report on whichever exam the school has
-    // actually finished entering, not the Final — a Final sitting at a
-    // fraction entered for most of the year used to make this panel report
-    // pass rates over a sliver of the cohort. Flag Final isFinal and give it
-    // the higher displayOrder, exactly as in real data, then give First
-    // Terminal strictly more marks via a temporary subject — the panel must
-    // still follow the marks, not the flag or the order.
-    await prisma.examType.update({ where: { id: finalExamId }, data: { isFinal: true } });
-
-    const mathsSubject = await prisma.subject.findUniqueOrThrow({
-      where: { id: mathsId },
-      select: { gradeId: true },
-    });
-    const extraSubject = await prisma.subject.create({
-      data: { name: "Social", gradeId: mathsSubject.gradeId, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
-    });
-    try {
-      // First Terminal: 4 (Maths, existing) + 4 (Science, new) + 4 (Social, new) = 12, vs Final's 8.
-      for (const sid of gradeOneStudents) {
-        await addMark(sid, scienceId, firstTermId, 55);
-        await addMark(sid, extraSubject.id, firstTermId, 60);
-      }
-      clearDashboardCache();
-
-      const res = await dashboard(adminToken).expect(200);
-      expect(res.body.data.subjectStatsExam).toEqual({ name: "First Terminal" });
-    } finally {
-      await prisma.mark.deleteMany({ where: { subjectId: extraSubject.id } });
-      await prisma.mark.deleteMany({ where: { examTypeId: firstTermId, subjectId: scienceId } });
-      await prisma.subject.delete({ where: { id: extraSubject.id } });
-      clearDashboardCache();
-    }
-  });
-
-  it("a low-volume makeup exam added after the final does not hijack the panel", async () => {
-    // A supplementary exam sorting last, with almost nothing entered, must
-    // not outrank Final just because display order once decided this.
-    const makeup = await addExamType("Makeup", 3);
-    await addMark(gradeOneStudents[1], mathsId, makeup.id, 45);
-    clearDashboardCache();
-
-    const res = await dashboard(adminToken).expect(200);
-    expect(res.body.data.subjectStatsExam).toEqual({ name: "Final" });
-
-    const maths = res.body.data.subjectStats.find(
-      (s: { subjectName: string }) => s.subjectName === "Maths"
-    );
-    expect(maths).toMatchObject({ totalStudents: 4, passed: 2, failed: 2 });
   });
 });
 
@@ -267,7 +196,7 @@ describe("GET /analytics/dashboard — cost", () => {
       const extraSection = await createTestSection(extraGrade.id, { name: "A" });
       await createTestStudent(extraSection.id, { name: "Three 1", rollNo: 1 });
       await prisma.subject.create({
-        data: { name: "English", gradeId: extraGrade.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+        data: { name: "English", gradeId: extraGrade.id, fullTheoryMarks: 100, fullPracticalMarks: 0 },
       });
       clearDashboardCache();
 
@@ -318,7 +247,6 @@ describe("GET /analytics/dashboard — cache isolation", () => {
     const theirs = await dashboard(foreignToken).expect(200);
     expect(theirs.body.data.summary.totalStudents).toBe(1);
     expect(theirs.body.data.classAverages).toHaveLength(1);
-    expect(theirs.body.data.topPerformers).toHaveLength(0);
 
     // And mine is unchanged by theirs.
     const again = await dashboard(adminToken).expect(200);

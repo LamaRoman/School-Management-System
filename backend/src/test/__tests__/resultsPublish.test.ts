@@ -2,7 +2,7 @@
  * Results publish workflow (W1)
  *
  * The failure this exists to prevent is specific: a parent opens the portal on
- * day one of marks entry and sees a percentage, GPA and rank computed from one
+ * day one of marks entry and sees a GPA computed from one
  * subject, with nothing distinguishing it from a finished result. So the tests
  * that matter most are the ones asserting what a PARENT and a STUDENT can see
  * at each stage — including through the PDF route, which would otherwise be a
@@ -77,12 +77,12 @@ beforeAll(async () => {
 
   mathsId = (
     await prisma.subject.create({
-      data: { name: "Maths", gradeId: grade.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, displayOrder: 1 },
+      data: { name: "Maths", gradeId: grade.id, fullTheoryMarks: 100, fullPracticalMarks: 0, displayOrder: 1 },
     })
   ).id;
   scienceId = (
     await prisma.subject.create({
-      data: { name: "Science", gradeId: grade.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, displayOrder: 2 },
+      data: { name: "Science", gradeId: grade.id, fullTheoryMarks: 100, fullPracticalMarks: 0, displayOrder: 2 },
     })
   ).id;
 
@@ -166,11 +166,9 @@ describe("what a family sees before results are published (W1e)", () => {
     expect(res.body.data.examName).toBe("First Terminal");
     expect(res.body.data.message).toMatch(/not been published/i);
     // The thing this whole feature exists to stop reaching a family. Field
-    // names taken from the real payload — `percentage`/`gpa` are undefined on
-    // a *finished* report too, so asserting those would prove nothing.
-    expect(res.body.data.overallPercentage).toBeUndefined();
+    // names taken from the real payload — `gpa` is undefined on a *finished*
+    // report too, so asserting that would prove nothing.
     expect(res.body.data.overallGpa).toBeUndefined();
-    expect(res.body.data.rank).toBeUndefined();
     expect(res.body.data.subjects).toBeUndefined();
   });
 
@@ -197,28 +195,14 @@ describe("what a family sees before results are published (W1e)", () => {
     }
   });
 
-  it("gives the class teacher the preview as the PDF's own HTML, in the school's grading style", async () => {
-    const preview = () => request(app)
+  it("gives the class teacher the preview as the PDF's own HTML", async () => {
+    const res = await request(app)
       .get(`/pdf/term/${studentId}/${firstTermId}?format=html`)
       .set("Authorization", authHeader(classTeacherToken))
       .expect(200);
-
-    const marks = await preview();
-    expect(marks.headers["content-type"]).toMatch(/json/);
-    expect(marks.body.data.html).toContain("Aarav Sharma");
-    expect(marks.body.data.html).not.toContain("Credit Hr.");
-
-    const schoolId = (await prisma.student.findUniqueOrThrow({
-      where: { id: studentId }, select: { section: { select: { grade: { select: { academicYear: { select: { schoolId: true } } } } } } },
-    })).section.grade.academicYear.schoolId;
-    await prisma.reportCardSettings.upsert({
-      where: { schoolId }, update: { gradingStyle: "CREDIT_GRADE_BASED" }, create: { schoolId, gradingStyle: "CREDIT_GRADE_BASED" },
-    });
-    try {
-      expect((await preview()).body.data.html).toContain("Credit Hr.");
-    } finally {
-      await prisma.reportCardSettings.update({ where: { schoolId }, data: { gradingStyle: "MARKS_BASED" } });
-    }
+    expect(res.headers["content-type"]).toMatch(/json/);
+    expect(res.body.data.html).toContain("Aarav Sharma");
+    expect(res.body.data.html).toContain("Credit Hr.");
   });
 
   it("leaves admins and the student's own teachers seeing everything, unaffected by the publish gate (W1g)", async () => {
@@ -252,7 +236,6 @@ describe("what a family sees once published", () => {
       const res = await termReport(token).expect(200);
       expect(res.body.data.pending).toBeUndefined();
       expect(res.body.data.subjects.length).toBe(2);
-      expect(res.body.data.overallPercentage).toBeGreaterThan(0);
       expect(res.body.data.overallGpa).toBeGreaterThan(0);
     }
   });
@@ -423,7 +406,7 @@ describe("the soft gate names what is missing (W1b)", () => {
 
   it("does not count an elective against students who do not take it", async () => {
     const music = await prisma.subject.create({
-      data: { name: "Music", gradeId, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, isOptional: true, displayOrder: 3 },
+      data: { name: "Music", gradeId, fullTheoryMarks: 100, fullPracticalMarks: 0, isOptional: true, displayOrder: 3 },
     });
     await prisma.studentOptionalSubject.create({ data: { studentId, subjectId: music.id } });
 

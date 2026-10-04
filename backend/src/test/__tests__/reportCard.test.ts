@@ -1,17 +1,10 @@
 /**
  * Report Card Integration Tests
  *
- * Covers PDF generation for both report styles (ReportCardSettings.gradingStyle
- * — a single school-wide setting since 2026-08-17, not picked per grade):
- *   - MARKS_BASED        — the original full-marks / pass-marks report
- *   - CREDIT_GRADE_BASED — the credit-hour / grade-point (SEE/NEB) report
- *
- * The case that matters most here is that a school set to CREDIT_GRADE_BASED
- * gets the credit-grade template for BOTH its term report and its annual
- * report. Those are built by two separate functions (buildTermReportData and
- * buildFinalReportData), and an earlier revision wired the style through only
- * the term one — so a school would have seen a SEE-style term report and a
- * marks-style annual report for the same class.
+ * Covers PDF generation for the report card — the credit-hour / grade-point
+ * (SEE/NEB) design, the only one there is. Term and annual reports are built by
+ * two separate functions (buildTermReportData and buildFinalReportData), so both
+ * are checked for credit hours, grade points and the credit-weighted GPA.
  */
 
 import request from "supertest";
@@ -44,9 +37,8 @@ function captureHtml() {
   return { captured, restore: () => spy.mockRestore() };
 }
 
-// Markers unique to each template's table header.
+// Markers of the report card's table and footer.
 const CREDIT_MARKERS = ["Credit Hr.", "Grade Point", "Grade Points Average"];
-const MARKS_MARKERS = ["Pass", "Full"];
 
 /**
  * Rendered page count. The card is stretched to a fixed min-height so the
@@ -77,7 +69,6 @@ async function seedMarksFor(gradeId: string, studentId: string, yearId: string) 
           name: s.name,
           fullTheoryMarks: s.theory,
           fullPracticalMarks: s.practical,
-          passMarks: 35,
           creditHour: s.credit,
           displayOrder: i,
           gradeId,
@@ -140,18 +131,8 @@ afterAll(async () => {
   await disconnectDatabase();
 });
 
-async function setStyle(style: "MARKS_BASED" | "CREDIT_GRADE_BASED") {
-  await prisma.reportCardSettings.upsert({
-    where: { schoolId: ctx.school.id },
-    update: { gradingStyle: style },
-    create: { schoolId: ctx.school.id, gradingStyle: style },
-  });
-}
-
 describe("Report card PDF generation", () => {
-  describe("MARKS_BASED (default, existing behaviour)", () => {
-    beforeAll(() => setStyle("MARKS_BASED"));
-
+  describe("credit hour + grade point card", () => {
     it("generates a term report", async () => {
       const res = await request(app)
         .get(`/pdf/term/${ctx.student.id}/${firstTermId}`)
@@ -170,31 +151,8 @@ describe("Report card PDF generation", () => {
       expect(res.status).toBe(200);
       expect(res.body.subarray(0, 5).toString()).toBe(PDF_MAGIC);
     }, 30000);
-  });
 
-  describe("CREDIT_GRADE_BASED", () => {
-    beforeAll(() => setStyle("CREDIT_GRADE_BASED"));
-
-    it("generates a term report", async () => {
-      const res = await request(app)
-        .get(`/pdf/term/${ctx.student.id}/${firstTermId}`)
-        .set("Authorization", authHeader(adminToken));
-
-      expect(res.status).toBe(200);
-      expect(res.body.subarray(0, 5).toString()).toBe(PDF_MAGIC);
-    }, 30000);
-
-    // The regression this suite exists for.
-    it("generates an annual report through the credit-grade template", async () => {
-      const res = await request(app)
-        .get(`/pdf/final/${ctx.student.id}/${ctx.year.id}`)
-        .set("Authorization", authHeader(adminToken));
-
-      expect(res.status).toBe(200);
-      expect(res.body.subarray(0, 5).toString()).toBe(PDF_MAGIC);
-    }, 30000);
-
-    it("renders the annual report with credit-grade columns, not marks columns", async () => {
+    it("renders the annual report with credit hours and grade points, no marks, rank or pass/fail", async () => {
       const { captured, restore } = captureHtml();
       try {
         await request(app)
@@ -208,11 +166,8 @@ describe("Report card PDF generation", () => {
       expect(captured).toHaveLength(1);
       const html = captured[0];
       for (const marker of CREDIT_MARKERS) expect(html).toContain(marker);
-      // The marks-based template's Full/Pass Marks columns must be absent.
-      for (const marker of MARKS_MARKERS) expect(html).not.toContain(`>${marker}</th>`);
-      // Credit hours and grade points must actually be populated, not blank
-      // cells — passing gradingStyle through without reshaping the subjects
-      // would render the credit template with empty columns.
+      for (const gone of ["Full Marks", "Pass Marks", "Rank", "Pass", "Fail"]) expect(html).not.toContain(gone);
+      // Credit hours and grade points must actually be populated, not blank cells.
       expect(html).toMatch(/>4</); // Mathematics credit hour
       expect(html).toMatch(/>3</); // Social Studies credit hour
     }, 30000);
@@ -246,7 +201,6 @@ describe("Report card PDF generation", () => {
           name: "Practical Only",
           fullTheoryMarks: 0,
           fullPracticalMarks: 50,
-          passMarks: 20,
           gradeId: ctx.grade.id,
         });
 
@@ -261,7 +215,6 @@ describe("Report card PDF generation", () => {
           name: "Theory Only",
           fullTheoryMarks: 100,
           fullPracticalMarks: 0,
-          passMarks: 35,
           gradeId: ctx.grade.id,
         });
 
@@ -280,8 +233,6 @@ describe("Report card PDF generation", () => {
   });
 
   describe("page layout", () => {
-    beforeAll(() => setStyle("MARKS_BASED"));
-
     it("fits a term report on exactly one page", async () => {
       const res = await request(app)
         .get(`/pdf/term/${ctx.student.id}/${firstTermId}`)
@@ -350,8 +301,6 @@ describe("Report card PDF generation", () => {
   });
 
   describe("ink-friendly B&W mode", () => {
-    beforeAll(() => setStyle("MARKS_BASED"));
-
     it("renders no solid fills, so a printed class set stays cheap", async () => {
       const { captured, restore } = captureHtml();
       try {

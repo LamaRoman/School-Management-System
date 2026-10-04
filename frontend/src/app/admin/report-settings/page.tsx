@@ -2,20 +2,16 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Save, Settings, Upload, Trash2, FileText } from "lucide-react";
+import { Save, Settings, Upload, Trash2 } from "lucide-react";
 
 interface SettingsData {
-  showPassMarks: boolean;
   showTheoryPrac: boolean;
-  showPercentage: boolean;
   showGrade: boolean;
   showGpa: boolean;
-  showRank: boolean;
   showAttendance: boolean;
   showRemarks: boolean;
   showPromotion: boolean;
   showNepaliName: boolean;
-  gradingStyle: "MARKS_BASED" | "CREDIT_GRADE_BASED";
   logoPosition: string;
   logoSize: string;
 }
@@ -30,20 +26,17 @@ const settingsConfig = [
   },
   {
     group: "Table Columns",
-    description: "Choose which columns appear in the marks table",
+    description: "Choose which columns appear in the subject table",
     items: [
-      { key: "showPassMarks", label: "Pass Marks", desc: "Show the pass marks column for each subject" },
-      { key: "showTheoryPrac", label: "Theory / Practical Split", desc: "Show separate Theory and Practical columns (hidden if no subjects have practicals)" },
-      { key: "showPercentage", label: "Percentage (%)", desc: "Show percentage column per subject (hidden by default since it equals Total when full marks = 100)" },
-      { key: "showGrade", label: "Grade", desc: "Show letter grade column (A+, A, B+, etc.)" },
-      { key: "showGpa", label: "GPA", desc: "Show GPA column (4.0, 3.6, 3.2, etc.)" },
+      { key: "showTheoryPrac", label: "Theory / Practical Split", desc: "Show separate Theory and Practical grade columns (hidden if no subjects have practicals)" },
+      { key: "showGrade", label: "Final Grade", desc: "Show the final letter grade column (A+, A, B+, etc.)" },
+      { key: "showGpa", label: "Grade Point", desc: "Show the grade point column (4.0, 3.6, 3.2, etc.)" },
     ],
   },
   {
     group: "Bottom Section",
-    description: "Choose which sections appear below the marks table",
+    description: "Choose which sections appear below the subject table",
     items: [
-      { key: "showRank", label: "Rank", desc: "Show student rank within the section (also controlled per exam type)" },
       { key: "showAttendance", label: "Attendance", desc: "Show total days, present days, absent days" },
       { key: "showRemarks", label: "Comments / Remarks", desc: "Show class teacher comments (Final report only)" },
       { key: "showPromotion", label: "Promotion Status", desc: "Show 'Promoted to Class X' banner (Final report only)" },
@@ -211,29 +204,6 @@ export default function ReportCardSettingsPage() {
               )}
             </div>
           </div>
-        </div>
-
-        {/* Report Card Design */}
-        <div className="card p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <FileText size={16} className="text-primary" />
-            <h2 className="font-display font-bold text-primary">Report Card Design</h2>
-          </div>
-          <p className="text-xs text-gray-500 mb-4">
-            One design applies to every grade&apos;s report card, term and annual.
-          </p>
-          <select
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-            value={settings.gradingStyle}
-            onChange={(e) => {
-              const updated = { ...settings, gradingStyle: e.target.value as "MARKS_BASED" | "CREDIT_GRADE_BASED" };
-              setSettings(updated);
-              setHasChanges(JSON.stringify(updated) !== JSON.stringify(originalSettings));
-            }}
-          >
-            <option value="MARKS_BASED">Marks-based (Full/Pass Marks)</option>
-            <option value="CREDIT_GRADE_BASED">Credit Hour + Grade Point (SEE/NEB style)</option>
-          </select>
         </div>
 
         {settingsConfig.map((group) => (

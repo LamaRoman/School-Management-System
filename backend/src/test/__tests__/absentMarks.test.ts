@@ -1,17 +1,13 @@
 /**
  * Absent-mark handling in results
  *
- * Pins the rule stated in CLAUDE.md and in grading.service.ts's own rationale:
- * an absent subject is DISPLAYED as "Ab" (its grade/GPA as the E / 0.8 it counts as) but is COUNTED AS ZERO in every
- * average — it is never dropped from the denominator.
+ * Pins the rule stated in CLAUDE.md: an absent subject is DISPLAYED as "Ab" (never as a
+ * grade) but is COUNTED AS ZERO in the GPA — it is never dropped from the denominator.
  *
  * Why this file exists: an earlier revision short-circuited absent subjects to
- * `{ grade: "NG", gpa: null }` and then filtered them out of the overall
- * percentage. calculateOverallGpa drops nulls, so the subject vanished from
- * both averages, and a student who SKIPPED an exam scored higher than one who
- * sat it and failed. The same divergence also made a report card's percentage
- * disagree with its own rank (rank always scored absences as 0) and made the
- * grade sheet's Total column disagree with its Percentage column.
+ * `{ grade: "NG", gpa: null }`, and the GPA average drops nulls, so the subject
+ * vanished from the average and a student who SKIPPED an exam scored higher than
+ * one who sat it and did badly.
  *
  * The scenario below is the minimal reproduction of that bug. If someone
  * reintroduces the short-circuit, "counts an absence as zero, not as a skip"
@@ -42,18 +38,16 @@ let rita: { id: string };
 let sita: { id: string };
 
 /*
- * Two subjects, 100 marks each, so the arithmetic is checkable by hand:
+ * Two subjects, 100 marks and 4 credit hours each, so the arithmetic is checkable by hand:
  *
- *                     A      B          %              GPA
- *   Rita (sat both)   80     30    (80+30)/2 = 55   (3.6+1.6)/2 = 2.6  -> C+
- *   Sita (absent B)   80     Ab    (80+ 0)/2 = 40   (3.6+0.8)/2 = 2.2  -> C
+ *                     A           B            GPA
+ *   Rita (sat both)   80 A 3.6    30 D+ 1.6    (3.6+1.6)/2 = 2.6
+ *   Sita (absent B)   80 A 3.6    Ab (0 → 0.8) (3.6+0.8)/2 = 2.2
  *
- * Under the old behaviour Sita's B was dropped entirely, giving her 80% / 3.6
- * — beating Rita despite not sitting the paper. That inversion is the bug.
+ * Under the old behaviour Sita's B was dropped entirely, giving her 3.6 — beating
+ * Rita despite not sitting the paper. That inversion is the bug.
  */
-const RITA_PCT = 55;
 const RITA_GPA = 2.6;
-const SITA_PCT = 40;
 const SITA_GPA = 2.2;
 
 beforeAll(async () => {
@@ -76,7 +70,6 @@ beforeAll(async () => {
       academicYearId: ctx.year.id,
       displayOrder: 1,
       paperSize: "A4",
-      showRank: true,
     },
   });
   examTypeId = examType.id;
@@ -88,7 +81,7 @@ beforeAll(async () => {
           name,
           fullTheoryMarks: 100,
           fullPracticalMarks: 0,
-          passMarks: 35,
+          creditHour: 4,
           displayOrder: i,
           gradeId: ctx.grade.id,
         },
@@ -124,59 +117,44 @@ describe("absent marks in the term report", () => {
   it("counts an absence as zero, not as a skip", async () => {
     const sitaReport = await termReport(sita.id);
 
-    // The regression guard: dropping the absent subject would give 80 / 3.6.
-    expect(sitaReport.overallPercentage).toBe(SITA_PCT);
+    // The regression guard: dropping the absent subject would give 3.6.
     expect(sitaReport.overallGpa).toBe(SITA_GPA);
+    // ...and the screens show "—" for it while the paper is missing.
+    expect(sitaReport.incomplete).toBe(true);
   });
 
-  it("ranks a student who sat the exam above one who skipped it", async () => {
+  it("scores a student who sat the exam above one who skipped it", async () => {
     const ritaReport = await termReport(rita.id);
     const sitaReport = await termReport(sita.id);
 
-    expect(ritaReport.overallPercentage).toBe(RITA_PCT);
     expect(ritaReport.overallGpa).toBe(RITA_GPA);
-
+    expect(ritaReport.incomplete).toBe(false);
     // The whole point: 30 marks beats not turning up.
-    expect(ritaReport.overallPercentage).toBeGreaterThan(sitaReport.overallPercentage);
     expect(ritaReport.overallGpa).toBeGreaterThan(sitaReport.overallGpa);
-    // Since 2026-10-04 only students who passed are ranked: Rita is under the pass mark
-    // in B (Fail) and Sita was absent (Incomplete), so neither gets a position — the
-    // absence can no longer lift Sita above anyone.
-    expect(ritaReport.rank).toBeNull();
-    expect(sitaReport.rank).toBeNull();
   });
 
-  it("still flags the absent subject so the card prints Ab", async () => {
+  it("flags the absent subject so it prints Ab, and has no rank or pass/fail", async () => {
     const sitaReport = await termReport(sita.id);
     const absent = sitaReport.subjects.find((s: any) => s.subjectName === "Subject B");
 
-    // Counting it as zero must not cost us the display marker — pdf.service.ts
-    // renders "Ab" off this flag, not off the grade or gpa values.
+    // Counting it as zero must not cost us the display marker — every screen and the
+    // PDF print "Ab" off this flag, never the E it is scored as.
     expect(absent.isAbsent).toBe(true);
-    expect(absent.percentage).toBe(0);
-    expect(absent.hasPassed).toBe(false);
+    expect(absent.gradePoint).toBe(0.8);
 
-    // A present subject is unaffected.
     const present = sitaReport.subjects.find((s: any) => s.subjectName === "Subject A");
     expect(present.isAbsent).toBe(false);
-    expect(present.percentage).toBe(80);
-  });
+    expect(present.finalGrade).toBe("A");
 
-  it("ranks a student once the absence is replaced by a passing mark", async () => {
-    // Sita sits B after all and passes it: she is now Pass and ranked; Rita (Fail) still is not.
-    const m = await prisma.mark.findFirstOrThrow({ where: { studentId: sita.id, subjectId: subjectB.id } });
-    await prisma.mark.update({ where: { id: m.id }, data: { isAbsent: false, theoryMarks: 50 } });
-    try {
-      expect((await termReport(sita.id)).rank).toBe(1);
-      expect((await termReport(rita.id)).rank).toBeNull();
-    } finally {
-      await prisma.mark.update({ where: { id: m.id }, data: { isAbsent: true, theoryMarks: null } });
+    for (const gone of ["rank", "totalStudents", "result", "overallPercentage", "overallGrade"]) {
+      expect(sitaReport).not.toHaveProperty(gone);
     }
+    expect(absent).not.toHaveProperty("hasPassed");
   });
 });
 
 describe("absent marks in the class grade sheet", () => {
-  it("matches the report card, and its own Total column", async () => {
+  it("matches the report card", async () => {
     const res = await request(app)
       .get(
         `/grade-sheet/term?sectionId=${ctx.section.id}&examTypeId=${examTypeId}&academicYearId=${ctx.year.id}`,
@@ -188,17 +166,13 @@ describe("absent marks in the class grade sheet", () => {
     const sitaRow = rows.find((r) => r.studentName === "Sita");
     const ritaRow = rows.find((r) => r.studentName === "Rita");
 
-    // Same figures the report card gives — the two are printed together.
-    expect(sitaRow.percentage).toBe(SITA_PCT);
-    expect(ritaRow.percentage).toBe(RITA_PCT);
-    // Neither passed (Rita: Fail in B, Sita: absent), so neither is ranked.
-    expect(ritaRow.rank).toBeNull();
-    expect(sitaRow.rank).toBeNull();
-
-    // A parent can divide the Total column by hand; it has to land on the
-    // Percentage column beside it.
-    expect(sitaRow.totalObtained).toBe(80);
-    expect(sitaRow.totalFullMarks).toBe(200);
-    expect((sitaRow.totalObtained / sitaRow.totalFullMarks) * 100).toBe(sitaRow.percentage);
+    // Same GPA the report card gives — the two are printed together.
+    expect(sitaRow.gpa).toBe(SITA_GPA);
+    expect(sitaRow.incomplete).toBe(true);
+    expect(ritaRow.gpa).toBe(RITA_GPA);
+    expect(ritaRow.incomplete).toBe(false);
+    expect(sitaRow.subjects.find((s: any) => s.subjectId === subjectB.id).isAbsent).toBe(true);
+    expect(ritaRow).not.toHaveProperty("rank");
+    expect(res.body.data).not.toHaveProperty("showRank");
   });
 });

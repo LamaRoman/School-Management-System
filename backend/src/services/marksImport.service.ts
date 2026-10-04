@@ -11,7 +11,7 @@ import type { PrismaClient } from "@prisma/client";
 
 export interface ImportRow { rollNo: number; name: string; marks: Record<string, number | null> }
 export interface ImportData { subjects: string[]; rows: ImportRow[] }
-export interface ImportOptions { fullMarks: number; passMarks: number }
+export interface ImportOptions { fullMarks: number }
 
 type Db = Pick<PrismaClient, "section" | "examType" | "subject" | "student" | "mark" | "$transaction">;
 
@@ -154,7 +154,7 @@ export async function applyPlan(db: Db, target: Target, data: ImportData, opts: 
       const existing = gradeSubjects.find((g: any) => g.name === s.name);
       if (existing) { subjectIds.set(s.sheet, existing.id); continue; }
       const created = await tx.subject.create({
-        data: { name: s.name, fullTheoryMarks: opts.fullMarks, fullPracticalMarks: 0, passMarks: opts.passMarks, gradeId: section.gradeId, displayOrder: maxOrder + 1 + subjectsCreated },
+        data: { name: s.name, fullTheoryMarks: opts.fullMarks, fullPracticalMarks: 0, gradeId: section.gradeId, displayOrder: maxOrder + 1 + subjectsCreated },
       });
       subjectIds.set(s.sheet, created.id);
       subjectsCreated++;

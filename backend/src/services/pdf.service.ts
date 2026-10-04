@@ -1,6 +1,6 @@
 import puppeteer, { Browser } from "puppeteer";
 import NepaliDate from "nepali-date-converter";
-import { GRADING_SCALE, isPassingGrade, overallResult } from "./grading.service";
+import { GRADING_SCALE } from "./grading.service";
 import logger from "../utils/logger";
 
 let browserInstance: Browser | null = null;
@@ -295,24 +295,10 @@ function issueDateHtml(fontSize: string): string {
   return `<span style="font-size:${fontSize};font-weight:600;">Date of Issue: ${esc(new NepaliDate().format("YYYY-MM-DD"))}</span>`;
 }
 
-function getResultSummary(overallGrade: string, subjects: any[]): {
-  description: string;
-  result: string;
-} {
-  const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
-  return {
-    description: entry?.description || "—",
-    result: overallResult(overallGrade, subjects),
-  };
-}
-
 export interface ReportCardColumnSettings {
-  showPassMarks: boolean;
   showTheoryPrac: boolean;
-  showPercentage: boolean;
   showGrade: boolean;
   showGpa: boolean;
-  showRank: boolean;
   showAttendance: boolean;
   showRemarks: boolean;
   showPromotion: boolean;
@@ -322,12 +308,9 @@ export interface ReportCardColumnSettings {
 }
 
 export const defaultColumnSettings: ReportCardColumnSettings = {
-  showPassMarks: true,
   showTheoryPrac: true,
-  showPercentage: false,
   showGrade: true,
   showGpa: true,
-  showRank: true,
   showAttendance: true,
   showRemarks: true,
   showPromotion: true,
@@ -336,384 +319,16 @@ export const defaultColumnSettings: ReportCardColumnSettings = {
   logoSize: "medium",
 };
 
+/**
+ * The report card: credit-hour / grade-point design (SEE/NEB style). Each subject prints its
+ * credit hours, Theory and Practical grades, Final Grade and Grade Point; the footer prints
+ * the credit-weighted Grade Points Average. Data comes from services/reportCard.service.ts.
+ */
 export function buildReportCardHtml(
   reportData: any,
   mode: "color" | "bw",
   cols: ReportCardColumnSettings = defaultColumnSettings,
   observations: any[] | null = null,
-): string {
-  // Credit-hour / grade-point report style (SEE/NEB-like) renders through a
-  // fully separate function — see buildCreditGradeReportCardHtml below.
-  // Everything from here down is the original marks-based template and is
-  // only ever reached when gradingStyle is unset or "MARKS_BASED".
-  if (reportData.gradingStyle === "CREDIT_GRADE_BASED") {
-    return buildCreditGradeReportCardHtml(reportData, mode, cols, observations);
-  }
-
-  const t = getTheme(mode);
-  const isTermReport = reportData.isTermReport;
-  const hasPractical = reportData.hasPractical && cols.showTheoryPrac;
-  const paperSize = reportData.paperSize || "A4";
-
-  const isA5 = paperSize === "A5";
-  const logoSizeMap: Record<string, string> = {
-    small: isA5 ? "28px" : "35px",
-    medium: isA5 ? "40px" : "55px",
-    large: isA5 ? "55px" : "75px",
-  };
-  const computedLogoSize = logoSizeMap[cols.logoSize] || logoSizeMap["medium"];
-  const fs = {
-    schoolName: isA5 ? "17px" : "22px",
-    schoolNp: isA5 ? "11px" : "13px",
-    schoolEn: isA5 ? "10px" : "12px",
-    address: isA5 ? "8px" : "10px",
-    logoSize: computedLogoSize,
-    badge: isA5 ? "8px" : "10px",
-    info: isA5 ? "9px" : "10px",
-    th: isA5 ? "8px" : "10px",
-    td: isA5 ? "8px" : "10px",
-    footer: isA5 ? "9px" : "11px",
-    sig: isA5 ? "8px" : "10px",
-    overall: isA5 ? "9px" : "11px",
-    legend: isA5 ? "8px" : "9px",
-  };
-  const pad = {
-    header: isA5 ? "8px 10px" : "12px 16px",
-    info: isA5 ? "6px 10px" : "10px 16px",
-    cell: isA5 ? "6px 3px" : "9px 8px",
-    cellCenter: isA5 ? "6px 2px" : "9px 4px",
-    bottom: isA5 ? "10px 10px" : "14px 16px",
-  };
-
-  // Term headers for final report
-  let termHeaders = "";
-  if (!isTermReport && reportData.subjects?.[0]?.terms) {
-    termHeaders = reportData.subjects[0].terms
-      .map(
-        (term: any) =>
-          `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.headerBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">${esc(String(term.examTypeName || "").replace("Terminal", "Term"))} (${esc(term.weightage)}%)</th>`,
-      )
-      .join("");
-  }
-
-  // Subject rows
-  const subjectRows = (reportData.subjects || [])
-    .map((s: any, i: number) => {
-      const bg = i % 2 === 0 ? "#ffffff" : t.altRow;
-      let dataCols = "";
-
-      if (isTermReport) {
-        // "Ab" asserts the student was absent. A subject whose marks simply have not
-        // been entered yet must not say that — it prints "—" while still scoring 0
-        // in the percentage, grade and GPA columns beside it.
-        if (s.notEntered) {
-          if (hasPractical) {
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">—</td>`;
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">—</td>`;
-          }
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">—</td>`;
-        } else if (s.isAbsent) {
-          if (hasPractical) {
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">Ab</td>`;
-          }
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">Ab</td>`;
-        } else {
-          if (hasPractical) {
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.theoryMarks)}</td>`;
-            dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.practicalMarks || "—")}</td>`;
-          }
-          dataCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:600;">${esc(s.totalMarks)}</td>`;
-        }
-      } else {
-        dataCols = (s.terms || [])
-          .map(
-            (term: any) =>
-              `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${term.isAbsent ? "Ab" : esc(term.totalMarks)}</td>`,
-          )
-          .join("");
-      }
-
-      const pctValue = isTermReport ? s.percentage : s.weightedPercentage;
-      // No grade for a paper the student did not sit (or that is not entered yet): an
-      // absence is not an E. Decided 2026-10-04 — the card prints Ab / — here and leaves
-      // the overall figures blank (see resultSummaryHtml) while the result is Incomplete.
-      const missing: string | null = s.isAbsent ? "Ab" : s.notEntered ? "—" : null;
-
-      let resultCols = "";
-      if (cols.showPercentage) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${missing ?? esc(pctValue)}</td>`;
-      }
-      if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${missing ?? esc(s.grade)}</td>`;
-      }
-      if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${missing ?? esc(s.gpa)}</td>`;
-      }
-
-      let passMark = "";
-      if (cols.showPassMarks) {
-        passMark = `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${esc(s.passMarks)}</td>`;
-      }
-
-      return `<tr style="background:${bg};">
-        <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${i + 1}</td>
-        <td style="padding:${pad.cell};border:1px solid ${t.border};font-size:${fs.td};font-weight:500;">${esc(s.subjectName)}</td>
-        <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.fullMarks)}</td>
-        ${passMark}
-        ${dataCols}
-        ${resultCols}
-      </tr>`;
-    })
-    .join("");
-
-  // Table header columns
-  let theadCols = "";
-  if (isTermReport) {
-    if (hasPractical) {
-      theadCols += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.headerBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">Theory</th>`;
-      theadCols += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.headerBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">Prac.</th>`;
-    }
-    theadCols += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;">${hasPractical ? "Total" : "Obtained"}</th>`;
-  } else {
-    theadCols = termHeaders;
-  }
-
-  let resultHeaders = "";
-  if (cols.showPercentage) {
-    resultHeaders += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.accentBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">%</th>`;
-  }
-  if (cols.showGrade) {
-    resultHeaders += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.accentBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">Grade</th>`;
-  }
-  if (cols.showGpa) {
-    resultHeaders += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.accentBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">GPA</th>`;
-  }
-
-  let passHeader = "";
-  if (cols.showPassMarks) {
-    passHeader = `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;">Pass</th>`;
-  }
-
-  // Assembled header row, kept as a single string so buildTableFillerRow can
-  // count its columns instead of re-deriving which optional columns are on.
-  // S.N. and Subject get explicit widths (table-layout is fixed); the
-  // remaining width is shared evenly by the numeric columns.
-  const theadHtml = `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;width:${isA5 ? "6%" : "5%"};">S.N.</th>
-          <th style="text-align:left;padding:${pad.cell};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;width:24%;">Subject</th>
-          <th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;">Full</th>
-          ${passHeader}
-          ${theadCols}
-          ${resultHeaders}`;
-
-  // Result summary (description + pass/fail)
-  // "Incomplete" covers both an absence and a subject whose marks have not been
-  // entered yet — in either case the result on this card is not the final word, and
-  // printing a confident "Pass"/"Fail" over a missing paper is how a provisional
-  // number ends up being read as a final one.
-  const anyAbsent = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
-  const divResult = getResultSummary(reportData.overallGrade, reportData.subjects || []);
-
-  // Rank + Attendance
-  let bottomInfoHtml = "";
-  const infoParts: string[] = [];
-  if (cols.showRank && reportData.showRank && reportData.rank) {
-    infoParts.push(
-      `<span style="font-weight:600;color:${t.accent};font-size:${fs.footer};">Rank: ${esc(reportData.rank)} out of ${esc(reportData.totalStudents)}</span>`,
-    );
-  }
-  if (cols.showAttendance && reportData.attendance) {
-    infoParts.push(
-      `<span style="font-weight:600;color:${t.primary};font-size:${fs.footer};">Attendance:</span> <span style="font-size:${fs.footer};">Total: <b>${esc(reportData.attendance.totalDays)}</b></span> <span style="font-size:${fs.footer};">Present: <b>${esc(reportData.attendance.presentDays)}</b></span> <span style="font-size:${fs.footer};">Absent: <b>${esc(reportData.attendance.absentDays)}</b></span>`,
-    );
-  }
-  if (infoParts.length > 0) {
-    bottomInfoHtml = `<div style="display:flex;gap:16px;align-items:center;font-size:${fs.footer};margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;flex-wrap:wrap;">${infoParts.join('<span style="color:#ccc;margin:0 4px;">|</span>')}</div>`;
-  }
-
-  // Observation table
-  const observationHtml =
-    observations && observations.length > 0
-      ? `
-    <div style="margin-bottom:8px;">
-      <table style="border-collapse:collapse;width:auto;table-layout:auto;">
-        <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">General Observation</caption>
-        ${observations.map((obs: any) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${esc(obs.categoryName)}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};text-align:center;">${esc(obs.grade)}</td></tr>`).join("")}
-      </table>
-    </div>`
-      : "";
-
-  // Result Summary
-  const resultSummaryHtml = `
-    <div style="margin-bottom:8px;">
-      <table style="border-collapse:collapse;width:auto;table-layout:auto;">
-        <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : `${esc(reportData.overallPercentage)}%`}</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(divResult.description)}</td></tr>
-        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(reportData.overallGrade)}</td></tr>` : ""}
-        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(reportData.overallGpa)}</td></tr>` : ""}
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${anyAbsent ? t.accent : (divResult.result === "Pass" ? t.positive : t.accent)};">${anyAbsent ? "Incomplete" : esc(divResult.result)}</td></tr>
-      </table>
-    </div>`;
-
-  // Grading Scale (source of truth in grading.service.ts)
-  const gradingScaleHtml = `
-    <div style="margin-bottom:8px;">
-      <table style="border-collapse:collapse;width:auto;table-layout:auto;">
-        <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
-        ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Ab</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Absent</td></tr>
-      </table>
-    </div>`;
-
-  // Comments
-  const commentsHtml =
-    cols.showRemarks && reportData.remarks
-      ? `<div style="margin-bottom:8px;padding:6px 8px;background:${t.rankAttBg};border-radius:4px;font-size:${fs.footer};"><span style="font-weight:700;color:${t.primary};">Comments: </span><b>${esc(reportData.remarks)}</b></div>`
-      : "";
-
-  // Promotion
-  const promotionHtml =
-    cols.showPromotion && reportData.promoted
-      ? `<div style="text-align:center;padding:6px;background:${t.promoBg};border:1px solid ${t.promoBorder};border-radius:4px;font-size:${fs.footer};font-weight:700;color:${t.positive};margin-bottom:10px;">✓ ${esc(reportData.promotedTo || "Promoted")}</div>`
-      : "";
-
-  // Student info — labels are static strings (safe); values are DB-backed and
-  // must be escaped at the interpolation site below.
-  const infoFields = [
-    ["Student", reportData.student?.name || "—"],
-    [
-      "Class / Section",
-      `${reportData.student?.className || ""} / ${reportData.student?.section || ""}`,
-    ],
-    ["Roll No.", reportData.student?.rollNo || "—"],
-    ["DOB", reportData.student?.dateOfBirth || "—"],
-    ["Examination", reportData.examType || "—"],
-  ];
-  const infoRows = infoFields
-    .map(
-      ([label, value]) =>
-        `<div style="display:flex;gap:6px;"><span style="color:#888;min-width:${isA5 ? "70px" : "90px"};font-size:${fs.info};">${label}:</span><span style="font-weight:600;color:${t.primary};font-size:${fs.info};">${esc(value)}</span></div>`,
-    )
-    .join("");
-
-  // Logo URL must be validated BEFORE embedding as <img src>. Puppeteer will
-  // fetch whatever URL is set here — an internal URL (e.g. AWS IMDS, localhost
-  // services, file://) would trigger SSRF on the server.
-  const rawLogoUrl = reportData.school?.logo || "";
-  const logoUrl = isSafeLogoUrl(rawLogoUrl) ? rawLogoUrl : "";
-  const logoHtml = logoUrl
-    ? `<img src="${esc(logoUrl)}" style="width:${fs.logoSize};height:${fs.logoSize};object-fit:contain;border-radius:4px;" />`
-    : "";
-  const nepaliNameHtml =
-    cols.showNepaliName && reportData.school?.nameNp
-      ? `<p style="font-size:${fs.schoolNp};color:${t.primary};font-family:Georgia,'Noto Serif',serif;margin-bottom:1px;">${esc(reportData.school.nameNp)}</p>`
-      : "";
-  const schoolNameBlock = `
-    <h2 style="font-size:${fs.schoolName};font-weight:700;color:${t.primary};margin-bottom:2px;">${esc(reportData.school?.name || "")}</h2>
-    ${nepaliNameHtml}
-    <p style="font-size:${fs.address};color:#888;margin-bottom:6px;">${esc(reportData.school?.address || "")}</p>`;
-
-  const examBadgeHtml = `<div style="display:inline-block;padding:3px 14px;background:${t.badgeBg};color:${t.badgeText};border:${t.badgeBorder};font-size:${fs.badge};font-weight:700;text-transform:uppercase;letter-spacing:1px;border-radius:4px;">
-    ${esc(reportData.examType)} — ${esc(reportData.academicYear)} B.S.
-  </div>`;
-
-  const pos = cols.logoPosition || "center";
-  let headerInnerHtml = "";
-  let badgeInline = false;
-  if (!logoHtml) {
-    // No logo — just centered text
-    headerInnerHtml = `${schoolNameBlock}`;
-  } else if (pos === "center") {
-    headerInnerHtml = `<div style="margin-bottom:4px;">${logoHtml}</div>${schoolNameBlock}`;
-  } else if (pos === "left") {
-    headerInnerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
-      ${logoHtml}
-      <div style="text-align:left;">${schoolNameBlock}</div>
-    </div>`;
-  } else if (pos === "center-inline") {
-    // Nest the exam badge inside the name column (rather than centering it on
-    // the full logo+name width) so it lines up under the school name itself.
-    badgeInline = true;
-    headerInnerHtml = `<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:4px;">
-      ${logoHtml}
-      <div style="text-align:center;">
-        ${schoolNameBlock}
-        ${examBadgeHtml}
-      </div>
-    </div>`;
-  } else {
-    // right
-    headerInnerHtml = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
-      <div style="text-align:right;flex:1;">${schoolNameBlock}</div>
-      ${logoHtml}
-    </div>`;
-  }
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:;">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', 'Noto Sans', Arial, sans-serif; color: #333; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    @page { margin: 0; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-  </style>
-</head>
-<body>
-  <div style="border:2px solid ${t.primary};border-radius:4px;overflow:hidden;margin:${isA5 ? "2mm" : "3mm"};min-height:${cardMinHeight(isA5)};display:flex;flex-direction:column;">
-    <div style="padding:${pad.header};border-bottom:2px solid ${t.primary};text-align:center;">
-      ${headerInnerHtml}
-      ${badgeInline ? "" : examBadgeHtml}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;padding:${pad.info};background:${t.infoBg};border-bottom:1px solid ${t.border};">
-      ${infoRows}
-    </div>
-    <table>
-      <thead>
-        <tr style="background:${t.theadBg};">
-          ${theadHtml}
-        </tr>
-      </thead>
-      <tbody>
-        ${subjectRows}
-        ${buildTableFillerRows(theadHtml, t.border, (reportData.subjects || []).length, isA5)}
-      </tbody>
-    </table>
-    <div style="flex:1;padding:${pad.bottom};border-top:2px solid ${t.primary};display:flex;flex-direction:column;justify-content:space-between;">
-      <div>
-        ${bottomInfoHtml}
-        <div style="display:flex;gap:${isA5 ? "12px" : "20px"};flex-wrap:wrap;margin-bottom:8px;">
-          ${observationHtml}
-          ${resultSummaryHtml}
-          ${gradingScaleHtml}
-        </div>
-        ${commentsHtml}
-        ${promotionHtml}
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:${isA5 ? "16px" : "24px"};">
-        ${issueDateHtml(fs.sig)}
-        ${["Class Teacher", "Exam Coordinator", "Principal"].map((role) => `<div style="text-align:center;min-width:${isA5 ? "70px" : "100px"};"><div style="border-bottom:1px solid ${t.border};height:${isA5 ? "14px" : "20px"};margin-bottom:3px;"></div><span style="font-size:${fs.sig};font-weight:600;">${role}</span></div>`).join("")}
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-
-// ─── CREDIT-HOUR / GRADE-POINT REPORT (SEE/NEB style) ───
-// Used only when reportData.gradingStyle === "CREDIT_GRADE_BASED" (see the
-// branch at the top of buildReportCardHtml). This is a deliberately
-// self-contained template — it does not share rendering code with
-// buildReportCardHtml above, so nothing here can change how the existing
-// marks-based report renders.
-function buildCreditGradeReportCardHtml(
-  reportData: any,
-  mode: "color" | "bw",
-  cols: ReportCardColumnSettings,
-  observations: any[] | null,
 ): string {
   const t = getTheme(mode);
   const paperSize = reportData.paperSize || "A4";
@@ -790,29 +405,21 @@ function buildCreditGradeReportCardHtml(
     resultHeaders += `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};background:${t.accentBg};color:${t.headerText};font-size:${fs.th};font-weight:600;">Grade Point</th>`;
   }
 
-  // Assembled header row — see the matching comment in buildReportCardHtml.
+  // Assembled once so the filler rows below can count its columns.
   const theadHtml = `<th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;width:${isA5 ? "6%" : "5%"};">S.N.</th>
           <th style="text-align:left;padding:${pad.cell};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;width:28%;">Subject</th>
           <th style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.primary};color:${t.headerText};font-size:${fs.th};font-weight:600;">Credit Hr.</th>
           ${theadMid}
           ${resultHeaders}`;
 
-  // A student fails the term if any subject landed in a failing band — see
-  // FAILING_GRADES in grading.service. Keyed off the grade rather than a
-  // percentage because the credit-grade payload carries grades, not marks.
-  // Same reasoning as the marks-based template above.
-  const anyAbsentCG = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
-  const anyFailed = !anyAbsentCG && (reportData.subjects || []).some(
-    (s: any) => !s.isAbsent && !isPassingGrade(s.finalGrade),
-  );
-  const cgResult = anyAbsentCG ? "Incomplete" : (anyFailed ? "Fail" : "Pass");
-  const cgResultColor = cgResult === "Pass" ? t.positive : t.accent;
+  // An absent or not-yet-entered paper scores 0 in the GPA, so while any is missing the GPA
+  // prints "—" rather than a figure that would read as the student's standing.
+  const gpaPending = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
   const resultSummaryHtml = `
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsentCG ? "—" : esc(reportData.overallGpa ?? "—")}</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${cgResultColor};">${cgResult}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${gpaPending ? "—" : esc(reportData.overallGpa ?? "—")}</td></tr>
       </table>
     </div>`;
 
@@ -848,11 +455,6 @@ function buildCreditGradeReportCardHtml(
 
   let bottomInfoHtml = "";
   const infoParts: string[] = [];
-  if (cols.showRank && reportData.showRank && reportData.rank) {
-    infoParts.push(
-      `<span style="font-weight:600;color:${t.accent};font-size:${fs.footer};">Rank: ${esc(reportData.rank)} out of ${esc(reportData.totalStudents)}</span>`,
-    );
-  }
   if (cols.showAttendance && reportData.attendance) {
     infoParts.push(
       `<span style="font-weight:600;color:${t.primary};font-size:${fs.footer};">Attendance:</span> <span style="font-size:${fs.footer};">Total: <b>${esc(reportData.attendance.totalDays)}</b></span> <span style="font-size:${fs.footer};">Present: <b>${esc(reportData.attendance.presentDays)}</b></span> <span style="font-size:${fs.footer};">Absent: <b>${esc(reportData.attendance.absentDays)}</b></span>`,

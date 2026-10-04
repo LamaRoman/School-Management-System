@@ -13,7 +13,6 @@ const examTypeSchema = z.object({
   displayOrder: z.number().int().default(0),
   academicYearId: z.string().min(1),
   paperSize: z.enum(["A4", "A5"]).default("A5"),
-  showRank: z.boolean().default(true),
 });
 
 // GET /api/exam-types?academicYearId=xxx
@@ -51,7 +50,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     isFinal: data.isFinal,
     displayOrder: data.displayOrder,
     paperSize: data.paperSize,
-    showRank: data.showRank,
     academicYear: { connect: { id: data.academicYearId } },
   };
   const examType = await prisma.examType.create({ data: createData });

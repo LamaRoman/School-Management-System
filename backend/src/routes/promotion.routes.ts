@@ -126,7 +126,7 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
           nameNp: subject.nameNp,
           fullTheoryMarks: subject.fullTheoryMarks,
           fullPracticalMarks: subject.fullPracticalMarks,
-          passMarks: subject.passMarks,
+          creditHour: subject.creditHour,
           isOptional: subject.isOptional,
           displayOrder: subject.displayOrder,
           gradeId: newGrade.id,
@@ -144,7 +144,6 @@ router.post("/copy-structure", authenticate, authorize("ADMIN"), async (req, res
         displayOrder: et.displayOrder,
         academicYearId: targetYearId,
         paperSize: et.paperSize,
-        showRank: et.showRank,
       },
     });
     examTypeIdMap[et.id] = newEt.id;

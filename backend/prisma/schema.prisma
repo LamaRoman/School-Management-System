@@ -44,15 +44,6 @@ enum ResultStatus {
   PUBLISHED
 }
 
-// Report card layout for the whole school (ReportCardSettings.gradingStyle —
-// was per-grade until 2026-08-17; one school prints one design, not a mix).
-// MARKS_BASED: the original full-marks / pass-marks / theory+practical report.
-// CREDIT_GRADE_BASED: credit-hour + letter-grade + grade-point report (SEE/NEB style).
-enum GradingStyle {
-  MARKS_BASED
-  CREDIT_GRADE_BASED
-}
-
 // ─── SCHOOL ─────────────────────────────────────────────
 
 model School {
@@ -218,9 +209,7 @@ model Subject {
   nameNp             String?  @map("name_np")
   fullTheoryMarks    Int      @map("full_theory_marks")
   fullPracticalMarks Int      @default(0) @map("full_practical_marks")
-  passMarks          Int      @map("pass_marks")
-  // Only used by grades with gradingStyle = CREDIT_GRADE_BASED. Harmless
-  // default for existing marks-based subjects that never read this field.
+  // Weights the subject's grade point in the report card's GPA.
   creditHour         Int      @default(4) @map("credit_hour")
   isOptional         Boolean  @default(false) @map("is_optional")
   displayOrder       Int      @default(0) @map("display_order")
@@ -272,7 +261,6 @@ model ExamType {
   displayOrder   Int          @default(0) @map("display_order")
   academicYearId String       @map("academic_year_id")
   paperSize      String       @default("A5") @map("paper_size")
-  showRank       Boolean      @default(true) @map("show_rank")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
@@ -493,7 +481,6 @@ model ConsolidatedResult {
   gradeId         String       @map("grade_id")
   totalGpa        Float?       @map("total_gpa")
   totalPercentage Float?       @map("total_percentage")
-  rank            Int?
   promoted        Boolean      @default(false)
   promotedTo      String?      @map("promoted_to")
   remarks         String?
@@ -559,19 +546,13 @@ model DailyAttendance {
 model ReportCardSettings {
   id                String  @id @default(cuid())
   schoolId          String  @unique @map("school_id")
-  showPassMarks     Boolean @default(true) @map("show_pass_marks")
   showTheoryPrac    Boolean @default(true) @map("show_theory_prac")
-  showPercentage    Boolean @default(false) @map("show_percentage")
   showGrade         Boolean @default(true) @map("show_grade")
   showGpa           Boolean @default(true) @map("show_gpa")
-  showRank          Boolean @default(true) @map("show_rank")
   showAttendance    Boolean @default(true) @map("show_attendance")
   showRemarks       Boolean @default(true) @map("show_remarks")
   showPromotion     Boolean @default(true) @map("show_promotion")
   showNepaliName    Boolean @default(false) @map("show_nepali_name")
-  // Was Grade.gradingStyle until 2026-08-17 — moved here so the whole school
-  // prints one report card design instead of picking it per grade.
-  gradingStyle      GradingStyle @default(MARKS_BASED) @map("grading_style")
   logoPosition      String  @default("center") @map("logo_position")
   logoSize          String  @default("medium") @map("logo_size")
   createdAt         DateTime @default(now()) @map("created_at")

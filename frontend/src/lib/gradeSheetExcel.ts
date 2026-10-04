@@ -4,7 +4,7 @@
  * The sheet is already fully computed on the client — the same `rows`/`subjects`
  * structure that feeds `printGradeSheet` — so this needs no backend route. It
  * mirrors what is on screen exactly: same columns, same order, same "Ab" for
- * absent and "—" for a mark never entered, same red for below-pass.
+ * absent and "—" for a mark never entered.
  *
  * The one thing it does that the printed sheet cannot: **marks are written as
  * numbers, not text.** That is the entire point of wanting Excel rather than a
@@ -19,28 +19,23 @@
  * the print helpers too.
  */
 
-export interface SubjectHeader { id: string; name: string; fullMarks: number; passMarks: number }
+export interface SubjectHeader { id: string; name: string; fullMarks: number }
 export interface SubjectResult {
   subjectId: string;
   obtained?: number;
   weightedPercentage?: number;
-  grade: string;
   gpa: number | null;
-  passed: boolean;
   isAbsent?: boolean;
+  notEntered?: boolean;
 }
 export interface GradeSheetRow {
   studentId: string;
   studentName: string;
   rollNo: number | null;
   subjects: SubjectResult[];
-  totalObtained?: number;
-  totalFullMarks?: number;
-  percentage: number;
+  /** Credit-weighted, as on the report card. */
   gpa: number | null;
-  grade: string;
-  rank: number | null;
-  /** Absent / not entered: %, GPA and grade are shown as "—". */
+  /** Absent / not entered: the GPA is shown as "—". */
   incomplete?: boolean;
 }
 export interface SheetData {
@@ -48,7 +43,6 @@ export interface SheetData {
   sectionName: string;
   examType: string;
   isFinal: boolean;
-  showRank: boolean;
   subjects: SubjectHeader[];
   rows: GradeSheetRow[];
   totalStudents: number;
@@ -56,11 +50,11 @@ export interface SheetData {
 
 const PRIMARY = "FF1E3A5F";
 const ACCENT = "FFB8860B";
-const FAIL = "FFC0392B";
 
 /** "Ab" and "—" are deliberately strings; everything else stays a number. */
 function subjectCell(s: SubjectResult, isFinal: boolean): number | string {
   if (s.isAbsent) return "Ab";
+  if (s.notEntered) return "—";
   const value = isFinal ? s.weightedPercentage : s.obtained;
   return value ?? "—";
 }
@@ -85,11 +79,11 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   workbook.created = new Date();
 
   const sheet = workbook.addWorksheet(`${data.gradeName}-${data.sectionName}`.slice(0, 31), {
-    views: [{ state: "frozen", ySplit: 4, xSplit: data.showRank ? 3 : 2 }],
+    views: [{ state: "frozen", ySplit: 4, xSplit: 2 }],
   });
 
-  const leading = data.showRank ? ["Rank", "Roll", "Student Name"] : ["Roll", "Student Name"];
-  const trailing = ["%", "GPA", "Grade"];
+  const leading = ["Roll", "Student Name"];
+  const trailing = ["GPA"];
   const width = leading.length + data.subjects.length + trailing.length;
 
   // ── Title block ────────────────────────────────────────────────────────────
@@ -140,13 +134,10 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   // ── Student rows ───────────────────────────────────────────────────────────
   for (const row of data.rows) {
     const values: (string | number | null)[] = [
-      ...(data.showRank ? [row.rank ?? "—"] : []),
       row.rollNo ?? "—",
       row.studentName,
       ...row.subjects.map((s) => subjectCell(s, data.isFinal)),
-      row.incomplete ? "—" : row.percentage,
       row.incomplete ? "—" : row.gpa ?? "—",
-      row.incomplete ? "—" : row.grade,
     ];
     const added = sheet.addRow(values);
 
@@ -155,20 +146,12 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
       // Student name left-aligned, everything else centred — matches the table.
       cell.alignment = { horizontal: col === leading.length ? "left" : "center" };
     });
-
-    // Below-pass subjects in red, the same signal the on-screen legend explains.
-    row.subjects.forEach((s, i) => {
-      if (!s.passed) {
-        const cell = added.getCell(leading.length + 1 + i);
-        cell.font = { color: { argb: FAIL }, bold: true };
-      }
-    });
   }
 
   // ── Column widths ──────────────────────────────────────────────────────────
   sheet.columns.forEach((column, i) => {
     if (i === leading.length - 1) column.width = 24;        // student name
-    else if (i < leading.length) column.width = 7;          // rank / roll
+    else if (i < leading.length) column.width = 7;          // roll
     else column.width = 11;
   });
 

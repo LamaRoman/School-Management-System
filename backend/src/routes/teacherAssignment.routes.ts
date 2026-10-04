@@ -59,7 +59,7 @@ router.get("/my", authenticate, async (req, res) => {
     },
     include: {
       section: { include: { grade: { select: { id: true, name: true, academicYearId: true } } } },
-      subject: { select: { id: true, name: true, nameNp: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true } },
+      subject: { select: { id: true, name: true, nameNp: true, fullTheoryMarks: true, fullPracticalMarks: true } },
     },
     orderBy: [{ section: { grade: { displayOrder: "asc" } } }, { section: { name: "asc" } }],
   });

@@ -22,17 +22,13 @@ router.get("/", authenticate, async (req, res) => {
     settings = await prisma.reportCardSettings.create({
       data: {
         schoolId: school.id,
-        showPassMarks: true,
         showTheoryPrac: true,
-        showPercentage: false,
         showGrade: true,
         showGpa: true,
-        showRank: true,
         showAttendance: true,
         showRemarks: true,
         showPromotion: true,
         showNepaliName: false,
-        gradingStyle: "MARKS_BASED",
         logoPosition: "center",
         logoSize: "medium",
       },
@@ -46,17 +42,13 @@ router.get("/", authenticate, async (req, res) => {
 router.put("/", authenticate, authorize("ADMIN"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const schema = z.object({
-    showPassMarks: z.boolean().optional(),
     showTheoryPrac: z.boolean().optional(),
-    showPercentage: z.boolean().optional(),
     showGrade: z.boolean().optional(),
     showGpa: z.boolean().optional(),
-    showRank: z.boolean().optional(),
     showAttendance: z.boolean().optional(),
     showRemarks: z.boolean().optional(),
     showPromotion: z.boolean().optional(),
     showNepaliName: z.boolean().optional(),
-    gradingStyle: z.enum(["MARKS_BASED", "CREDIT_GRADE_BASED"]).optional(),
     logoPosition: z.enum(["left", "center", "center-inline", "right"]).optional(),
     logoSize: z.enum(["small", "medium", "large"]).optional(),
   });

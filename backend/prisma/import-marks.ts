@@ -11,8 +11,7 @@
  * default). To target production, set DATABASE_URL to the production URL for that one command.
  * The data file holds real students' names and marks: keep it OUT of git.
  *
- * Optional: --full-marks 50 (default 50), --pass-marks 20 (default 20, used only for subjects
- * that have to be created).
+ * Optional: --full-marks 50 (default 50).
  *
  * Data file shape:
  *   { "subjects": ["English", "Math"], "rows": [ { "rollNo": 1, "name": "A B", "marks": { "English": 18, "Math": 10 } } ] }
@@ -59,7 +58,7 @@ async function main() {
       process.exit(2);
     }
     const data: ImportData = JSON.parse(readFileSync(file, "utf8"));
-    const opts = { fullMarks: Number(arg("full-marks") ?? 50), passMarks: Number(arg("pass-marks") ?? 20) };
+    const opts = { fullMarks: Number(arg("full-marks") ?? 50) };
     const target = { sectionId, examName: exam };
 
     const plan = await buildPlan(prisma, target, data, opts);

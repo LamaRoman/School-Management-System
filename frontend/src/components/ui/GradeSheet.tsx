@@ -110,7 +110,6 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
             <table className="w-full text-xs" style={{ borderCollapse: "collapse", minWidth: "800px" }}>
               <thead>
                 <tr className="bg-primary text-white">
-                  {data.showRank && <th className="p-2 border border-primary text-center w-10">Rank</th>}
                   <th className="p-2 border border-primary text-center w-10">Roll</th>
                   <th className="p-2 border border-primary text-left min-w-[120px] sticky left-0 z-10 bg-primary">Student Name</th>
                   {data.subjects.map((s) => (
@@ -119,35 +118,23 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                       <div className="text-[10px] font-normal opacity-70">({s.fullMarks})</div>
                     </th>
                   ))}
-                  <th className="p-2 border border-primary text-center bg-accent min-w-[50px]">%</th>
                   <th className="p-2 border border-primary text-center bg-accent min-w-[50px]">GPA</th>
-                  <th className="p-2 border border-primary text-center bg-accent min-w-[50px]">Grade</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row, i) => (
                   <tr key={row.studentId} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    {data.showRank && (
-                      <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.rank ?? "—"}</td>
-                    )}
                     <td className="p-2 border border-gray-200 text-center text-gray-400">{row.rollNo || "—"}</td>
                     <td className={`p-2 border border-gray-200 font-medium sticky left-0 z-10 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>{row.studentName}</td>
                     {row.subjects.map((s, j) => {
                       const value = isFinal ? s.weightedPercentage : s.obtained;
                       return (
-                        <td
-                          key={j}
-                          className={`p-2 border border-gray-200 text-center ${
-                            !s.passed ? "text-red-600 font-bold" : ""
-                          }`}
-                        >
-                          {s.isAbsent ? "Ab" : (value ?? "—")}
+                        <td key={j} className="p-2 border border-gray-200 text-center">
+                          {s.isAbsent ? "Ab" : s.notEntered ? "—" : (value ?? "—")}
                         </td>
                       );
                     })}
-                    <td className="p-2 border border-gray-200 text-center font-bold text-accent">{row.incomplete ? "—" : row.percentage}</td>
-                    <td className="p-2 border border-gray-200 text-center font-semibold">{row.incomplete ? "—" : row.gpa ?? "—"}</td>
-                    <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.incomplete ? "—" : row.grade}</td>
+                    <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.incomplete ? "—" : row.gpa ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -156,7 +143,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
 
           {/* Legend */}
           <div className="mt-3 text-xs text-gray-400 no-print">
-            <span className="text-red-600 font-bold">Red</span> = below pass marks
+            Ab = absent · GPA is credit-weighted, as on the report card; &quot;—&quot; while a paper is absent or not entered
             {isFinal && " · Values show weighted percentage per subject"}
           </div>
         </>

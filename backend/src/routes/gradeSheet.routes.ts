@@ -7,10 +7,8 @@ import {
   getGradeFromPercentage,
   calculatePercentage,
   calculateWeightedPercentage,
-  calculateOverallGpa,
-  totalMarksPercentage,
+  calculateOverallGpaWeighted,
 } from "../services/grading.service";
-import { computeSectionRanks, computeFinalSectionRanks } from "../services/rank.service";
 import { assertSectionOwnership } from "../services/resultStatus.service";
 
 const router = Router();
@@ -41,7 +39,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
   const subjects = await prisma.subject.findMany({
     where: { gradeId: section.gradeId },
     orderBy: { displayOrder: "asc" },
-    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true, isOptional: true },
+    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, creditHour: true, isOptional: true },
   });
 
   const allMarks = await prisma.mark.findMany({
@@ -78,9 +76,8 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         (m) => m.studentId === student.id && m.subjectId === subject.id
       );
       // Absent falls through to the normal path — null marks read as 0, so the
-      // subject grades E / 0.8 and counts toward the averages below. This is
-      // also what keeps the Total column (which has always summed absences as
-      // 0 over the full marks) agreeing with the Percentage column beside it.
+      // subject counts toward the GPA below exactly as on the report card. The
+      // cell itself prints "Ab".
       const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
       const pct = calculatePercentage(obtained, fullMarks);
       const gradeResult = getGradeFromPercentage(pct);
@@ -89,11 +86,10 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
         subjectId: subject.id,
         obtained,
         fullMarks,
-        percentage: parseFloat(pct.toFixed(1)),
-        grade: gradeResult.grade,
+        creditHour: subject.creditHour,
         gpa: gradeResult.gpa,
-        passed: obtained >= subject.passMarks,
         isAbsent: mark?.isAbsent ?? false,
+        notEntered: !mark,
         // Optional subject this student is not enrolled in (R7a). The column stays on
         // the sheet — it is class-wide — but the cell is not theirs and must not be
         // scored as a zero in their totals below.
@@ -105,44 +101,17 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     // by decision R1); only an optional subject they do not take drops out.
     const counted = subjectResults.filter((s) => !s.notTaken);
 
-    const totalObtained = counted.reduce((a, s) => a + s.obtained, 0);
-    const totalFullMarks = counted.reduce((a, s) => a + s.fullMarks, 0);
-    // Total marks over total full marks (totalMarksPercentage) — what Total / Full in the
-    // columns beside it say, and the figure the rank below is computed on.
-    const avgPct = counted.length > 0 ? parseFloat(totalMarksPercentage(counted).toFixed(1)) : 0;
-    const avgGpa = calculateOverallGpa(counted.map((s) => s.gpa));
-    const overallGrade = counted.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
-
     return {
       studentId: student.id,
       studentName: student.name,
       rollNo: student.rollNo,
       subjects: subjectResults,
-      totalObtained,
-      totalFullMarks,
-      percentage: avgPct,
-      gpa: avgGpa,
-      grade: overallGrade.grade,
-      rank: null as number | null,
-      incomplete: false,
+      // Credit-weighted, the report card's Grade Points Average (same subjects, same rule).
+      gpa: calculateOverallGpaWeighted(counted.map((s) => ({ gpa: s.gpa, creditHour: s.creditHour }))),
+      // Absent / not entered: the sheet shows "—" for the GPA, as the card does.
+      incomplete: counted.some((s) => s.isAbsent || s.notEntered),
     };
   });
-
-  // Ranks come from the one shared implementation (R7) so this sheet and the report
-  // cards printed from the same marks cannot disagree. It recomputes the averages from
-  // the same rule used for the Percentage column above — deliberately, so the service
-  // stays the single definition rather than this passing its own numbers in.
-  const { ranks } = await computeSectionRanks(
-    String(sectionId),
-    String(examTypeId),
-    String(academicYearId)
-  );
-  for (const row of rows) {
-    // null = not ranked (only students who passed are; see rank.service).
-    row.rank = ranks.get(row.studentId)?.rank ?? null;
-    // Absent / not entered: the sheet shows "—" for %, GPA and grade (decided 2026-10-04).
-    row.incomplete = ranks.get(row.studentId)?.result === "Incomplete";
-  }
 
   res.json({
     data: {
@@ -150,12 +119,10 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       sectionName: section.name,
       examType: examType.name,
       isFinal: false,
-      showRank: examType.showRank,
       subjects: subjects.map((s) => ({
         id: s.id,
         name: s.name,
         fullMarks: s.fullTheoryMarks + s.fullPracticalMarks,
-        passMarks: s.passMarks,
       })),
       rows,
       totalStudents: rows.length,
@@ -189,7 +156,7 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
   const subjects = await prisma.subject.findMany({
     where: { gradeId: section.gradeId },
     orderBy: { displayOrder: "asc" },
-    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true },
+    select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, creditHour: true },
   });
 
   const policies = await prisma.gradingPolicy.findMany({
@@ -203,10 +170,6 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       academicYearId: String(academicYearId),
       studentId: { in: students.map((s) => s.id) },
     },
-  });
-
-  const finalExamType = await prisma.examType.findFirst({
-    where: { isFinal: true, academicYearId: String(academicYearId) },
   });
 
   const rows = students.map((student) => {
@@ -235,39 +198,22 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
         subjectId: subject.id,
         fullMarks,
         weightedPercentage: parseFloat(weightedPct.toFixed(1)),
-        grade: gradeResult.grade,
+        creditHour: subject.creditHour,
         gpa: gradeResult.gpa,
-        passed: weightedPct >= (subject.passMarks / fullMarks) * 100,
         isAbsent: allAbsent,
       };
     });
-
-    // Every subject counts, absent included; total-marks basis, same as the term sheet.
-    const avgPct = subjectResults.length > 0
-      ? parseFloat(totalMarksPercentage(subjectResults.map((s) => ({ percentage: s.weightedPercentage, fullMarks: s.fullMarks }))).toFixed(1))
-      : 0;
-    const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
-    const overallGrade = subjectResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
 
     return {
       studentId: student.id,
       studentName: student.name,
       rollNo: student.rollNo,
       subjects: subjectResults,
-      percentage: avgPct,
-      gpa: avgGpa,
-      grade: overallGrade.grade,
-      rank: null as number | null,
-      incomplete: false,
+      // Every subject counts, absent included — credit-weighted, as on the annual report card.
+      gpa: calculateOverallGpaWeighted(subjectResults.map((s) => ({ gpa: s.gpa, creditHour: s.creditHour }))),
+      incomplete: subjectResults.some((s) => s.isAbsent),
     };
   });
-
-  // The shared annual ranking (rank.service) — the same one the annual report card uses.
-  const { ranks } = await computeFinalSectionRanks(String(sectionId), String(academicYearId));
-  for (const row of rows) {
-    row.rank = ranks.get(row.studentId)?.rank ?? null;
-    row.incomplete = ranks.get(row.studentId)?.result === "Incomplete";
-  }
 
   res.json({
     data: {
@@ -275,12 +221,10 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       sectionName: section.name,
       examType: "Final (Weighted)",
       isFinal: true,
-      showRank: finalExamType?.showRank ?? true,
       subjects: subjects.map((s) => ({
         id: s.id,
         name: s.name,
         fullMarks: s.fullTheoryMarks + s.fullPracticalMarks,
-        passMarks: s.passMarks,
       })),
       rows,
       totalStudents: rows.length,

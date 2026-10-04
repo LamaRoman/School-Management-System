@@ -12,12 +12,8 @@
 
 import {
   GRADING_SCALE,
-  FAILING_GRADES,
-  isPassingGrade,
   getGradeFromPercentage,
-  calculateOverallGpa,
   calculateOverallGpaWeighted,
-  overallResult,
 } from "../../services/grading.service";
 
 describe("Grading scale", () => {
@@ -74,30 +70,13 @@ describe("Grading scale", () => {
     });
   });
 
-  describe("pass and fail", () => {
-    it("fails only the Insufficient bands", () => {
-      expect(FAILING_GRADES).toEqual(["D", "E"]);
-      for (const grade of ["A+", "A", "B+", "B", "C+", "C", "D+"]) {
-        expect(isPassingGrade(grade)).toBe(true);
-      }
-      for (const grade of ["D", "E"]) {
-        expect(isPassingGrade(grade)).toBe(false);
-      }
-    });
-  });
-
   describe("GPA averaging", () => {
     // Reproduces a real printed sheet: 7 subjects at equal credit hours,
     // which that sheet totals as a GPA of 2.69.
     const printedSheetGrades = ["B+", "C+", "B+", "C+", "B", "B", "C"];
     const gpaFor = (g: string) => GRADING_SCALE.find((e) => e.grade === g)!.gpa;
 
-    it("reproduces the GPA printed on a real sheet", () => {
-      const gpas = printedSheetGrades.map(gpaFor);
-      expect(calculateOverallGpa(gpas)).toBe(2.69);
-    });
-
-    it("matches the unweighted average when all credit hours are equal", () => {
+    it("reproduces the GPA printed on a real sheet (equal credit hours)", () => {
       const subjects = printedSheetGrades.map((g) => ({ gpa: gpaFor(g), creditHour: 4 }));
       expect(calculateOverallGpaWeighted(subjects)).toBe(2.69);
     });
@@ -117,32 +96,7 @@ describe("Grading scale", () => {
       // skipped, inflating the average. It now scores 0.8 and counts.
       const withWeakSubject = [getGradeFromPercentage(85).gpa, getGradeFromPercentage(10).gpa];
       expect(withWeakSubject).toEqual([3.6, 0.8]);
-      expect(calculateOverallGpa(withWeakSubject)).toBe(2.2);
+      expect(calculateOverallGpaWeighted(withWeakSubject.map((gpa) => ({ gpa, creditHour: 4 })))).toBe(2.2);
     });
-  });
-});
-
-describe("Overall result — strict rule: pass every subject", () => {
-  const pass = { hasPassed: true };
-  const fail = { hasPassed: false };
-
-  it("passes only when every subject reaches its pass mark", () => {
-    expect(overallResult("C", [pass, pass, pass])).toBe("Pass");
-  });
-
-  it("fails on a single subject below its pass mark, whatever the overall grade", () => {
-    // The III-A case: 46.7% overall (grade C), but three subjects under 20/50.
-    expect(overallResult("C", [fail, pass, pass])).toBe("Fail");
-    expect(overallResult("A+", [pass, fail])).toBe("Fail");
-  });
-
-  it("still fails on a failing overall grade", () => {
-    expect(overallResult("D", [pass, pass])).toBe("Fail");
-    expect(overallResult("E", [pass])).toBe("Fail");
-  });
-
-  it("skips absent and not-yet-entered subjects (the card prints Incomplete for those)", () => {
-    expect(overallResult("C", [pass, { hasPassed: false, isAbsent: true }])).toBe("Pass");
-    expect(overallResult("C", [pass, { hasPassed: false, notEntered: true }])).toBe("Pass");
   });
 });

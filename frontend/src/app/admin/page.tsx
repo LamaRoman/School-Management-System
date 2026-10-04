@@ -5,7 +5,7 @@ import { getTodayBS, getCurrentBSMonthName, formatBSDateLong } from "@/lib/bsDat
 import Link from "next/link";
 import {
   Users, GraduationCap, TrendingUp,
-  Award, AlertTriangle, CalendarCheck,
+  Award, CalendarCheck,
   UserCheck, X, ChevronRight,
   ChevronDown, ChevronUp,
   Receipt, Megaphone,
@@ -23,11 +23,6 @@ interface Analytics {
     overallAttendanceRate: number;
   };
   classAverages: { gradeName: string; avgGpa: number; avgPct: number; studentCount: number }[];
-  topPerformers: { rank: number; studentName: string; gradeName: string; sectionName: string; gpa: number; percentage: number }[];
-  subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[];
-  // Which exam the subjectStats panel is about — whichever exam type has the
-  // most marks entered (R8a), not necessarily the Final.
-  subjectStatsExam: { name: string } | null;
   attendanceOverview: { overallRate: number; gradeWise: { gradeName: string; rate: number }[] };
   termComparison: { examName: string; avgPercentage: number; studentCount: number }[];
 }
@@ -185,11 +180,6 @@ export default function AdminDashboard() {
   // recorded anyway (a make-up day), the real counts are shown instead.
   const closedToday = !!s.todayStatus?.closed && totalToday === 0;
   const closedWhy = (s.todayStatus?.reasons ?? []).map((r) => r.title).join(", ");
-
-  const lowPassSubjects = [...analytics.subjectStats]
-    .filter((ss) => ss.totalStudents > 0)
-    .sort((a, b) => a.passRate - b.passRate)
-    .slice(0, 8);
 
   const activeClassAverages = analytics.classAverages.filter((c) => c.studentCount > 0);
   const activeGradeAttendance = analytics.attendanceOverview.gradeWise.filter((g) => g.rate > 0);
@@ -477,83 +467,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Top Performers */}
-            {analytics.topPerformers.length > 0 && (
-              <div className="card p-5">
-                <h3 className="font-display font-bold text-primary text-sm mb-3 flex items-center gap-2">
-                  <Award size={15} /> Top Performers
-                </h3>
-                <div className="space-y-2">
-                  <CollapsibleList limit={4}>
-                    {analytics.topPerformers.map((tp) => (
-                      <div key={tp.rank} className="flex items-center gap-3 text-sm">
-                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                          tp.rank <= 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
-                        }`}>
-                          {tp.rank}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-800 truncate">{tp.studentName}</p>
-                          <p className="text-[10px] text-gray-400">{tp.gradeName} - {tp.sectionName}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-bold text-primary">{tp.percentage}%</p>
-                          <p className="text-[10px] text-gray-400">GPA {tp.gpa}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </CollapsibleList>
-                </div>
-              </div>
-            )}
-
-            {/* Subjects Needing Attention */}
-            {lowPassSubjects.length > 0 && (
-              <div className="card p-5">
-                <h3 className="font-display font-bold text-primary text-sm mb-1 flex items-center gap-2">
-                  <AlertTriangle size={15} /> Subjects Needing Attention
-                </h3>
-                {/* Name the exam these pass rates come from. Without it a
-                    dashboard pointing at the wrong exam looks identical to one
-                    pointing at the right exam. */}
-                {analytics.subjectStatsExam && (
-                  <p className="text-[10px] text-gray-400 mb-3">
-                    {analytics.subjectStatsExam.name} · most recently completed exam
-                  </p>
-                )}
-                <div className="space-y-3">
-                  <CollapsibleList limit={3}>
-                    {lowPassSubjects.map((ss, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-gray-700 truncate">{ss.subjectName}</span>
-                            <span className="text-xs text-gray-400 shrink-0 ml-2">{ss.gradeName}</span>
-                          </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${ss.passRate}%`,
-                                background: ss.passRate >= 80 ? "#22c55e" : ss.passRate >= 50 ? "#f59e0b" : "#ef4444",
-                              }}
-                            />
-                          </div>
-                          <div className="flex justify-between mt-1">
-                            <span className="text-[10px] text-gray-400">{ss.passed} passed · {ss.failed} failed</span>
-                            <span className={`text-[10px] font-bold ${
-                              ss.passRate >= 80 ? "text-emerald-600" : ss.passRate >= 50 ? "text-amber-600" : "text-red-600"
-                            }`}>
-                              {ss.passRate}% pass rate
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </CollapsibleList>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -3,41 +3,19 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { api } from '../../api/client';
-import { Card, Badge, EmptyState, LoadingScreen } from '../../components/ui';
+import { EmptyState, LoadingScreen } from '../../components/ui';
+import ReportCardView, { type ReportData, type PendingReport } from '../../components/ReportCardView';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../../theme';
 
 interface Child { id: string; name: string; grade?: { name: string }; section?: { name: string } }
 interface ExamType { id: string; name: string }
-interface SubjectRow {
-  subjectName: string;
-  theoryMarks: number | null;
-  practicalMarks: number | null;
-  totalMarks: number | null;
-  fullMarks: number;
-  grade: string | null;
-  gpa: number | null;
-  isAbsent: boolean;
-  notEntered?: boolean;
-}
-interface ReportData {
-  student: { name: string; rollNo?: number };
-  examType: string;
-  academicYear: string;
-  subjects: SubjectRow[];
-  overallPercentage: number;
-  overallGpa: number;
-  overallGrade: string;
-  /** Absent / not-entered paper: overall GPA, % and grade are shown as "—". */
-  incomplete?: boolean;
-  rank?: number;
-}
 
 export default function ParentReportScreen({ children }: { children?: Child[] }) {
   const [myChildren, setMyChildren] = useState<Child[]>(children || []);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [selectedExam, setSelectedExam] = useState<ExamType | null>(null);
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [report, setReport] = useState<ReportData | PendingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -71,16 +49,13 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
     if (!selectedChild || !selectedExam) return;
     setReportLoading(true);
     setReport(null);
-    api.get<ReportData>(`/reports/term/${selectedChild.id}/${selectedExam.id}`)
+    api.get<ReportData | PendingReport>(`/reports/term/${selectedChild.id}/${selectedExam.id}`)
       .then(data => setReport(data))
       .catch(err => { if (err?.response?.status !== 404) console.error('Report fetch error:', err); })
       .finally(() => setReportLoading(false));
   }, [selectedChild, selectedExam]);
 
   if (loading) return <LoadingScreen />;
-
-  const gpaColor = (gpa: number) =>
-    gpa >= 3.6 ? Colors.success : gpa >= 2.4 ? Colors.info : gpa >= 1.6 ? Colors.warning : Colors.danger;
 
   return (
     <ScrollView style={s.container} contentContainerStyle={{ paddingBottom: Spacing.xxxl }}>
@@ -122,63 +97,7 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
       ) : !report ? (
         <EmptyState icon="📊" message="No report card found for this exam" />
       ) : (
-        <>
-          {/* Summary card */}
-          {report && (
-            <Card style={s.summaryCard}>
-              <Text style={s.studentName}>{report.student.name}</Text>
-              <Text style={s.examLabel}>{report.examType} • {report.academicYear}</Text>
-              <View style={s.summaryRow}>
-                <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
-                    {report.incomplete ? '—' : report.overallGpa.toFixed(2)}
-                  </Text>
-                  <Text style={s.summaryKey}>GPA</Text>
-                </View>
-                <View style={s.summaryDivider} />
-                <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: Colors.primary }]}>
-                    {report.incomplete ? '—' : `${report.overallPercentage.toFixed(1)}%`}
-                  </Text>
-                  <Text style={s.summaryKey}>Percentage</Text>
-                </View>
-                <View style={s.summaryDivider} />
-                <View style={s.summaryItem}>
-                  <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
-                    {report.incomplete ? '—' : report.overallGrade}
-                  </Text>
-                  <Text style={s.summaryKey}>Grade</Text>
-                </View>
-              </View>
-            </Card>
-          )}
-
-          {/* Marks table */}
-          <Card style={s.tableCard}>
-            <Text style={s.tableTitle}>Subject-wise Marks</Text>
-            <View style={s.tableHeader}>
-              <Text style={[s.th, { flex: 2 }]}>Subject</Text>
-              <Text style={s.th}>Total</Text>
-              <Text style={s.th}>FM</Text>
-              <Text style={s.th}>Grade</Text>
-            </View>
-            {report.subjects.map((row, idx) => (
-              <View key={idx} style={[s.tableRow, idx % 2 === 0 && s.tableRowAlt]}>
-                <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{row.subjectName}</Text>
-                <Text style={s.td}>{row.isAbsent ? 'Ab' : (row.totalMarks ?? '–')}</Text>
-                <Text style={s.td}>{row.fullMarks}</Text>
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                  {row.isAbsent ? <Text style={s.td}>Ab</Text> : row.grade && !row.notEntered ? (
-                    <Badge label={row.grade} color={
-                      (row.gpa ?? 0) >= 3.6 ? 'success' :
-                      (row.gpa ?? 0) >= 2.4 ? 'info' : 'warning'
-                    } />
-                  ) : <Text style={s.td}>–</Text>}
-                </View>
-              </View>
-            ))}
-          </Card>
-        </>
+        <ReportCardView report={report} />
       )}
     </ScrollView>
   );
@@ -194,19 +113,5 @@ const s = StyleSheet.create({
   chipText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: FontWeight.medium as any },
   chipTextActive: { color: Colors.white },
   center: { padding: Spacing.xxxl, alignItems: 'center' },
-  summaryCard: { margin: Spacing.lg, gap: Spacing.md },
-  studentName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold as any, color: Colors.text },
   examLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: Spacing.md },
-  summaryItem: { alignItems: 'center', gap: Spacing.xs },
-  summaryVal: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold as any },
-  summaryKey: { fontSize: FontSize.xs, color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  summaryDivider: { width: 1, backgroundColor: Colors.border },
-  tableCard: { marginHorizontal: Spacing.lg, marginBottom: Spacing.lg },
-  tableTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold as any, color: Colors.text, marginBottom: Spacing.md },
-  tableHeader: { flexDirection: 'row', backgroundColor: Colors.primary, borderRadius: Radius.sm, padding: Spacing.sm, marginBottom: 2 },
-  th: { flex: 1, fontSize: FontSize.xs, fontWeight: FontWeight.bold as any, color: Colors.white, textAlign: 'center' },
-  tableRow: { flexDirection: 'row', paddingVertical: Spacing.sm, paddingHorizontal: Spacing.xs, borderRadius: Radius.sm, alignItems: 'center' },
-  tableRowAlt: { backgroundColor: Colors.surfaceAlt },
-  td: { flex: 1, fontSize: FontSize.sm, color: Colors.text, textAlign: 'center' },
 });

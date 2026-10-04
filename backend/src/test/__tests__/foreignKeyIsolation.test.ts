@@ -72,12 +72,12 @@ async function seedSchool(name: string, code: string, into: Ids): Promise<string
 
   into.subjectOneId = (
     await prisma.subject.create({
-      data: { name: "Maths", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+      data: { name: "Maths", gradeId: gradeOne.id, fullTheoryMarks: 100, fullPracticalMarks: 0 },
     })
   ).id;
   into.subjectTwoId = (
     await prisma.subject.create({
-      data: { name: "Maths", gradeId: gradeTwo.id, fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40 },
+      data: { name: "Maths", gradeId: gradeTwo.id, fullTheoryMarks: 100, fullPracticalMarks: 0 },
     })
   ).id;
 

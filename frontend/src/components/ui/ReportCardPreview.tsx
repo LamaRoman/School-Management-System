@@ -5,8 +5,8 @@ import { api } from "@/lib/api";
 
 /**
  * The on-screen report card: the exact HTML the PDF is printed from (`/pdf/...?format=html`),
- * so it follows the school's grading style (marks-based or credit-hour/grade-point), column
- * settings and colour/B&W mode — and can never disagree with the printed card.
+ * so it follows the school's column settings and colour/B&W mode — and can never disagree
+ * with the printed card.
  *
  * Shown in a sandboxed iframe: no scripts run in it. `allow-same-origin` is only there so the
  * frame can be sized to its content; without `allow-scripts` the document cannot act on it.

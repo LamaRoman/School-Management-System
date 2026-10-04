@@ -27,7 +27,7 @@ router.get("/", authenticate, authorize("ADMIN", "TEACHER"), async (req, res) =>
     where,
     include: {
       student: { select: { id: true, name: true, rollNo: true } },
-      subject: { select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true } },
+      subject: { select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true } },
       examType: { select: { id: true, name: true } },
     },
     orderBy: { student: { rollNo: "asc" } },
