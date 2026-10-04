@@ -1,3 +1,4 @@
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
@@ -86,6 +87,7 @@ export default function HomeworkScreen() {
   };
 
   useEffect(() => { load(); loadFormData(); }, []);
+  useRefreshOnFocus(() => { load(true); loadFormData(); });
 
   const handleRefresh = () => { setRefreshing(true); load(true); };
 

@@ -1,3 +1,4 @@
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
@@ -26,6 +27,7 @@ export default function TeacherDashboard({ navigation }: any) {
   };
 
   useEffect(() => { fetchData(); }, []);
+  useRefreshOnFocus(fetchData);
 
   if (loading) return <LoadingScreen />;
   if (error && !data) return <ErrorState message={error} onRetry={() => { setLoading(true); fetchData(); }} />;
