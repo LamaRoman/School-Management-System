@@ -272,6 +272,7 @@ model ExamType {
   seatAllocations SeatAllocation[]
   feeStructures  FeeStructure[]
   resultStatuses ExamResultStatus[]
+  attendanceSnapshots ExamAttendance[]
 
   @@unique([name, academicYearId])
   @@map("exam_types")
@@ -306,6 +307,30 @@ model ExamResultStatus {
   // load; the admin overview asks for every section of one exam type.
   @@index([sectionId])
   @@map("exam_result_statuses")
+}
+
+// A student's attendance as it stood when an exam's results were published, so a
+// reprinted report card shows the same numbers it was released with. Written by
+// result-status /publish (services/examAttendance.service.ts). presentDays/totalDays
+// are that term's days only — the cumulative count minus the previous exam's — and
+// cumulative* is the year to date at publish, which the next exam subtracts and the
+// annual card prints.
+model ExamAttendance {
+  id                String   @id @default(cuid())
+  studentId         String   @map("student_id")
+  examTypeId        String   @map("exam_type_id")
+  presentDays       Int      @map("present_days")
+  totalDays         Int      @map("total_days")
+  cumulativePresent Int      @map("cumulative_present")
+  cumulativeTotal   Int      @map("cumulative_total")
+  frozenAt          DateTime @default(now()) @map("frozen_at")
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examType ExamType @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, examTypeId])
+  @@index([examTypeId])
+  @@map("exam_attendances")
 }
 
 // ─── GRADING POLICY (Weightage) ─────────────────────────
@@ -352,6 +377,7 @@ model Student {
   results          ConsolidatedResult[]
   attendances      Attendance[]
   dailyAttendances DailyAttendance[]
+  examAttendances  ExamAttendance[]
   user             User?
   observationResults ObservationResult[]
   seatAllocations SeatAllocation[]

@@ -14,6 +14,7 @@ import {
   calculateWeightedPercentage,
   calculateOverallGpaWeighted,
 } from "./grading.service";
+import { termAttendance, yearAttendance, cardAttendance, type Days } from "./examAttendance.service";
 
 export interface ReportSubject {
   subjectName: string;
@@ -51,7 +52,7 @@ export interface TermReportBatch {
   studentsById: Map<string, any>;
   marksByStudent: Map<string, any[]>;
   optionalByStudent: Map<string, Set<string>>;
-  attendanceByStudent: Map<string, any>;
+  attendanceByStudent: Map<string, Days>;
 }
 
 /**
@@ -86,7 +87,7 @@ export async function loadTermReportBatch(
   ]);
 
   const studentIds = students.map((s) => s.id);
-  const [marks, optional, attendances] = await Promise.all([
+  const [marks, optional, attendanceByStudent] = await Promise.all([
     prisma.mark.findMany({
       where: { studentId: { in: studentIds }, examTypeId },
       include: { subject: true },
@@ -96,9 +97,7 @@ export async function loadTermReportBatch(
       where: { studentId: { in: studentIds } },
       select: { studentId: true, subjectId: true },
     }),
-    prisma.attendance.findMany({
-      where: { studentId: { in: studentIds }, academicYearId: examType.academicYearId },
-    }),
+    termAttendance(studentIds, examType),
   ]);
 
   const marksByStudent = new Map<string, any[]>();
@@ -126,7 +125,7 @@ export async function loadTermReportBatch(
     studentsById: new Map(students.map((s) => [s.id, s])),
     marksByStudent,
     optionalByStudent,
-    attendanceByStudent: new Map(attendances.map((a) => [a.studentId, a])),
+    attendanceByStudent,
   };
 }
 
@@ -252,11 +251,10 @@ export async function buildTermReportData(
     };
   });
 
+  // That term's days only, frozen when the exam was published (examAttendance.service).
   const attendance = batch
-    ? batch.attendanceByStudent.get(studentId) ?? null
-    : await prisma.attendance.findUnique({
-        where: { studentId_academicYearId: { studentId, academicYearId: examType.academicYearId } },
-      });
+    ? batch.attendanceByStudent.get(studentId)
+    : (await termAttendance([studentId], examType)).get(studentId);
 
   return {
     _studentId: studentId,
@@ -279,9 +277,7 @@ export async function buildTermReportData(
     ),
     // A paper absent or not yet entered: the GPA counts it as 0, so screens show "—" for it.
     incomplete: subjects.some((s) => s.isAbsent || s.notEntered),
-    attendance: attendance
-      ? { totalDays: attendance.totalDays, presentDays: attendance.presentDays, absentDays: attendance.absentDays }
-      : undefined,
+    attendance: cardAttendance(attendance),
     _observations: null as any[] | null,
   };
 }
@@ -368,10 +364,6 @@ export async function buildFinalReportData(
     };
   });
 
-  const attendance = await prisma.attendance.findUnique({
-    where: { studentId_academicYearId: { studentId, academicYearId } },
-  });
-
   const consolidated = await prisma.consolidatedResult.findUnique({
     where: { studentId_academicYearId: { studentId, academicYearId } },
   });
@@ -379,6 +371,8 @@ export async function buildFinalReportData(
   const finalExamType = await prisma.examType.findFirst({
     where: { isFinal: true, academicYearId },
   });
+  // The whole year, frozen when the Final is published.
+  const attendance = await yearAttendance(studentId, academicYearId, finalExamType?.id ?? null);
 
   return {
     _studentId: studentId,
@@ -402,9 +396,7 @@ export async function buildFinalReportData(
     ),
     // A paper absent or not yet entered: the GPA counts it as 0, so screens show "—" for it.
     incomplete: subjects.some((s) => s.isAbsent || s.notEntered),
-    attendance: attendance
-      ? { totalDays: attendance.totalDays, presentDays: attendance.presentDays, absentDays: attendance.absentDays }
-      : undefined,
+    attendance: cardAttendance(attendance),
     remarks: consolidated?.remarks,
     promoted: consolidated?.promoted,
     promotedTo: consolidated?.promotedTo,
