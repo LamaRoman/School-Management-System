@@ -115,6 +115,9 @@ describe("routes", () => {
       const card = await get(`/reports/term/${row.studentId}/${termId}`);
       expect(card.rank ?? null).toBe(row.rank);
       expect(card.overallPercentage).toBe(row.percentage);
+      // Absent student: flagged so every screen shows "—" for %, GPA and grade.
+      expect(card.incomplete).toBe(row.studentId === ids.absent);
+      expect(row.incomplete).toBe(row.studentId === ids.absent);
     }
     expect(sheet.totalStudents).toBe(4);
   });

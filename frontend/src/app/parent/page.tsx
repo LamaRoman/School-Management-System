@@ -229,22 +229,22 @@ export default function ParentDashboard() {
                           <tr key={i} className="border-t border-gray-100">
                             <td className="px-4 py-2 font-medium text-primary">{s.subjectName}</td>
                             <td className="px-4 py-2 text-center">{s.fullMarks}</td>
-                            <td className="px-4 py-2 text-center font-semibold">{s.totalMarks || s.weightedPercentage}</td>
-                            <td className="px-4 py-2 text-center font-bold text-primary">{s.grade}</td>
-                            <td className="px-4 py-2 text-center">{s.gpa}</td>
+                            <td className="px-4 py-2 text-center font-semibold">{s.isAbsent ? "Ab" : s.notEntered ? "—" : (s.totalMarks ?? s.weightedPercentage)}</td>
+                            <td className="px-4 py-2 text-center font-bold text-primary">{s.isAbsent ? "Ab" : s.notEntered ? "—" : s.grade}</td>
+                            <td className="px-4 py-2 text-center">{s.isAbsent ? "Ab" : s.notEntered ? "—" : s.gpa}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
                         <tr className="border-t-2 border-primary bg-gray-50">
                           <td colSpan={3} className="px-4 py-2 text-right font-bold">Overall</td>
-                          <td className="px-4 py-2 text-center font-bold text-primary">{reportData.overallGrade}</td>
-                          <td className="px-4 py-2 text-center font-bold">{reportData.overallGpa}</td>
+                          <td className="px-4 py-2 text-center font-bold text-primary">{reportData.incomplete ? "—" : reportData.overallGrade}</td>
+                          <td className="px-4 py-2 text-center font-bold">{reportData.incomplete ? "—" : reportData.overallGpa}</td>
                         </tr>
                       </tfoot>
                     </table>
                     <div className="p-4 text-sm text-gray-600">
-                      <span className="font-semibold text-primary">Percentage: </span>{reportData.overallPercentage}%
+                      <span className="font-semibold text-primary">Percentage: </span>{reportData.incomplete ? "—" : `${reportData.overallPercentage}%`}
                       {reportData.rank && (
                         <span className="ml-4"><span className="font-semibold text-primary">Rank: </span>{reportData.rank} of {reportData.totalStudents}</span>
                       )}

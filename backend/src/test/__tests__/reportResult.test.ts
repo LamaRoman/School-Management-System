@@ -39,31 +39,43 @@ it("prints Incomplete when a subject is absent", () => {
   expect(printedResult(html)).toBe("Incomplete");
 });
 
-describe("an absent subject on the printed card", () => {
+describe("an absent subject on the printed card (no grade point for a paper not sat)", () => {
   const absentNepali = subject("Nepali", 0, { isAbsent: true, hasPassed: false, grade: "E", gpa: 0.8, percentage: 0 });
+  const rowOf = (html: string, name: string) =>
+    html.slice(html.indexOf(`>${name}<`), html.indexOf("</tr>", html.indexOf(`>${name}<`)));
+  const resultCell = (html: string, label: string) =>
+    html.match(new RegExp(`>${label}</td><td[^>]*>([^<]*)<`))?.[1];
 
-  it("marks-based: Obtained says Ab, grade/GPA show the E / 0.8 it counts as, never NG", () => {
+  it("marks-based: the row says Ab, not E / 0.8, and the overall figures are blank", () => {
     const html = buildReportCardHtml(card([subject("English", 25), absentNepali]), "color");
-    const row = html.slice(html.indexOf(">Nepali<"), html.indexOf("</tr>", html.indexOf(">Nepali<")));
+    const row = rowOf(html, "Nepali");
     expect(row).toContain(">Ab<");
-    expect(row).toContain(">E<");
-    expect(row).toContain(">0.8<");
-    expect(html).not.toContain("NG");
+    expect(row).not.toContain(">E<");
+    expect(row).not.toContain(">0.8<");
+    for (const label of ["Percentage", "Description", "GPA"]) expect(resultCell(html, label)).toBe("—");
+    expect(resultCell(html, "Result")).toBe("Incomplete");
     expect(html).not.toContain("Not Graded");
   });
 
-  it("credit-grade: Theory grade says Ab, Final Grade / Grade Point show E / 0.8, never NG", () => {
+  it("credit-grade: the row says Ab and the Grade Points Average is blank", () => {
     const html = buildReportCardHtml({
-      ...card([]), gradingStyle: "CREDIT_GRADE_BASED", hasPracticalSubjects: true, overallGpa: 2,
+      ...card([]), gradingStyle: "CREDIT_GRADE_BASED", hasPracticalSubjects: false, overallGpa: 1.57,
       subjects: [
-        { subjectName: "Nepali", creditHour: 4, theoryGrade: "E", practicalGrade: "E", finalGrade: "E", gradePoint: 0.8, isAbsent: true, notEntered: false },
-        { subjectName: "English", creditHour: 4, theoryGrade: "B", practicalGrade: "A", finalGrade: "B+", gradePoint: 3.2, isAbsent: false, notEntered: false },
+        { subjectName: "Nepali", creditHour: 4, theoryGrade: "E", practicalGrade: null, finalGrade: "E", gradePoint: 0.8, isAbsent: true, notEntered: false },
+        { subjectName: "English", creditHour: 4, theoryGrade: "B", practicalGrade: null, finalGrade: "B", gradePoint: 2.8, isAbsent: false, notEntered: false },
       ],
     }, "color");
-    const row = html.slice(html.indexOf(">Nepali<"), html.indexOf("</tr>", html.indexOf(">Nepali<")));
+    const row = rowOf(html, "Nepali");
     expect(row).toContain(">Ab<");
-    expect(row).toContain(">E<");
-    expect(row).toContain(">0.8<");
-    expect(html).not.toContain("Not Graded");
+    expect(row).not.toContain(">0.8<");
+    expect(rowOf(html, "English")).toContain(">2.8<");
+    expect(resultCell(html, "Grade Points Average")).toBe("—");
+    expect(resultCell(html, "Result")).toBe("Incomplete");
+  });
+
+  it("a complete card still prints its figures", () => {
+    const html = buildReportCardHtml(card([subject("English", 25), subject("Nepali", 43)]), "color");
+    expect(resultCell(html, "Percentage")).toBe("46.7%");
+    expect(resultCell(html, "GPA")).toBe("2.06");
   });
 });

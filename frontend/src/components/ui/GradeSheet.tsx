@@ -145,9 +145,9 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                         </td>
                       );
                     })}
-                    <td className="p-2 border border-gray-200 text-center font-bold text-accent">{row.percentage}</td>
-                    <td className="p-2 border border-gray-200 text-center font-semibold">{row.gpa ?? "—"}</td>
-                    <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.grade}</td>
+                    <td className="p-2 border border-gray-200 text-center font-bold text-accent">{row.incomplete ? "—" : row.percentage}</td>
+                    <td className="p-2 border border-gray-200 text-center font-semibold">{row.incomplete ? "—" : row.gpa ?? "—"}</td>
+                    <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.incomplete ? "—" : row.grade}</td>
                   </tr>
                 ))}
               </tbody>

@@ -289,9 +289,9 @@ describe("the report card template", () => {
 
     expect(scienceRow).toContain("—");
     expect(scienceRow).not.toContain(">Ab<");
-    // The columns beside it still show the real 0-score grade — it counts, it just
-    // does not claim she was absent.
-    expect(scienceRow).toContain("E");
+    // Since 2026-10-04 no grade is printed for a paper not sat or not entered: the
+    // grade/GPA cells say "—" too, and the card's overall figures are blank (Incomplete).
+    expect(scienceRow).not.toContain(">E<");
   });
 
   it("still prints 'Ab' for a genuine absence", () => {
