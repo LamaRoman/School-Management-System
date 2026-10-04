@@ -5,7 +5,7 @@ import { formatGradeSection } from "@/lib/bsDate";
 import { openReportCardPdf } from "@/lib/reportCardPdf";
 import toast from "react-hot-toast";
 import { Printer, Download, ChevronLeft, Users } from "lucide-react";
-import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
+import { GRADING_SCALE, overallResult } from "@/lib/gradingScale";
 
 interface ClassTeacherSection {
   assignmentId: string;
@@ -49,11 +49,11 @@ const defaultSettings: ColumnSettings = {
   logoSize: "medium",
 };
 
-function getResult(overallGrade: string): { description: string; result: string } {
+function getResult(overallGrade: string, subjects: any[]): { description: string; result: string } {
   const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
   return {
     description: entry?.description || "—",
-    result: isPassingGrade(overallGrade) ? "Pass" : "Fail",
+    result: overallResult(overallGrade, subjects),
   };
 }
 
@@ -83,8 +83,8 @@ function ReportCard({
   };
 
   const hasPractical = reportData.hasPractical && cols.showTheoryPrac;
-  const divResult = getResult(reportData.overallGrade);
-  const anyAbsent = reportData.subjects?.some((s: any) => s.isAbsent) ?? false;
+  const divResult = getResult(reportData.overallGrade, reportData.subjects || []);
+  const anyAbsent = reportData.subjects?.some((s: any) => s.isAbsent || s.notEntered) ?? false;
 
   return (
     <div className="bg-white border-2 rounded" style={{ borderColor: t.primary }}>

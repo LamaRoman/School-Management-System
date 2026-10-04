@@ -67,6 +67,25 @@ export function isPassingGrade(grade: string): boolean {
 }
 
 /**
+ * The overall result, marks-based report cards. The school follows the usual Nepali rule: a
+ * student passes only by reaching the pass mark in EVERY subject — fail one subject and the
+ * result is Fail, whatever the overall percentage. (Until 2026-10-04 only the overall grade
+ * decided it, so a student below the pass mark in three subjects could still print "Pass".)
+ * A failing overall grade (D/E) is still a fail too.
+ *
+ * Absent and not-yet-entered subjects are left to the caller, which prints "Incomplete" for
+ * them before looking at this; they are skipped here so a missing paper never reads as a fail.
+ * Must match overallResult in frontend/src/lib/gradingScale.ts.
+ */
+export function overallResult(
+  overallGrade: string,
+  subjects: { hasPassed?: boolean; isAbsent?: boolean; notEntered?: boolean }[],
+): "Pass" | "Fail" {
+  const failedSubject = subjects.some((s) => !s.isAbsent && !s.notEntered && s.hasPassed === false);
+  return failedSubject || !isPassingGrade(overallGrade) ? "Fail" : "Pass";
+}
+
+/**
  * Get grade and GPA from a percentage value. The lowest band starts at 0, so
  * every input resolves to a grade; the fallback exists only to satisfy the
  * compiler if the scale is ever edited to not reach 0.

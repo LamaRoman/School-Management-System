@@ -17,6 +17,7 @@ import {
   getGradeFromPercentage,
   calculateOverallGpa,
   calculateOverallGpaWeighted,
+  overallResult,
 } from "../../services/grading.service";
 
 describe("Grading scale", () => {
@@ -118,5 +119,30 @@ describe("Grading scale", () => {
       expect(withWeakSubject).toEqual([3.6, 0.8]);
       expect(calculateOverallGpa(withWeakSubject)).toBe(2.2);
     });
+  });
+});
+
+describe("Overall result — strict rule: pass every subject", () => {
+  const pass = { hasPassed: true };
+  const fail = { hasPassed: false };
+
+  it("passes only when every subject reaches its pass mark", () => {
+    expect(overallResult("C", [pass, pass, pass])).toBe("Pass");
+  });
+
+  it("fails on a single subject below its pass mark, whatever the overall grade", () => {
+    // The III-A case: 46.7% overall (grade C), but three subjects under 20/50.
+    expect(overallResult("C", [fail, pass, pass])).toBe("Fail");
+    expect(overallResult("A+", [pass, fail])).toBe("Fail");
+  });
+
+  it("still fails on a failing overall grade", () => {
+    expect(overallResult("D", [pass, pass])).toBe("Fail");
+    expect(overallResult("E", [pass])).toBe("Fail");
+  });
+
+  it("skips absent and not-yet-entered subjects (the card prints Incomplete for those)", () => {
+    expect(overallResult("C", [pass, { hasPassed: false, isAbsent: true }])).toBe("Pass");
+    expect(overallResult("C", [pass, { hasPassed: false, notEntered: true }])).toBe("Pass");
   });
 });

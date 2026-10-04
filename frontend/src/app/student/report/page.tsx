@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { openReportCardPdf } from "@/lib/reportCardPdf";
 import { useAuth } from "@/hooks/useAuth";
 import { Printer, Download } from "lucide-react";
-import { GRADING_SCALE, isPassingGrade } from "@/lib/gradingScale";
+import { GRADING_SCALE, overallResult } from "@/lib/gradingScale";
 import ResultsPending from "@/components/ui/ResultsPending";
 import { useExamTypes } from "@/hooks/useReferenceData";
 
@@ -40,11 +40,11 @@ const defaultSettings: ColumnSettings = {
   logoSize: "medium",
 };
 
-function getResult(overallGrade: string): { description: string; result: string } {
+function getResult(overallGrade: string, subjects: any[]): { description: string; result: string } {
   const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
   return {
     description: entry?.description || "—",
-    result: isPassingGrade(overallGrade) ? "Pass" : "Fail",
+    result: overallResult(overallGrade, subjects),
   };
 }
 
@@ -119,7 +119,7 @@ export default function StudentReportPage() {
   };
 
   const hasPractical = reportData?.hasPractical && cols.showTheoryPrac;
-  const divResult = reportData ? getResult(reportData.overallGrade) : null;
+  const divResult = reportData ? getResult(reportData.overallGrade, reportData.subjects || []) : null;
   // Absent or not-yet-entered — either way the result shown is provisional.
   const anyAbsent = reportData?.subjects?.some((s: any) => s.isAbsent || s.notEntered) ?? false;
 
