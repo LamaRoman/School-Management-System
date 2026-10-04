@@ -361,4 +361,35 @@ router.delete("/:id", authenticate, authorize("ADMIN"), async (req, res) => {
   res.json({ data: { message: `${teacher.name} deactivated` } });
 });
 
+// DELETE /api/teachers/:id/permanent { confirm: "delete permanently" } (admin only)
+//
+// Irreversible: removes the teacher and their class/subject assignments. Only a deactivated
+// teacher can be deleted. Their login account is deliberately KEPT, disabled (deactivation
+// already locked it and freed the email): homework, notices, announcements, gallery photos
+// and calendar events are owned by that account and are deleted with it, so removing it
+// would silently erase everything the teacher ever posted. Marks never pointed at the
+// teacher and are unaffected.
+router.delete("/:id/permanent", authenticate, authorize("ADMIN"), async (req, res) => {
+  const schoolId = getSchoolId(req);
+  const confirm = typeof req.body?.confirm === "string" ? req.body.confirm : "";
+  if (confirm.trim().toLowerCase() !== "delete permanently") {
+    throw new AppError('Type "delete permanently" to confirm', 400);
+  }
+  const teacher = await prisma.teacher.findFirstOrThrow({
+    where: { id: req.params.id, schoolId },
+    select: { id: true, name: true, isActive: true, user: { select: { id: true, isActive: true } } },
+  });
+  if (teacher.isActive) throw new AppError("Deactivate the teacher first, then delete permanently", 400);
+
+  await prisma.$transaction(async (tx) => {
+    // Belt and braces: the login must stay locked once the teacher row is gone.
+    if (teacher.user?.isActive) await tx.user.update({ where: { id: teacher.user.id }, data: { isActive: false } });
+    await tx.teacher.delete({ where: { id: teacher.id } }); // cascades assignments; user.teacherId -> null
+  });
+  if (teacher.user) invalidateUserCache(teacher.user.id);
+
+  res.json({ data: { message: `${teacher.name} permanently deleted` } });
+});
+
 export default router;
+

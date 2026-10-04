@@ -126,8 +126,9 @@ class ApiClient {
     return this.request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
   }
 
-  delete<T>(path: string): Promise<T> {
-    return this.request<T>(path, { method: "DELETE" });
+  /** `body` is for the few deletes that need one, e.g. a typed confirmation. */
+  delete<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>(path, body === undefined ? { method: "DELETE" } : { method: "DELETE", body: JSON.stringify(body) });
   }
 }
 
