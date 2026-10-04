@@ -438,13 +438,13 @@ export function buildReportCardHtml(
 
       let resultCols = "";
       if (cols.showPercentage) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(pctValue)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(pctValue)}</td>`;
       }
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(s.grade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.grade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.gpa)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gpa)}</td>`;
       }
 
       let passMark = "";
@@ -558,7 +558,6 @@ export function buildReportCardHtml(
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
         ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">NG</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Not Graded</td></tr>
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Ab</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Absent</td></tr>
       </table>
     </div>`;
@@ -752,17 +751,17 @@ function buildCreditGradeReportCardHtml(
       const bg = i % 2 === 0 ? "#ffffff" : t.altRow;
       let midCols = "";
       if (hasPracticalCol) {
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.theoryGrade)}</td>`;
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : esc(s.theoryGrade)}</td>`;
         // A theory-only subject has no practical column value even when absent
-        // (practicalGrade is null); keep the structural "—" rather than NG.
-        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.practicalGrade === null ? "—" : (s.isAbsent ? "NG" : esc(s.practicalGrade))}</td>`;
+        // (practicalGrade is null); keep the structural "—" rather than Ab.
+        midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.practicalGrade === null ? "—" : (s.isAbsent ? "Ab" : esc(s.practicalGrade))}</td>`;
       }
       let resultCols = "";
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "NG" : esc(s.finalGrade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.finalGrade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "NG" : esc(s.gradePoint)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gradePoint)}</td>`;
       }
       return `<tr style="background:${bg};">
         <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${i + 1}</td>
@@ -818,7 +817,6 @@ function buildCreditGradeReportCardHtml(
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Grading and Marking System</caption>
         ${GRADING_SCALE.map((row) => `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">${row.grade}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};">${row.range}</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;">${row.gpa ?? "—"}</td></tr>`).join("")}
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">NG</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Not Graded</td></tr>
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Ab</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};" colspan="2">Absent</td></tr>
       </table>
     </div>`;

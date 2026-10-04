@@ -357,8 +357,9 @@ async function buildTermReportData(
       // (and its credit hours) out of the average entirely, leaving a student
       // who skipped the exam ranked ABOVE one who sat it and failed.
       //
-      // The "Ab" / "NG" printed on the card is driven by the isAbsent flag in
-      // pdf.service.ts, not by these values, so the display is unaffected.
+      // The card prints these values (E / 0.8) for the final grade and grade point, so a
+      // reader can reproduce the GPA; the Theory/Practical columns print "Ab" from the
+      // isAbsent flag in pdf.service.ts, so the absence itself stays visible.
       const theoryResult = getGradeFromPercentage(
         calculatePercentage(m?.theoryMarks || 0, subject.fullTheoryMarks)
       );
