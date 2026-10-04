@@ -143,10 +143,13 @@ describe("the divisor is every subject in the grade", () => {
     const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
 
     // The regression guard for R6. Dividing by Shyam's own row count gives him 75%
-    // and rank 1 — ahead of Ram, on half the papers.
-    expect(ranks.get(shyam.id)!.avgPct).toBeCloseTo(37.5, 5);
-    expect(ranks.get(ram.id)!.avgPct).toBeCloseTo(70, 5);
-    expect(ranks.get(ram.id)!.rank).toBeLessThan(ranks.get(shyam.id)!.rank);
+    // and rank 1 — ahead of Ram, on half the papers. His missing paper scores 0, and
+    // since 2026-10-04 it also makes his result Incomplete, so he is not ranked at all.
+    expect(ranks.get(shyam.id)!.pct).toBeCloseTo(37.5, 5);
+    expect(ranks.get(ram.id)!.pct).toBeCloseTo(70, 5);
+    expect(ranks.get(shyam.id)!.result).toBe("Incomplete");
+    expect(ranks.get(shyam.id)!.rank).toBeNull();
+    expect(ranks.get(ram.id)!.rank).toBe(1);
   });
 
   it("reports the same percentage through the term report", async () => {
@@ -157,7 +160,7 @@ describe("the divisor is every subject in the grade", () => {
 describe("the report card and the class mark sheet agree", () => {
   it("gives every student the same rank on both documents", async () => {
     const sheet = await gradeSheet();
-    const sheetRanks = new Map<string, number>(
+    const sheetRanks = new Map<string, number | null>(
       sheet.rows.map((r: any) => [r.studentId, r.rank])
     );
 
@@ -165,7 +168,8 @@ describe("the report card and the class mark sheet agree", () => {
     // documents, and before R7 these could differ for a student mid-entry.
     for (const student of [ram, shyam, hari]) {
       const report = await termReport(student.id);
-      expect(report.rank).toBe(sheetRanks.get(student.id));
+      // Unranked: the report omits the rank, the sheet sends null (printed "—").
+      expect(report.rank ?? null).toBe(sheetRanks.get(student.id));
     }
   });
 });
@@ -174,11 +178,11 @@ describe("ties and unranked students", () => {
   it("shares a rank on equal percentages and skips the next position", async () => {
     const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
 
-    // Ram and Hari both average 70%, so both are 1st and the next distinct
-    // percentage takes 3rd — standard competition ranking.
+    // Ram and Hari both have 70%, so both are 1st — standard competition ranking.
+    // Shyam (Incomplete) is not ranked; see "only students who passed" below for the skip.
     expect(ranks.get(ram.id)!.rank).toBe(1);
     expect(ranks.get(hari.id)!.rank).toBe(1);
-    expect(ranks.get(shyam.id)!.rank).toBe(3);
+    expect(ranks.get(shyam.id)!.rank).toBeNull();
   });
 
   it("counts the whole class in totalStudents, including students with no marks", async () => {
@@ -189,10 +193,11 @@ describe("ties and unranked students", () => {
   it("marks a student with no marks as unranked rather than genuinely last", async () => {
     const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
 
-    // She does sort last in the raw ranking, which is what the class mark sheet
-    // wants — but `hasAnyMarks` is what stops the report card telling a mid-year
-    // transfer she came last in a class she has not sat an exam in.
-    expect(ranks.get(gita.id)!.rank).toBe(4);
+    // Nothing entered = every paper missing = Incomplete, so she has no rank anywhere
+    // (the report card used to need `hasAnyMarks` to avoid telling a mid-year transfer
+    // she came last; the pass-only rule now covers that).
+    expect(ranks.get(gita.id)!.rank).toBeNull();
+    expect(ranks.get(gita.id)!.result).toBe("Incomplete");
     expect(ranks.get(gita.id)!.hasAnyMarks).toBe(false);
 
     // The term report never gets that far for her: a student with no marks at all
@@ -360,13 +365,13 @@ describe("optional subjects are not scored against a student who does not take t
 
     // Ram is still averaged over his two real subjects — 70%, unchanged. Scoring the
     // elective as a zero would have dropped him to (70+70+0)/3 = 46.7%.
-    expect(ranks.get(ram.id)!.avgPct).toBeCloseTo(70, 5);
+    expect(ranks.get(ram.id)!.pct).toBeCloseTo(70, 5);
   });
 
   it("counts the elective for the student who does take it", async () => {
     const { ranks } = await computeSectionRanks(ctx.section.id, examTypeId, ctx.year.id);
     // Hari: (70 + 70 + 90) / 3
-    expect(ranks.get(hari.id)!.avgPct).toBeCloseTo((70 + 70 + 90) / 3, 5);
+    expect(ranks.get(hari.id)!.pct).toBeCloseTo((70 + 70 + 90) / 3, 1) // rounded to 1 decimal, as printed;
   });
 
   it("keeps the elective off the report card of a student who does not take it", async () => {
@@ -431,10 +436,10 @@ describe("an enrolled elective with no mark yet still scores zero", () => {
     // (70 + 70 + 0) / 3 = 46.67. The old mark-presence heuristic would have excluded
     // the unmarked elective and left him on 70 — better than the classmates he is
     // actually tied with, for a paper nobody has marked.
-    expect(ranks.get(ram.id)!.avgPct).toBeCloseTo((70 + 70 + 0) / 3, 5);
+    expect(ranks.get(ram.id)!.pct).toBeCloseTo((70 + 70 + 0) / 3, 1) // rounded to 1 decimal, as printed;
 
     // Hari is not enrolled in this one, so he is untouched at 70.
-    expect(ranks.get(hari.id)!.avgPct).toBeCloseTo(70, 5);
+    expect(ranks.get(hari.id)!.pct).toBeCloseTo(70, 5);
   });
 
   it("shows the enrolled-but-unmarked elective on the card as not entered", async () => {

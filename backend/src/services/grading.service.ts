@@ -67,6 +67,64 @@ export function isPassingGrade(grade: string): boolean {
 }
 
 /**
+ * The overall percentage: total marks obtained over total full marks — the school's own
+ * method (decided 2026-10-04). Until then it was the plain average of the subject
+ * percentages, which gives a 25-mark subject the same weight as a 50-mark one; with every
+ * subject on the same full marks the two agree, which is why nobody noticed until III-A's
+ * Computer (out of 25) made them differ (Aasha: 51.3% averaged vs 50.3% by total).
+ *
+ * Written as the full-marks-weighted mean of the subject percentages, which is exactly
+ * total/total for a term, and the natural equivalent for the annual result, where each
+ * subject's percentage is already the weighted blend of its terms. Unrounded.
+ */
+export function totalMarksPercentage(subjects: { percentage: number; fullMarks: number }[]): number {
+  const full = subjects.reduce((a, s) => a + s.fullMarks, 0);
+  if (full <= 0) return 0;
+  return subjects.reduce((a, s) => a + s.percentage * s.fullMarks, 0) / full;
+}
+
+export type StudentResult = "Pass" | "Fail" | "Incomplete";
+
+/**
+ * A student's result for an exam (or the year), as printed on the report card and used to
+ * decide who is ranked. Incomplete if any subject is absent or not yet entered; otherwise
+ * the style's pass rule — marks-based: every subject at its pass mark and the overall grade
+ * not D/E (overallResult); credit-grade: no subject's final grade D/E.
+ */
+export function studentResult(
+  overallGrade: string,
+  subjects: { hasPassed?: boolean; grade?: string; isAbsent?: boolean; notEntered?: boolean }[],
+  style: "MARKS_BASED" | "CREDIT_GRADE_BASED" = "MARKS_BASED",
+): StudentResult {
+  if (subjects.some((s) => s.isAbsent || s.notEntered)) return "Incomplete";
+  if (style === "CREDIT_GRADE_BASED") {
+    return subjects.some((s) => s.grade !== undefined && !isPassingGrade(s.grade)) ? "Fail" : "Pass";
+  }
+  return overallResult(overallGrade, subjects);
+}
+
+/**
+ * Rank only the students who passed (decided 2026-10-04): a student who failed a subject or
+ * has an absent / missing paper gets no rank (null) rather than a position that could sit
+ * above someone who passed. Among those who passed, standard competition ranking on the
+ * percentage: equal percentages share a rank and the next one skips (1, 2, 2, 4).
+ */
+export function rankPassedOnly(
+  students: { studentId: string; pct: number; result: StudentResult }[],
+): Map<string, number | null> {
+  const out = new Map<string, number | null>();
+  const passed = students.filter((s) => s.result === "Pass").sort((a, b) => b.pct - a.pct);
+  let rank = 0;
+  let prev = Number.NaN;
+  passed.forEach((s, i) => {
+    if (s.pct !== prev) { rank = i + 1; prev = s.pct; }
+    out.set(s.studentId, rank);
+  });
+  for (const s of students) if (!out.has(s.studentId)) out.set(s.studentId, null);
+  return out;
+}
+
+/**
  * The overall result, marks-based report cards. The school follows the usual Nepali rule: a
  * student passes only by reaching the pass mark in EVERY subject — fail one subject and the
  * result is Fail, whatever the overall percentage. (Until 2026-10-04 only the overall grade

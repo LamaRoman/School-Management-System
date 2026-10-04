@@ -8,8 +8,9 @@ import {
   calculatePercentage,
   calculateWeightedPercentage,
   calculateOverallGpa,
+  totalMarksPercentage,
 } from "../services/grading.service";
-import { computeSectionRanks } from "../services/rank.service";
+import { computeSectionRanks, computeFinalSectionRanks } from "../services/rank.service";
 import { assertSectionOwnership } from "../services/resultStatus.service";
 
 const router = Router();
@@ -106,12 +107,9 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
 
     const totalObtained = counted.reduce((a, s) => a + s.obtained, 0);
     const totalFullMarks = counted.reduce((a, s) => a + s.fullMarks, 0);
-    // Averaged over every counted subject, absent included, so this column stays
-    // consistent with totalObtained / totalFullMarks above and with the rank
-    // derived from it below.
-    const avgPct = counted.length > 0
-      ? parseFloat((counted.reduce((a, s) => a + s.percentage, 0) / counted.length).toFixed(1))
-      : 0;
+    // Total marks over total full marks (totalMarksPercentage) — what Total / Full in the
+    // columns beside it say, and the figure the rank below is computed on.
+    const avgPct = counted.length > 0 ? parseFloat(totalMarksPercentage(counted).toFixed(1)) : 0;
     const avgGpa = calculateOverallGpa(counted.map((s) => s.gpa));
     const overallGrade = counted.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
 
@@ -125,7 +123,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       percentage: avgPct,
       gpa: avgGpa,
       grade: overallGrade.grade,
-      rank: 0,
+      rank: null as number | null,
     };
   });
 
@@ -139,7 +137,8 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
     String(academicYearId)
   );
   for (const row of rows) {
-    row.rank = ranks.get(row.studentId)?.rank ?? 0;
+    // null = not ranked (only students who passed are; see rank.service).
+    row.rank = ranks.get(row.studentId)?.rank ?? null;
   }
 
   res.json({
@@ -231,6 +230,7 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
 
       return {
         subjectId: subject.id,
+        fullMarks,
         weightedPercentage: parseFloat(weightedPct.toFixed(1)),
         grade: gradeResult.grade,
         gpa: gradeResult.gpa,
@@ -239,9 +239,9 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       };
     });
 
-    // Every subject counts, absent included — same reasoning as the term sheet.
+    // Every subject counts, absent included; total-marks basis, same as the term sheet.
     const avgPct = subjectResults.length > 0
-      ? parseFloat((subjectResults.reduce((a, s) => a + s.weightedPercentage, 0) / subjectResults.length).toFixed(1))
+      ? parseFloat(totalMarksPercentage(subjectResults.map((s) => ({ percentage: s.weightedPercentage, fullMarks: s.fullMarks }))).toFixed(1))
       : 0;
     const avgGpa = calculateOverallGpa(subjectResults.map((s) => s.gpa));
     const overallGrade = subjectResults.length > 0 ? getGradeFromPercentage(avgPct) : { grade: "", gpa: null, description: "" };
@@ -254,23 +254,13 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       percentage: avgPct,
       gpa: avgGpa,
       grade: overallGrade.grade,
-      rank: 0,
+      rank: null as number | null,
     };
   });
 
-  const sorted = [...rows].sort((a, b) => b.percentage - a.percentage);
-  let rank = 0;
-  let prevPct = -1;
-  let position = 0;
-  for (const row of sorted) {
-    position++;
-    if (row.percentage !== prevPct) {
-      rank = position;
-      prevPct = row.percentage;
-    }
-    const original = rows.find((r) => r.studentId === row.studentId);
-    if (original) original.rank = rank;
-  }
+  // The shared annual ranking (rank.service) — the same one the annual report card uses.
+  const { ranks } = await computeFinalSectionRanks(String(sectionId), String(academicYearId));
+  for (const row of rows) row.rank = ranks.get(row.studentId)?.rank ?? null;
 
   res.json({
     data: {
