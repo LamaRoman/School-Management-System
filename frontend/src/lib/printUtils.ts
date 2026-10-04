@@ -3,6 +3,7 @@
 // No sidebar, no layout chrome — just the document.
 
 import { api } from "./api";
+import { hasTotal, sheetFullMarks, totalCell } from "./gradeSheetExcel";
 
 // ─── Core ───────────────────────────────────────────────────────────────────
 
@@ -249,6 +250,7 @@ interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weight
 interface GradeSheetRow {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: GradeSheetSubjectResult[];
+  totalObtained?: number; totalFullMarks?: number;
   gpa: number | null; incomplete?: boolean;
 }
 
@@ -258,6 +260,7 @@ export async function printGradeSheet(data: {
 }) {
   const [school, headerSettings] = await Promise.all([getSchoolInfo(), getHeaderSettings()]);
   const isFinal = data.isFinal;
+  const showTotal = hasTotal(data);
 
   const subjectHeaders = data.subjects.map(s =>
     `<th class="text-center" style="min-width:50px;background:#1a3a5c;color:white;border-color:#1a3a5c"><div>${s.name}</div><div style="font-size:9px;font-weight:normal;opacity:0.7">(${s.fullMarks})</div></th>`
@@ -273,6 +276,7 @@ export async function printGradeSheet(data: {
       <td class="text-center muted">${row.rollNo || "—"}</td>
       <td class="bold">${row.studentName}</td>
       ${subjectCells}
+      ${showTotal ? `<td class="text-center bold">${totalCell(row, data)}</td>` : ""}
       <td class="text-center bold" style="color:#1a3a5c">${row.incomplete ? "—" : row.gpa ?? "—"}</td>
     </tr>`;
   }).join("");
@@ -294,6 +298,7 @@ ${schoolHeaderHtml(school, headerSettings)}
     <th class="text-center" style="width:40px;background:#1a3a5c;color:white;border-color:#1a3a5c">Roll</th>
     <th style="min-width:120px;background:#1a3a5c;color:white;border-color:#1a3a5c">Student Name</th>
     ${subjectHeaders}
+    ${showTotal ? `<th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:45px"><div>Total</div><div style="font-size:9px;font-weight:normal;opacity:0.7">(${sheetFullMarks(data)})</div></th>` : ""}
     <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:40px">GPA</th>
   </tr></thead>
   <tbody>${bodyRows}</tbody>

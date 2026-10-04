@@ -16,6 +16,13 @@ import {
 } from "./grading.service";
 import { termAttendance, yearAttendance, cardAttendance, type Days } from "./examAttendance.service";
 
+/**
+ * The school fields the card prints. Selected explicitly because this data also goes to
+ * parents and students as JSON (`/reports/...`): the full row carries internal fields such as
+ * the website revalidation secret.
+ */
+const CARD_SCHOOL_FIELDS = { name: true, nameNp: true, address: true, logo: true } as const;
+
 export interface ReportSubject {
   subjectName: string;
   creditHour: number;
@@ -71,7 +78,7 @@ export async function loadTermReportBatch(
     }),
     // S5 — same scoping as the single-student builder below.
     prisma.examType.findFirstOrThrow({ where: { id: examTypeId, academicYear: { schoolId } } }),
-    prisma.school.findUnique({ where: { id: schoolId } }),
+    prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS }),
   ]);
 
   const [academicYear, students, gradeSubjects] = await Promise.all([
@@ -211,7 +218,7 @@ export async function buildTermReportData(
   const school =
     batch !== undefined
       ? batch.school
-      : await prisma.school.findUnique({ where: { id: schoolId } });
+      : await prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS });
 
   // Theory and Practical are each graded on their own full marks, then a Final Grade is
   // derived from the combined percentage — algebraically the same as weighting the two
@@ -319,7 +326,7 @@ export async function buildFinalReportData(
     where: { studentId, academicYearId },
   });
 
-  const school = await prisma.school.findUnique({ where: { id: schoolId } });
+  const school = await prisma.school.findUnique({ where: { id: schoolId }, select: CARD_SCHOOL_FIELDS });
 
   // Grades are derived weighted-marks-first: each component's term marks are combined
   // using the grading policy's weightages, and the resulting percentage is graded once.

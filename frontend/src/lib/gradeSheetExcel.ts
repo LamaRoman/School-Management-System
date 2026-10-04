@@ -33,6 +33,9 @@ export interface GradeSheetRow {
   studentName: string;
   rollNo: number | null;
   subjects: SubjectResult[];
+  /** Term sheets only: marks obtained (an absent paper adds 0) over the student's full marks. */
+  totalObtained?: number;
+  totalFullMarks?: number;
   /** Credit-weighted, as on the report card. */
   gpa: number | null;
   /** Absent / not entered: the GPA is shown as "—". */
@@ -50,6 +53,25 @@ export interface SheetData {
 
 const PRIMARY = "FF1E3A5F";
 const ACCENT = "FFB8860B";
+
+/** Term sheets have a Total column; the annual sheet's cells are weighted percentages, which don't add up to a total. */
+export function hasTotal(data: SheetData): boolean {
+  return !data.isFinal;
+}
+
+/** Full marks of every subject on the sheet — the Total column's header. */
+export function sheetFullMarks(data: SheetData): number {
+  return data.subjects.reduce((a, s) => a + s.fullMarks, 0);
+}
+
+/**
+ * A student's Total cell: the marks obtained, or "obtained/full" for the rare student whose
+ * full marks differ from the header (an optional subject they don't take).
+ */
+export function totalCell(row: GradeSheetRow, data: SheetData): number | string {
+  if (row.totalObtained === undefined) return "—";
+  return row.totalFullMarks === sheetFullMarks(data) ? row.totalObtained : `${row.totalObtained}/${row.totalFullMarks}`;
+}
 
 /** "Ab" and "—" are deliberately strings; everything else stays a number. */
 function subjectCell(s: SubjectResult, isFinal: boolean): number | string {
@@ -83,7 +105,7 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   });
 
   const leading = ["Roll", "Student Name"];
-  const trailing = ["GPA"];
+  const trailing = hasTotal(data) ? ["Total", "GPA"] : ["GPA"];
   const width = leading.length + data.subjects.length + trailing.length;
 
   // ── Title block ────────────────────────────────────────────────────────────
@@ -106,7 +128,7 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   const fullMarksRow = sheet.addRow([
     ...leading.map(() => ""),
     ...data.subjects.map((s) => `(${s.fullMarks})`),
-    ...trailing.map(() => ""),
+    ...trailing.map((t) => (t === "Total" ? `(${sheetFullMarks(data)})` : "")),
   ]);
 
   for (const row of [headerRow, fullMarksRow]) {
@@ -127,9 +149,8 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   for (let col = 1; col <= leading.length; col++) {
     sheet.mergeCells(headerRow.number, col, fullMarksRow.number, col);
   }
-  for (let col = leading.length + data.subjects.length + 1; col <= width; col++) {
-    sheet.mergeCells(headerRow.number, col, fullMarksRow.number, col);
-  }
+  // GPA has no full-marks figure either; Total does, so it keeps its second row.
+  sheet.mergeCells(headerRow.number, width, fullMarksRow.number, width);
 
   // ── Student rows ───────────────────────────────────────────────────────────
   for (const row of data.rows) {
@@ -137,6 +158,7 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
       row.rollNo ?? "—",
       row.studentName,
       ...row.subjects.map((s) => subjectCell(s, data.isFinal)),
+      ...(hasTotal(data) ? [totalCell(row, data)] : []),
       row.incomplete ? "—" : row.gpa ?? "—",
     ];
     const added = sheet.addRow(values);

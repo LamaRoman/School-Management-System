@@ -106,6 +106,9 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       studentName: student.name,
       rollNo: student.rollNo,
       subjects: subjectResults,
+      // Marks obtained over the subjects the student takes; an absent paper adds 0.
+      totalObtained: parseFloat(counted.reduce((a, s) => a + s.obtained, 0).toFixed(1)),
+      totalFullMarks: counted.reduce((a, s) => a + s.fullMarks, 0),
       // Credit-weighted, the report card's Grade Points Average (same subjects, same rule).
       gpa: calculateOverallGpaWeighted(counted.map((s) => ({ gpa: s.gpa, creditHour: s.creditHour }))),
       // Absent / not entered: the sheet shows "—" for the GPA, as the card does.
