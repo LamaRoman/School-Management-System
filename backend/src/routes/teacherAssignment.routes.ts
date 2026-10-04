@@ -64,8 +64,20 @@ router.get("/my", authenticate, async (req, res) => {
     orderBy: [{ section: { grade: { displayOrder: "asc" } } }, { section: { name: "asc" } }],
   });
 
+  // Collapse repeats. The table's unique key includes a nullable subjectId, and Postgres treats
+  // NULLs as distinct, so nothing stops two class-teacher rows for the same teacher + section
+  // (e.g. a double-submitted form). One section is one card on every screen, so show it once;
+  // if one of the rows is permanent, prefer it over a temporary one.
+  const seen = new Map<string, (typeof assignments)[number]>();
+  for (const a of assignments) {
+    const key = `${a.isClassTeacher ? "ct" : "sub"}:${a.sectionId}:${a.isClassTeacher ? "" : a.subjectId}`;
+    const prev = seen.get(key);
+    if (!prev || (prev.isTemporary && !a.isTemporary)) seen.set(key, a);
+  }
+  const unique = [...seen.values()];
+
   // Separate class teacher sections from subject assignments
-  const classTeacherSections = assignments
+  const classTeacherSections = unique
     .filter((a) => a.isClassTeacher)
     .map((a) => ({
       assignmentId: a.id,
@@ -78,7 +90,7 @@ router.get("/my", authenticate, async (req, res) => {
       expiresAt: a.expiresAt,
     }));
 
-  const subjectAssignments = assignments
+  const subjectAssignments = unique
     .filter((a) => !a.isClassTeacher && a.subject)
     .map((a) => ({
       assignmentId: a.id,
