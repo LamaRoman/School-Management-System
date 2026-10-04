@@ -2,7 +2,7 @@
  * Absent-mark handling in results
  *
  * Pins the rule stated in CLAUDE.md and in grading.service.ts's own rationale:
- * an absent subject is DISPLAYED as "Ab"/"NG" but is COUNTED AS ZERO in every
+ * an absent subject is DISPLAYED as "Ab" (its grade/GPA as the E / 0.8 it counts as) but is COUNTED AS ZERO in every
  * average — it is never dropped from the denominator.
  *
  * Why this file exists: an earlier revision short-circuited absent subjects to
@@ -142,12 +142,12 @@ describe("absent marks in the term report", () => {
     expect(ritaReport.rank).toBeLessThan(sitaReport.rank);
   });
 
-  it("still flags the absent subject so the card prints Ab / NG", async () => {
+  it("still flags the absent subject so the card prints Ab", async () => {
     const sitaReport = await termReport(sita.id);
     const absent = sitaReport.subjects.find((s: any) => s.subjectName === "Subject B");
 
     // Counting it as zero must not cost us the display marker — pdf.service.ts
-    // renders "Ab"/"NG" off this flag, not off the grade or gpa values.
+    // renders "Ab" off this flag, not off the grade or gpa values.
     expect(absent.isAbsent).toBe(true);
     expect(absent.percentage).toBe(0);
     expect(absent.hasPassed).toBe(false);
