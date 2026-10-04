@@ -1,6 +1,6 @@
 import puppeteer, { Browser } from "puppeteer";
 import NepaliDate from "nepali-date-converter";
-import { GRADING_SCALE, isPassingGrade } from "./grading.service";
+import { GRADING_SCALE, isPassingGrade, overallResult } from "./grading.service";
 import logger from "../utils/logger";
 
 let browserInstance: Browser | null = null;
@@ -295,14 +295,14 @@ function issueDateHtml(fontSize: string): string {
   return `<span style="font-size:${fontSize};font-weight:600;">Date of Issue: ${esc(new NepaliDate().format("YYYY-MM-DD"))}</span>`;
 }
 
-function getResultSummary(overallGrade: string): {
+function getResultSummary(overallGrade: string, subjects: any[]): {
   description: string;
   result: string;
 } {
   const entry = GRADING_SCALE.find((e) => e.grade === overallGrade);
   return {
     description: entry?.description || "—",
-    result: isPassingGrade(overallGrade) ? "Pass" : "Fail",
+    result: overallResult(overallGrade, subjects),
   };
 }
 
@@ -508,7 +508,7 @@ export function buildReportCardHtml(
   // printing a confident "Pass"/"Fail" over a missing paper is how a provisional
   // number ends up being read as a final one.
   const anyAbsent = (reportData.subjects || []).some((s: any) => s.isAbsent || s.notEntered);
-  const divResult = getResultSummary(reportData.overallGrade);
+  const divResult = getResultSummary(reportData.overallGrade, reportData.subjects || []);
 
   // Rank + Attendance
   let bottomInfoHtml = "";
