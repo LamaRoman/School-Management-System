@@ -40,6 +40,8 @@ export interface GradeSheetRow {
   gpa: number | null;
   grade: string;
   rank: number | null;
+  /** Absent / not entered: %, GPA and grade are shown as "—". */
+  incomplete?: boolean;
 }
 export interface SheetData {
   gradeName: string;
@@ -142,9 +144,9 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
       row.rollNo ?? "—",
       row.studentName,
       ...row.subjects.map((s) => subjectCell(s, data.isFinal)),
-      row.percentage,
-      row.gpa ?? "—",
-      row.grade,
+      row.incomplete ? "—" : row.percentage,
+      row.incomplete ? "—" : row.gpa ?? "—",
+      row.incomplete ? "—" : row.grade,
     ];
     const added = sheet.addRow(values);
 

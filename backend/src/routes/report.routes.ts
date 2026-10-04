@@ -186,6 +186,10 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
       subjects,
       overallPercentage: overallPct,
       overallGrade: overallGrade.grade,
+      // An absent or not-yet-entered paper: the overall %, grade and GPA are not shown
+      // ("—") while the result is Incomplete. The numbers stay in the payload so older
+      // app versions that format them keep working.
+      incomplete: subjects.some((s: any) => s.isAbsent || s.notEntered),
       overallGpa,
       rank: rankData?.rank,
       totalStudents: rankData?.totalStudents,
@@ -354,6 +358,10 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
       subjects: finalSubjects,
       overallPercentage: overallPct,
       overallGrade: overallGrade.grade,
+      // An absent or not-yet-entered paper: the overall %, grade and GPA are not shown
+      // ("—") while the result is Incomplete. The numbers stay in the payload so older
+      // app versions that format them keep working.
+      incomplete: finalSubjects.some((s: any) => s.isAbsent || s.notEntered),
       overallGpa,
       rank: rankData?.rank,
       totalStudents: rankData?.totalStudents,

@@ -435,16 +435,20 @@ export function buildReportCardHtml(
       }
 
       const pctValue = isTermReport ? s.percentage : s.weightedPercentage;
+      // No grade for a paper the student did not sit (or that is not entered yet): an
+      // absence is not an E. Decided 2026-10-04 — the card prints Ab / — here and leaves
+      // the overall figures blank (see resultSummaryHtml) while the result is Incomplete.
+      const missing: string | null = s.isAbsent ? "Ab" : s.notEntered ? "—" : null;
 
       let resultCols = "";
       if (cols.showPercentage) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(pctValue)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${missing ?? esc(pctValue)}</td>`;
       }
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.grade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${missing ?? esc(s.grade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gpa)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${missing ?? esc(s.gpa)}</td>`;
       }
 
       let passMark = "";
@@ -544,10 +548,10 @@ export function buildReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallPercentage)}%</td></tr>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(divResult.description)}</td></tr>
-        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGrade)}</td></tr>` : ""}
-        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa)}</td></tr>` : ""}
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Percentage</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : `${esc(reportData.overallPercentage)}%`}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Description</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(divResult.description)}</td></tr>
+        ${cols.showGrade ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(reportData.overallGrade)}</td></tr>` : ""}
+        ${cols.showGpa ? `<tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">GPA</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsent ? "—" : esc(reportData.overallGpa)}</td></tr>` : ""}
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${anyAbsent ? t.accent : (divResult.result === "Pass" ? t.positive : t.accent)};">${anyAbsent ? "Incomplete" : esc(divResult.result)}</td></tr>
       </table>
     </div>`;
@@ -758,10 +762,10 @@ function buildCreditGradeReportCardHtml(
       }
       let resultCols = "";
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.finalGrade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${s.isAbsent ? "Ab" : s.notEntered ? "—" : esc(s.finalGrade)}</td>`;
       }
       if (cols.showGpa) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gradePoint)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.isAbsent ? "Ab" : s.notEntered ? "—" : esc(s.gradePoint)}</td>`;
       }
       return `<tr style="background:${bg};">
         <td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};color:${t.pct};">${i + 1}</td>
@@ -807,7 +811,7 @@ function buildCreditGradeReportCardHtml(
     <div style="margin-bottom:8px;">
       <table style="border-collapse:collapse;width:auto;table-layout:auto;">
         <caption style="text-align:left;font-weight:700;font-size:${fs.footer};color:${t.primary};padding-bottom:3px;">Result</caption>
-        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${esc(reportData.overallGpa ?? "—")}</td></tr>
+        <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Grade Points Average</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${t.primary};">${anyAbsentCG ? "—" : esc(reportData.overallGpa ?? "—")}</td></tr>
         <tr><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:600;">Result</td><td style="border:1px solid ${t.border};padding:3px 8px;font-size:${fs.legend};font-weight:700;color:${cgResultColor};">${cgResult}</td></tr>
       </table>
     </div>`;

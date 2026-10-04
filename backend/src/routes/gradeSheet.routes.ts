@@ -124,6 +124,7 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
       gpa: avgGpa,
       grade: overallGrade.grade,
       rank: null as number | null,
+      incomplete: false,
     };
   });
 
@@ -139,6 +140,8 @@ router.get("/term", authenticate, authorize("ADMIN", "TEACHER"), async (req, res
   for (const row of rows) {
     // null = not ranked (only students who passed are; see rank.service).
     row.rank = ranks.get(row.studentId)?.rank ?? null;
+    // Absent / not entered: the sheet shows "—" for %, GPA and grade (decided 2026-10-04).
+    row.incomplete = ranks.get(row.studentId)?.result === "Incomplete";
   }
 
   res.json({
@@ -255,12 +258,16 @@ router.get("/final", authenticate, authorize("ADMIN", "TEACHER"), async (req, re
       gpa: avgGpa,
       grade: overallGrade.grade,
       rank: null as number | null,
+      incomplete: false,
     };
   });
 
   // The shared annual ranking (rank.service) — the same one the annual report card uses.
   const { ranks } = await computeFinalSectionRanks(String(sectionId), String(academicYearId));
-  for (const row of rows) row.rank = ranks.get(row.studentId)?.rank ?? null;
+  for (const row of rows) {
+    row.rank = ranks.get(row.studentId)?.rank ?? null;
+    row.incomplete = ranks.get(row.studentId)?.result === "Incomplete";
+  }
 
   res.json({
     data: {

@@ -17,6 +17,7 @@ interface SubjectRow {
   grade: string | null;
   gpa: number | null;
   isAbsent: boolean;
+  notEntered?: boolean;
 }
 interface ReportData {
   student: { name: string; rollNo?: number };
@@ -26,6 +27,8 @@ interface ReportData {
   overallPercentage: number;
   overallGpa: number;
   overallGrade: string;
+  /** Absent / not-entered paper: overall GPA, % and grade are shown as "—". */
+  incomplete?: boolean;
   rank?: number;
 }
 
@@ -128,21 +131,21 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
               <View style={s.summaryRow}>
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
-                    {report.overallGpa.toFixed(2)}
+                    {report.incomplete ? '—' : report.overallGpa.toFixed(2)}
                   </Text>
                   <Text style={s.summaryKey}>GPA</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryVal, { color: Colors.primary }]}>
-                    {report.overallPercentage.toFixed(1)}%
+                    {report.incomplete ? '—' : `${report.overallPercentage.toFixed(1)}%`}
                   </Text>
                   <Text style={s.summaryKey}>Percentage</Text>
                 </View>
                 <View style={s.summaryDivider} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryVal, { color: gpaColor(report.overallGpa) }]}>
-                    {report.overallGrade}
+                    {report.incomplete ? '—' : report.overallGrade}
                   </Text>
                   <Text style={s.summaryKey}>Grade</Text>
                 </View>
@@ -162,10 +165,10 @@ export default function ParentReportScreen({ children }: { children?: Child[] })
             {report.subjects.map((row, idx) => (
               <View key={idx} style={[s.tableRow, idx % 2 === 0 && s.tableRowAlt]}>
                 <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{row.subjectName}</Text>
-                <Text style={s.td}>{row.isAbsent ? 'Abs' : (row.totalMarks ?? '–')}</Text>
+                <Text style={s.td}>{row.isAbsent ? 'Ab' : (row.totalMarks ?? '–')}</Text>
                 <Text style={s.td}>{row.fullMarks}</Text>
                 <View style={{ flex: 1, alignItems: 'center' }}>
-                  {row.grade ? (
+                  {row.isAbsent ? <Text style={s.td}>Ab</Text> : row.grade && !row.notEntered ? (
                     <Badge label={row.grade} color={
                       (row.gpa ?? 0) >= 3.6 ? 'success' :
                       (row.gpa ?? 0) >= 2.4 ? 'info' : 'warning'
