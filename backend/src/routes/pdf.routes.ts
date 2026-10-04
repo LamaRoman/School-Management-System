@@ -767,7 +767,20 @@ router.get("/dl/:token", async (req, res, next) => {
   next();
 });
 
-// GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw
+/**
+ * `?format=html` on the two single-student routes: the exact HTML the PDF is printed from, for
+ * the on-screen report card. The web pages used to draw their own copy of the marks-based card,
+ * so whatever the admin chose under Report Card Settings (marks-based or credit-hour/grade-point)
+ * the screen showed marks-based; now there is one design and the screen cannot disagree with
+ * the paper. Same route, so the same school scope, student access and publish gate apply; no
+ * Puppeteer, so it is cheap. The browser shows it in a sandboxed iframe (no scripts).
+ */
+function sendPreview(res: import("express").Response, html: string, paperSize: string) {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ data: { html, paperSize } });
+}
+
+// GET /api/pdf/term/:studentId/:examTypeId?mode=color|bw[&format=html]
 router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
@@ -795,6 +808,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
   const cols = await getColumnSettings(schoolId);
   const obs = await getObservations(reportData._studentId, examTypeId, reportData._gradeId);
   const html = buildReportCardHtml(reportData, mode, cols, obs);
+  if (req.query.format === "html") return sendPreview(res, html, reportData.paperSize);
   const pdfBuffer = await generatePdf({
     html,
     paperSize: reportData.paperSize as "A4" | "A5",
@@ -808,7 +822,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
   res.send(pdfBuffer);
 });
 
-// GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw
+// GET /api/pdf/final/:studentId/:academicYearId?mode=color|bw[&format=html]
 router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
@@ -837,6 +851,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN",
   const cols = await getColumnSettings(schoolId);
   const obs = await getObservations(reportData._studentId, reportData._examTypeId, reportData._gradeId);
   const html = buildReportCardHtml(reportData, mode, cols, obs);
+  if (req.query.format === "html") return sendPreview(res, html, reportData.paperSize);
   const pdfBuffer = await generatePdf({
     html,
     paperSize: reportData.paperSize as "A4" | "A5",
