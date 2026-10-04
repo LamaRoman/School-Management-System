@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Printer, FileSpreadsheet } from "lucide-react";
 import toast from "react-hot-toast";
 import { printGradeSheet } from "@/lib/printUtils";
-import type { SheetData } from "@/lib/gradeSheetExcel";
+import { hasTotal, sheetFullMarks, totalCell, type SheetData } from "@/lib/gradeSheetExcel";
 
 interface GradeSheetProps {
   sectionId: string;
@@ -118,6 +118,12 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                       <div className="text-[10px] font-normal opacity-70">({s.fullMarks})</div>
                     </th>
                   ))}
+                  {hasTotal(data) && (
+                    <th className="p-2 border border-primary text-center bg-accent min-w-[50px]">
+                      <div>Total</div>
+                      <div className="text-[10px] font-normal opacity-70">({sheetFullMarks(data)})</div>
+                    </th>
+                  )}
                   <th className="p-2 border border-primary text-center bg-accent min-w-[50px]">GPA</th>
                 </tr>
               </thead>
@@ -134,6 +140,9 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                         </td>
                       );
                     })}
+                    {hasTotal(data) && (
+                      <td className="p-2 border border-gray-200 text-center font-semibold">{totalCell(row, data)}</td>
+                    )}
                     <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.incomplete ? "—" : row.gpa ?? "—"}</td>
                   </tr>
                 ))}

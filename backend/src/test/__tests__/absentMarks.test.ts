@@ -150,6 +150,8 @@ describe("absent marks in the term report", () => {
       expect(sitaReport).not.toHaveProperty(gone);
     }
     expect(absent).not.toHaveProperty("hasPassed");
+    // Parents and students receive this JSON: only the school fields the card prints.
+    expect(Object.keys(sitaReport.school).sort()).toEqual(["address", "logo", "name", "nameNp"]);
   });
 });
 
@@ -172,6 +174,9 @@ describe("absent marks in the class grade sheet", () => {
     expect(ritaRow.gpa).toBe(RITA_GPA);
     expect(ritaRow.incomplete).toBe(false);
     expect(sitaRow.subjects.find((s: any) => s.subjectId === subjectB.id).isAbsent).toBe(true);
+    // Total column: marks obtained, an absent paper adding 0.
+    expect(ritaRow).toMatchObject({ totalObtained: 110, totalFullMarks: 200 });
+    expect(sitaRow).toMatchObject({ totalObtained: 80, totalFullMarks: 200 });
     expect(ritaRow).not.toHaveProperty("rank");
     expect(res.body.data).not.toHaveProperty("showRank");
   });

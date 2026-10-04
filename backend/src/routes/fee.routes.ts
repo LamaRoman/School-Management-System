@@ -6,6 +6,7 @@ import { AppError } from "../middleware/errorHandler";
 import { verifyAcademicYear, verifyGrade, verifySection, verifyStudent, verifyFeeCategory, verifyExamType } from "../utils/schoolScope";
 import { logAudit } from "../utils/audit";
 import logger from "../utils/logger";
+import { sanitizeSchool } from "../utils/sanitizeSchool";
 
 const router = Router();
 
@@ -1068,7 +1069,7 @@ router.get("/receipt/:receiptNumber", authenticate, authorize("ADMIN", "ACCOUNTA
   res.json({
     data: {
       receiptNumber: req.params.receiptNumber,
-      school: school ?? {},
+      school: school ? sanitizeSchool(school) : {},
       student: {
         name: first.student.name,
         className: first.student.section.grade.name,
@@ -1104,7 +1105,7 @@ router.get("/invoice/:studentId", authenticate, authorize("ADMIN", "ACCOUNTANT")
   const invoice = await buildInvoice(req.params.studentId, String(academicYearId), String(month));
   const school = await prisma.school.findFirst({ where: { id: schoolId } });
 
-  res.json({ data: { school: school ?? {}, ...invoice } });
+  res.json({ data: { school: school ? sanitizeSchool(school) : {}, ...invoice } });
 });
 
 // ─── INVOICES BULK ────────────────────────────────────────────────────────────
