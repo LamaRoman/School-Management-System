@@ -42,20 +42,15 @@ async function getColumnSettings(schoolId: string): Promise<ReportCardColumnSett
   };
 }
 
-// Helper: fetch observations for a student + exam
-async function getObservations(studentId: string, examTypeId: string, gradeId: string): Promise<any[] | null> {
-  const categories = await prisma.observationCategory.findMany({
-    where: { gradeId, isActive: true },
-    orderBy: { displayOrder: "asc" },
-  });
+// Helper: fetch observations for a student + exam — both queries in one round, filtered
+// through the student's grade so they need not wait for the report to know the grade.
+async function getObservations(studentId: string, examTypeId: string): Promise<any[] | null> {
+  const ofStudentsGrade = { isActive: true, grade: { sections: { some: { students: { some: { id: studentId } } } } } };
+  const [categories, results] = await Promise.all([
+    prisma.observationCategory.findMany({ where: ofStudentsGrade, orderBy: { displayOrder: "asc" } }),
+    prisma.observationResult.findMany({ where: { studentId, examTypeId, category: ofStudentsGrade } }),
+  ]);
   if (categories.length === 0) return null;
-  const results = await prisma.observationResult.findMany({
-    where: {
-      studentId,
-      examTypeId,
-      categoryId: { in: categories.map((c) => c.id) },
-    },
-  });
   return categories.map((cat) => {
     const result = results.find((r) => r.categoryId === cat.id);
     return { categoryName: cat.name, grade: result?.grade || "—" };
@@ -169,8 +164,10 @@ function sendPreview(res: import("express").Response, html: string, paperSize: s
 router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, examTypeId } = req.params;
-  await verifyStudent(studentId, schoolId);
-  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyStudentAccess(req.user!.userId, req.user!.role, studentId),
+  ]);
 
   // The portal's pending state (W1e) would be worth nothing if the PDF for the
   // same exam were one URL away. Gated for the same roles and on the same
@@ -187,11 +184,12 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
 
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
-  const reportData = await buildTermReportData(studentId, examTypeId, schoolId);
+  const [reportData, cols, obs] = await Promise.all([
+    buildTermReportData(studentId, examTypeId, schoolId),
+    getColumnSettings(schoolId),
+    getObservations(studentId, examTypeId),
+  ]);
   if (!reportData) throw new AppError("No marks found for this student and exam", 404);
-
-  const cols = await getColumnSettings(schoolId);
-  const obs = await getObservations(reportData._studentId, examTypeId, reportData._gradeId);
   const html = buildReportCardHtml(reportData, mode, cols, obs);
   if (req.query.format === "html") return sendPreview(res, html, reportData.paperSize);
   const pdfBuffer = await generatePdf({
@@ -211,8 +209,10 @@ router.get("/term/:studentId/:examTypeId", authenticate, authorize("ADMIN", "TEA
 router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN", "TEACHER", "STUDENT", "PARENT"), async (req, res) => {
   const schoolId = getSchoolId(req);
   const { studentId, academicYearId } = req.params;
-  await verifyStudent(studentId, schoolId);
-  await verifyStudentAccess(req.user!.userId, req.user!.role, studentId);
+  await Promise.all([
+    verifyStudent(studentId, schoolId),
+    verifyStudentAccess(req.user!.userId, req.user!.role, studentId),
+  ]);
 
   if (isGatedRole(req.user!.role)) {
     const student = await prisma.student.findUniqueOrThrow({
@@ -230,11 +230,12 @@ router.get("/final/:studentId/:academicYearId", authenticate, authorize("ADMIN",
 
   const mode = (req.query.mode as string) === "bw" ? "bw" : "color";
 
-  const reportData = await buildFinalReportData(studentId, academicYearId, schoolId);
+  const [reportData, cols] = await Promise.all([
+    buildFinalReportData(studentId, academicYearId, schoolId),
+    getColumnSettings(schoolId),
+  ]);
   if (!reportData) throw new AppError("No report data found for this student", 404);
-
-  const cols = await getColumnSettings(schoolId);
-  const obs = await getObservations(reportData._studentId, reportData._examTypeId, reportData._gradeId);
+  const obs = reportData._examTypeId ? await getObservations(studentId, reportData._examTypeId) : null;
   const html = buildReportCardHtml(reportData, mode, cols, obs);
   if (req.query.format === "html") return sendPreview(res, html, reportData.paperSize);
   const pdfBuffer = await generatePdf({
