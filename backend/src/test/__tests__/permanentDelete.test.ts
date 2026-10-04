@@ -132,4 +132,25 @@ describe("teachers", () => {
     expect(kept.isActive).toBe(false);
     expect(kept.teacherId).toBeNull();
   });
+
+  it("leaves every report card unchanged: marks belong to the student, not the teacher who entered them", async () => {
+    const teacher = await createTestTeacher(ctx.school.id, { name: "Marks Teacher" });
+    const subject = await prisma.subject.create({ data: { name: "Science", fullTheoryMarks: 50, creditHour: 4, gradeId: ctx.grade.id } });
+    await prisma.teacherAssignment.create({ data: { teacherId: teacher.id, sectionId: ctx.section.id, subjectId: subject.id } });
+    const exam = await prisma.examType.create({ data: { name: "Term With Teacher", academicYearId: ctx.year.id, displayOrder: 9 } });
+    await prisma.mark.create({
+      data: { studentId: ctx.student.id, subjectId: subject.id, examTypeId: exam.id, academicYearId: ctx.year.id, theoryMarks: 41 },
+    });
+    const card = async () =>
+      (await request(app).get(`/reports/term/${ctx.student.id}/${exam.id}`).set("Authorization", authHeader(adminToken)).expect(200)).body.data;
+
+    const before = await card();
+    await del(`/teachers/${teacher.id}`).expect(200);
+    await del(`/teachers/${teacher.id}/permanent`, "delete permanently").expect(200);
+    const after = await card();
+
+    expect(after.subjects).toEqual(before.subjects);
+    expect(after.overallGpa).toBe(before.overallGpa);
+    expect(after.subjects.find((s: any) => s.subjectName === "Science")).toMatchObject({ finalGrade: "A", gradePoint: 3.6 });
+  });
 });
