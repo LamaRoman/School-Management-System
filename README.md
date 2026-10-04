@@ -79,7 +79,7 @@ npx expo start
 
 ## Features
 
-- Two report card styles per grade: marks-based (A+ to E, GPA 4.0–0.8) or credit-hour/grade-point (SEE/NEB-style, GPA weighted by subject credit hours)
+- Credit-hour / grade-point report cards (SEE/NEB-style, A+ to E, GPA weighted by subject credit hours); absent papers print "Ab"
 - Weightage-based final results (percentage-first method)
 - Absent marks shown as "Ab" instead of 0, both in the app and on printed report cards
 - Bikram Sambat date system

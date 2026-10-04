@@ -16,7 +16,7 @@ import {
 } from "../helpers";
 import { buildPlan, applyPlan, type ImportData } from "../../services/marksImport.service";
 
-const OPTS = { fullMarks: 50, passMarks: 20 };
+const OPTS = { fullMarks: 50 };
 
 let ctx: Awaited<ReturnType<typeof seedSchoolContext>>;
 let otherCtx: Awaited<ReturnType<typeof seedSchoolContext>>;
@@ -49,7 +49,7 @@ beforeEach(async () => {
   await prisma.examType.create({ data: { name: examName, academicYearId: otherCtx.year.id, displayOrder: 1 } });
   // The grade already has English and Mathematics (full marks 50); Science/Nepali/Social do not exist.
   for (const [i, name] of ["English", "Mathematics"].entries()) {
-    await prisma.subject.create({ data: { name, fullTheoryMarks: 50, passMarks: 20, displayOrder: i, gradeId: ctx.grade.id } });
+    await prisma.subject.create({ data: { name, fullTheoryMarks: 50, displayOrder: i, gradeId: ctx.grade.id } });
   }
 });
 
@@ -102,7 +102,7 @@ describe("apply", () => {
     expect(students.map((s) => [s.rollNo, s.name])).toEqual([[1, "Aasish Kami"], [2, "Anisha Budha"], [3, "Sudash Budha"]]);
 
     const science = await prisma.subject.findFirstOrThrow({ where: { gradeId: ctx.grade.id, name: "Science" } });
-    expect(science).toMatchObject({ fullTheoryMarks: 50, fullPracticalMarks: 0, passMarks: 20 });
+    expect(science).toMatchObject({ fullTheoryMarks: 50, fullPracticalMarks: 0 });
 
     const anisha = students[1];
     const social = await prisma.subject.findFirstOrThrow({ where: { gradeId: ctx.grade.id, name: "Social Studies" } });

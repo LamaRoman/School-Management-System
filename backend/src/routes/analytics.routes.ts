@@ -25,9 +25,6 @@ const DASHBOARD_TTL_MS = 5 * 60 * 1000;
 type CachedDashboard = {
   summary: { totalStudents: number; totalTeachers: number; overallAttendanceRate: number };
   classAverages: unknown;
-  topPerformers: unknown;
-  subjectStats: unknown;
-  subjectStatsExam: { name: string } | null;
   attendanceOverview: unknown;
   termComparison: unknown;
 };
@@ -123,7 +120,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
             students: { where: { isActive: true }, select: { id: true } },
           },
         },
-        subjects: { select: { id: true, name: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true } },
+        subjects: { select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true } },
       },
     }),
     prisma.examType.findMany({
@@ -145,18 +142,10 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
   // Two batches rather than one Promise.all of five: the pool is 5 connections
   // (utils/prisma.ts), and the landing page should not be able to hold all of
   // them at once while two admins log in together.
-  const [consolidatedResults, topPerformers, allAttendances] = await Promise.all([
+  const [consolidatedResults, allAttendances] = await Promise.all([
     prisma.consolidatedResult.findMany({
       where: { academicYearId: yearId, studentId: { in: activeStudentIds } },
       select: { studentId: true, gradeId: true, totalGpa: true, totalPercentage: true },
-    }),
-    prisma.consolidatedResult.findMany({
-      where: { academicYearId: yearId },
-      orderBy: { totalPercentage: "desc" },
-      take: 10,
-      include: {
-        student: { select: { name: true, section: { include: { grade: { select: { name: true } } } } } },
-      },
     }),
     prisma.attendance.findMany({
       where: { academicYearId: yearId },
@@ -187,32 +176,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
       : Promise.resolve([]),
     prisma.teacher.count({ where: { isActive: true, schoolId } }),
   ]);
-
-  // R8a — which exam the subject-wise pass/fail panel is about.
-  //
-  // Used to be whichever exam type had the highest displayOrder — the Final,
-  // once one exists. But the Final sits partly entered for most of the year
-  // (in dev: 728 marks vs First Terminal's 1,820), so the panel was reporting
-  // pass rates over a sliver of the cohort while presenting them like
-  // whole-class figures. Owner decided (2026-08-17): report on whichever exam
-  // has the most marks entered instead — the exam the school actually just
-  // finished, not the one furthest down the list. Ties go to the higher
-  // displayOrder (examTypes is ascending, so `>=` lets a later tie win),
-  // which also reproduces the old fallback when nothing has any marks yet.
-  const examMarkCounts = new Map<string, number>();
-  for (const m of examMarks) {
-    examMarkCounts.set(m.examTypeId, (examMarkCounts.get(m.examTypeId) ?? 0) + 1);
-  }
-  let finalExam: (typeof examTypes)[number] | null = null;
-  let bestMarkCount = -1;
-  for (const et of examTypes) {
-    const count = examMarkCounts.get(et.id) ?? 0;
-    if (count >= bestMarkCount) {
-      finalExam = et;
-      bestMarkCount = count;
-    }
-  }
-  const subjectStatsExam = finalExam ? { name: finalExam.name } : null;
 
   // ─── 1. Class-wise average GPA ─────────────────────
   const resultsByGrade = new Map<string, { totalGpa: number | null; totalPercentage: number | null }[]>();
@@ -245,66 +208,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     };
   });
 
-  // ─── 2. Top performers ────────────────────────────
-  const topPerformersList = topPerformers.map((r, i) => ({
-    rank: i + 1,
-    studentName: r.student.name,
-    gradeName: r.student.section.grade.name,
-    sectionName: r.student.section.name,
-    gpa: r.totalGpa || 0,
-    percentage: r.totalPercentage || 0,
-  }));
-
-  // ─── 3. Subject-wise pass/fail ───────────────────
-  const subjectStats: { subjectName: string; gradeName: string; totalStudents: number; passed: number; failed: number; passRate: number }[] = [];
-
-  const finalExamMarksBySubject = new Map<string, typeof examMarks>();
-  if (finalExam) {
-    for (const m of examMarks) {
-      if (m.examTypeId !== finalExam.id) continue;
-      // Only active students, as the per-grade query's studentId filter did.
-      if (!gradeOfStudent.has(m.studentId)) continue;
-      const bucket = finalExamMarksBySubject.get(m.subjectId);
-      if (bucket) bucket.push(m);
-      else finalExamMarksBySubject.set(m.subjectId, [m]);
-    }
-  }
-
-  for (const grade of grades) {
-    if (grade.subjects.length === 0) continue;
-    if ((studentCountByGrade.get(grade.id) ?? 0) === 0) continue;
-    if (!finalExam) continue;
-
-    for (const subject of grade.subjects) {
-      // A subject belongs to one grade, so its marks can only come from that
-      // grade's students — but pin it anyway, since the old query's studentId
-      // filter made that explicit.
-      const subjectMarks = (finalExamMarksBySubject.get(subject.id) ?? []).filter(
-        (m) => gradeOfStudent.get(m.studentId) === grade.id
-      );
-      if (subjectMarks.length === 0) continue;
-
-      let passed = 0;
-      let failed = 0;
-
-      for (const m of subjectMarks) {
-        const total = (m.theoryMarks || 0) + (m.practicalMarks || 0);
-        if (total >= subject.passMarks) passed++;
-        else failed++;
-      }
-
-      subjectStats.push({
-        subjectName: subject.name,
-        gradeName: grade.name,
-        totalStudents: subjectMarks.length,
-        passed,
-        failed,
-        passRate: parseFloat(((passed / subjectMarks.length) * 100).toFixed(1)),
-      });
-    }
-  }
-
-  // ─── 4. Attendance overview ────────────────────────
+  // ─── 2. Attendance overview  // ─── 4. Attendance overview ────────────────────────
   const overallPresentDays = allAttendances.reduce((a, r) => a + r.presentDays, 0);
   const overallTotalDays = allAttendances.reduce((a, r) => a + r.totalDays, 0);
   const overallAttendanceRate = overallTotalDays > 0
@@ -332,7 +236,7 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
     };
   });
 
-  // ─── 5. Term comparison ────────────────────────────
+  // ─── 3. Term comparison ────────────────────────────
   // Full marks come from the subjects already loaded with the grades. A mark
   // can in principle reference a subject from another year's grade — nothing
   // enforces that pairing (the S4 class of gap) — so fetch any stragglers
@@ -392,9 +296,6 @@ router.get("/dashboard", authenticate, authorize("ADMIN"), async (req, res) => {
   const payload: CachedDashboard = {
     summary: { totalStudents, totalTeachers, overallAttendanceRate },
     classAverages,
-    topPerformers: topPerformersList,
-    subjectStats,
-    subjectStatsExam,
     attendanceOverview: {
       overallRate: overallAttendanceRate,
       gradeWise: gradeAttendance,

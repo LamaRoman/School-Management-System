@@ -22,7 +22,6 @@ export interface ExamType {
   isFinal: boolean;
   displayOrder: number;
   paperSize: string;
-  showRank: boolean;
 }
 
 export interface AcademicYear {

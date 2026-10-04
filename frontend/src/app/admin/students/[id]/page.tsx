@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────
-interface Subject { id: string; name: string; fullTheoryMarks: number; fullPracticalMarks: number; passMarks: number; displayOrder: number }
+interface Subject { id: string; name: string; fullTheoryMarks: number; fullPracticalMarks: number; displayOrder: number }
 interface ExamTypeRef { id: string; name: string; isFinal: boolean; displayOrder: number }
 interface Mark { theoryMarks: number | null; practicalMarks: number | null; isAbsent: boolean; academicYearId: string; subject: Subject; examType: ExamTypeRef }
 interface AttendanceRow { academicYearId: string; totalDays: number; presentDays: number; absentDays: number }
-interface ResultRow { academicYearId: string; totalGpa: number | null; totalPercentage: number | null; rank: number | null; promoted: boolean; promotedTo: string | null; remarks: string | null }
+interface ResultRow { academicYearId: string; totalGpa: number | null; totalPercentage: number | null; promoted: boolean; promotedTo: string | null; remarks: string | null }
 interface StudentDetail {
   id: string; name: string; nameNp?: string; dateOfBirth?: string; rollNo?: number; symbolNumber?: string;
   gender?: string; fatherName?: string; motherName?: string; guardianName?: string; guardianPhone?: string;
@@ -37,11 +37,6 @@ function markValue(m: Mark | undefined): string {
   if (m.isAbsent) return "Ab";
   const total = (m.theoryMarks ?? 0) + (m.practicalMarks ?? 0);
   return String(total);
-}
-function isFail(m: Mark | undefined): boolean {
-  if (!m || m.isAbsent) return false;
-  const total = (m.theoryMarks ?? 0) + (m.practicalMarks ?? 0);
-  return total < m.subject.passMarks;
 }
 
 export default function StudentProfilePage() {
@@ -317,7 +312,7 @@ export default function StudentProfilePage() {
                     {examTypes.map((et) => {
                       const m = markAt(sub.id, et.id);
                       return (
-                        <td key={et.id} className={`py-2 px-3 text-center ${isFail(m) ? "text-red-600 font-semibold" : "text-gray-700"}`}>
+                        <td key={et.id} className="py-2 px-3 text-center text-gray-700">
                           {markValue(m)}
                         </td>
                       );
@@ -330,11 +325,10 @@ export default function StudentProfilePage() {
               <div className="flex flex-wrap gap-4 mt-4 text-sm">
                 {result.totalPercentage != null && <Pill label="Year %" value={`${result.totalPercentage.toFixed(1)}%`} />}
                 {result.totalGpa != null && <Pill label="Year GPA" value={result.totalGpa.toFixed(2)} />}
-                {result.rank != null && <Pill label="Rank" value={String(result.rank)} />}
                 {result.promoted && <Pill label="Promotion" value={result.promotedTo ? `→ ${result.promotedTo}` : "Promoted"} />}
               </div>
             )}
-            <p className="text-xs text-gray-400 mt-3"><span className="text-red-600 font-semibold">Red</span> = below pass marks · &quot;Ab&quot; = absent</p>
+            <p className="text-xs text-gray-400 mt-3">&quot;Ab&quot; = absent</p>
           </div>
         ) : (
           <Empty>No exam marks recorded for this year.</Empty>
@@ -423,7 +417,7 @@ export default function StudentProfilePage() {
       {optionalSubjects.length > 0 && (
         <Section icon={<BookOpen size={16} />} title="Optional Subjects">
           <p className="text-xs text-gray-500 mb-3">
-            Only the subjects ticked here count toward this student&apos;s percentage, GPA and rank.
+            Only the subjects ticked here count toward this student&apos;s GPA.
             An unticked subject is left off their report card entirely.
           </p>
           <div className="space-y-2">

@@ -1313,6 +1313,16 @@ The JSON API (`report.routes.ts`) correctly allows parents via `verifyStudentAcc
 - [ ] **Fee search** — `accountantReport.routes.ts:146` uses `ILIKE '%x%'`, unindexable by design. Fine now; trigram index if it slows.
 - [x] **`CLAUDE.md` wording** — **FIXED 2026-08-16.** Now reads "D and E are the failing grades".
 
+### [x] X9. One report card: credit hour + grade point; no pass / fail, no rank
+
+> **Done 2026-10-04** (owner decision) — PR #83. The marks-based card, the grading-style setting, pass marks, the Pass/Fail/Incomplete result and every ranking are gone from the backend, web app and parent app. The ranking items above (R7, P3, R8's subject pass/fail panel, `rank.service.ts`) describe code that no longer exists; they stay as history.
+
+Deliberately **not** done, and why:
+
+- **Old migrations still name `MARKS_BASED`, `pass_marks`, `show_rank`.** Migration files are history Prisma checksums on every deploy; editing them breaks `migrate deploy`. The new migration `20261007000000_gpa_report_card_only` drops the columns and the enum.
+- **`ConsolidatedResult.totalPercentage` kept.** It is stored data the dashboard's class-average panel reads, not a report-card figure. Nothing writes it today; drop it with that panel if it ever goes.
+- **No compatibility fields for installed parent-app builds.** The API now returns the card's own fields (credit hour, final grade, grade point) and no longer sends `overallPercentage`; an old build's report screen calls `toFixed` on it and errors on any complete report until the rebuilt APK is installed. Owner chose a clean API since the rebuild is planned.
+
 ---
 
 ## Suggested order

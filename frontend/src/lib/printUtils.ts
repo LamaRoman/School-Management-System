@@ -245,15 +245,15 @@ ${schoolHeaderHtml(school, headerSettings)}
 // ─── Grade Sheet Print ──────────────────────────────────────────────────────
 
 interface GradeSheetSubject { id: string; name: string; fullMarks: number }
-interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; grade: string; gpa: number | null; passed: boolean; isAbsent?: boolean }
+interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weightedPercentage?: number; gpa: number | null; isAbsent?: boolean; notEntered?: boolean }
 interface GradeSheetRow {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: GradeSheetSubjectResult[];
-  percentage: number; gpa: number | null; grade: string; rank: number | null; incomplete?: boolean;
+  gpa: number | null; incomplete?: boolean;
 }
 
 export async function printGradeSheet(data: {
-  gradeName: string; sectionName: string; examType: string; isFinal: boolean; showRank: boolean;
+  gradeName: string; sectionName: string; examType: string; isFinal: boolean;
   subjects: GradeSheetSubject[]; rows: GradeSheetRow[]; totalStudents: number;
 }) {
   const [school, headerSettings] = await Promise.all([getSchoolInfo(), getHeaderSettings()]);
@@ -266,18 +266,14 @@ export async function printGradeSheet(data: {
   const bodyRows = data.rows.map((row, i) => {
     const subjectCells = row.subjects.map(s => {
       const value = isFinal ? s.weightedPercentage : s.obtained;
-      const style = !s.passed ? 'color:#dc2626;font-weight:700' : '';
-      return `<td class="text-center" style="${style}">${s.isAbsent ? "Ab" : (value ?? "—")}</td>`;
+      return `<td class="text-center">${s.isAbsent ? "Ab" : s.notEntered ? "—" : (value ?? "—")}</td>`;
     }).join("");
 
     return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9f9f9'}">
-      ${data.showRank ? `<td class="text-center bold">${row.rank ?? "—"}</td>` : ""}
       <td class="text-center muted">${row.rollNo || "—"}</td>
       <td class="bold">${row.studentName}</td>
       ${subjectCells}
-      <td class="text-center bold" style="color:#c8102e">${row.incomplete ? "—" : row.percentage}</td>
-      <td class="text-center bold">${row.incomplete ? "—" : row.gpa ?? "—"}</td>
-      <td class="text-center bold" style="color:#1a3a5c">${row.incomplete ? "—" : row.grade}</td>
+      <td class="text-center bold" style="color:#1a3a5c">${row.incomplete ? "—" : row.gpa ?? "—"}</td>
     </tr>`;
   }).join("");
 
@@ -295,17 +291,14 @@ ${schoolHeaderHtml(school, headerSettings)}
 <div class="subtitle">${data.gradeName} — Section ${data.sectionName} · ${data.totalStudents} Students</div>
 <table>
   <thead><tr style="background:#1a3a5c;color:white">
-    ${data.showRank ? '<th class="text-center" style="width:40px;background:#1a3a5c;color:white;border-color:#1a3a5c">Rank</th>' : ""}
     <th class="text-center" style="width:40px;background:#1a3a5c;color:white;border-color:#1a3a5c">Roll</th>
     <th style="min-width:120px;background:#1a3a5c;color:white;border-color:#1a3a5c">Student Name</th>
     ${subjectHeaders}
-    <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:40px">%</th>
     <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:40px">GPA</th>
-    <th class="text-center" style="background:#c8102e;border-color:#c8102e;min-width:45px">Grade</th>
   </tr></thead>
   <tbody>${bodyRows}</tbody>
 </table>
-<div style="margin-top:8px;font-size:9px;color:#999"><span style="color:#dc2626;font-weight:700">Red</span> = below pass marks${isFinal ? " · Values show weighted percentage per subject" : ""}</div>
+<div style="margin-top:8px;font-size:9px;color:#999">Ab = absent · GPA is credit-weighted, as on the report card${isFinal ? " · Values show weighted percentage per subject" : ""}</div>
 <div class="signatures">
   <div class="sig"><div class="sig-line"></div>Class Teacher</div>
   <div class="sig"><div class="sig-line"></div>Exam Coordinator</div>

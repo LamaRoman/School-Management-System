@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { openReportCardPdf } from "@/lib/reportCardPdf";
 import { GraduationCap, Calendar, Receipt, Megaphone, Pin, Printer, Download } from "lucide-react";
 import ResultsPending from "@/components/ui/ResultsPending";
+import ReportCardPreview from "@/components/ui/ReportCardPreview";
 import { useExamTypes } from "@/hooks/useReferenceData";
 
 interface Child {
@@ -212,44 +213,13 @@ export default function ParentDashboard() {
                     pendingTerms={reportData.pendingTerms}
                     message={reportData.message}
                   />
-                ) : reportData ? (
-                  <div className="card overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="table-header">
-                          <th className="text-left px-4 py-2">Subject</th>
-                          <th className="text-center px-4 py-2">Full Marks</th>
-                          <th className="text-center px-4 py-2">Obtained</th>
-                          <th className="text-center px-4 py-2">Grade</th>
-                          <th className="text-center px-4 py-2">GPA</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportData.subjects?.map((s: any, i: number) => (
-                          <tr key={i} className="border-t border-gray-100">
-                            <td className="px-4 py-2 font-medium text-primary">{s.subjectName}</td>
-                            <td className="px-4 py-2 text-center">{s.fullMarks}</td>
-                            <td className="px-4 py-2 text-center font-semibold">{s.isAbsent ? "Ab" : s.notEntered ? "—" : (s.totalMarks ?? s.weightedPercentage)}</td>
-                            <td className="px-4 py-2 text-center font-bold text-primary">{s.isAbsent ? "Ab" : s.notEntered ? "—" : s.grade}</td>
-                            <td className="px-4 py-2 text-center">{s.isAbsent ? "Ab" : s.notEntered ? "—" : s.gpa}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-primary bg-gray-50">
-                          <td colSpan={3} className="px-4 py-2 text-right font-bold">Overall</td>
-                          <td className="px-4 py-2 text-center font-bold text-primary">{reportData.incomplete ? "—" : reportData.overallGrade}</td>
-                          <td className="px-4 py-2 text-center font-bold">{reportData.incomplete ? "—" : reportData.overallGpa}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                    <div className="p-4 text-sm text-gray-600">
-                      <span className="font-semibold text-primary">Percentage: </span>{reportData.incomplete ? "—" : `${reportData.overallPercentage}%`}
-                      {reportData.rank && (
-                        <span className="ml-4"><span className="font-semibold text-primary">Rank: </span>{reportData.rank} of {reportData.totalStudents}</span>
-                      )}
-                    </div>
-                  </div>
+                ) : reportData && selectedChild ? (
+                  <ReportCardPreview
+                    mode="color"
+                    path={examTypes.find((e) => e.id === selectedExam)?.isFinal
+                      ? `/pdf/final/${selectedChild.id}/${activeYear?.id}`
+                      : `/pdf/term/${selectedChild.id}/${selectedExam}`}
+                  />
                 ) : selectedExam ? (
                   <div className="card p-8 text-center text-gray-400">No report data available.</div>
                 ) : (

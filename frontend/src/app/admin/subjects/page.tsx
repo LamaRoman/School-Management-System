@@ -9,12 +9,12 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 interface Subject {
   id: string; name: string; nameNp?: string;
-  fullTheoryMarks: number; fullPracticalMarks: number; passMarks: number; creditHour: number;
+  fullTheoryMarks: number; fullPracticalMarks: number; creditHour: number;
   isOptional: boolean; displayOrder: number;
   grade: { name: string };
 }
 
-const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 40, creditHour: 4, isOptional: false, displayOrder: 0, gradeId: "" };
+const emptyForm = { name: "", nameNp: "", fullTheoryMarks: 100, fullPracticalMarks: 0, creditHour: 4, isOptional: false, displayOrder: 0, gradeId: "" };
 
 export default function SubjectsPage() {
   const confirm = useConfirm();
@@ -53,7 +53,7 @@ export default function SubjectsPage() {
   };
 
   const startEdit = (s: Subject) => {
-    setForm({ name: s.name, nameNp: s.nameNp || "", fullTheoryMarks: s.fullTheoryMarks, fullPracticalMarks: s.fullPracticalMarks, passMarks: s.passMarks, creditHour: s.creditHour, isOptional: s.isOptional, displayOrder: s.displayOrder, gradeId: selectedGrade });
+    setForm({ name: s.name, nameNp: s.nameNp || "", fullTheoryMarks: s.fullTheoryMarks, fullPracticalMarks: s.fullPracticalMarks, creditHour: s.creditHour, isOptional: s.isOptional, displayOrder: s.displayOrder, gradeId: selectedGrade });
     setEditId(s.id);
     setShowForm(true);
   };
@@ -109,12 +109,8 @@ export default function SubjectsPage() {
               <input type="number" className="input" value={form.fullPracticalMarks} onChange={(e) => setForm({ ...form, fullPracticalMarks: parseInt(e.target.value) || 0 })} />
             </div>
             <div>
-              <label className="label">Pass Marks</label>
-              <input type="number" className="input" value={form.passMarks} onChange={(e) => setForm({ ...form, passMarks: parseInt(e.target.value) || 0 })} required />
-            </div>
-            <div>
               <label className="label">Credit Hour</label>
-              <input type="number" min={1} className="input" value={form.creditHour} onChange={(e) => setForm({ ...form, creditHour: parseInt(e.target.value) || 1 })} title="Used only for grades set to the credit-hour/grade-point report style" />
+              <input type="number" min={1} className="input" value={form.creditHour} onChange={(e) => setForm({ ...form, creditHour: parseInt(e.target.value) || 1 })} title="Weights this subject's grade point in the report card GPA" />
             </div>
             <div>
               <label className="label">Order</label>
@@ -155,7 +151,7 @@ export default function SubjectsPage() {
                   ["Theory", s.fullTheoryMarks],
                   ["Practical", s.fullPracticalMarks || "—"],
                   ["Full", s.fullTheoryMarks + s.fullPracticalMarks],
-                  ["Pass", s.passMarks],
+                  ["Credit hr", s.creditHour],
                 ].map(([label, value]) => (
                   <div key={label as string} className="bg-surface rounded-lg py-1.5">
                     <dt className="text-[10px] uppercase tracking-wide text-gray-400">{label}</dt>
@@ -163,8 +159,7 @@ export default function SubjectsPage() {
                   </div>
                 ))}
               </dl>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-500">Credit hr: {s.creditHour}</span>
+              <div className="flex items-center justify-end mt-2">
                 <div className="flex items-center gap-1">
                   <button onClick={() => startEdit(s)} className="p-1.5 hover:bg-blue-50 rounded-lg text-gray-400 hover:text-blue-600" aria-label="Edit"><Edit2 size={16} /></button>
                   <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600" aria-label="Delete"><Trash2 size={16} /></button>
@@ -182,7 +177,6 @@ export default function SubjectsPage() {
               <th className="text-center px-5 py-3">Theory</th>
               <th className="text-center px-5 py-3">Practical</th>
               <th className="text-center px-5 py-3">Full Marks</th>
-              <th className="text-center px-5 py-3">Pass Marks</th>
               <th className="text-center px-5 py-3">Credit Hr.</th>
               <th className="text-center px-5 py-3">Type</th>
               <th className="text-right px-5 py-3">Actions</th>
@@ -190,9 +184,9 @@ export default function SubjectsPage() {
           </thead>
           <tbody>
             {loadingGrades || loadingSubjects ? (
-              <tr><td colSpan={9} className="text-center py-8 text-gray-400 animate-pulse">Loading subjects...</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400 animate-pulse">Loading subjects...</td></tr>
             ) : subjects.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400">{selectedGrade ? "No subjects for this grade" : "Select a grade"}</td></tr>
             ) : subjects.map((s, i) => (
               <tr key={s.id} className="border-t border-gray-100 hover:bg-surface transition-colors">
                 <td className="px-5 py-3 text-gray-400">{i + 1}</td>
@@ -203,7 +197,6 @@ export default function SubjectsPage() {
                 <td className="px-5 py-3 text-center">{s.fullTheoryMarks}</td>
                 <td className="px-5 py-3 text-center">{s.fullPracticalMarks || "—"}</td>
                 <td className="px-5 py-3 text-center font-semibold">{s.fullTheoryMarks + s.fullPracticalMarks}</td>
-                <td className="px-5 py-3 text-center">{s.passMarks}</td>
                 <td className="px-5 py-3 text-center">{s.creditHour}</td>
                 <td className="px-5 py-3 text-center">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${s.isOptional ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>

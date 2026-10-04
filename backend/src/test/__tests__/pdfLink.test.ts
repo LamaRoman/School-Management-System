@@ -49,7 +49,7 @@ beforeAll(async () => {
   });
   examId = exam.id;
   const subject = await prisma.subject.create({
-    data: { name: "Maths", fullTheoryMarks: 100, fullPracticalMarks: 0, passMarks: 35, creditHour: 4, displayOrder: 0, gradeId: ctx.grade.id },
+    data: { name: "Maths", fullTheoryMarks: 100, fullPracticalMarks: 0, creditHour: 4, displayOrder: 0, gradeId: ctx.grade.id },
   });
   await prisma.mark.create({
     data: { studentId: ctx.student.id, subjectId: subject.id, examTypeId: examId, academicYearId: ctx.year.id, theoryMarks: 80, practicalMarks: 0 },

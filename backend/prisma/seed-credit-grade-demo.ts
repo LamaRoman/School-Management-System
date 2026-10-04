@@ -1,14 +1,10 @@
 /**
  * seed-credit-grade-demo.ts — standalone demo data for the credit-hour /
- * grade-point report card (ReportCardSettings.gradingStyle = CREDIT_GRADE_BASED).
+ * grade-point report card, with theory + practical subjects.
  *
  * Deliberately separate from seed-all.ts / seed-dev.ts — doesn't touch or
  * depend on either. Adopts the existing school if one is present (from a
  * prior seed-all.ts run), otherwise creates a "Demo School".
- *
- * gradingStyle is a school-wide setting (not per grade), so this switches the
- * WHOLE adopted school to the credit-grade design — every grade's report card
- * renders through that template after this runs, not just Grade "X".
  *
  * Creates, all under a freshly-activated "current" BS academic year:
  *   - Grade "X"
@@ -105,16 +101,7 @@ async function main() {
       isFinal: false,
       displayOrder: 1,
       paperSize: "A4",
-      showRank: true,
     },
-  });
-
-  // gradingStyle is school-wide, not per grade — this switches every grade in
-  // the adopted school to the credit-grade report design, not just "X" below.
-  await prisma.reportCardSettings.upsert({
-    where: { schoolId: school.id },
-    update: { gradingStyle: "CREDIT_GRADE_BASED" },
-    create: { schoolId: school.id, gradingStyle: "CREDIT_GRADE_BASED" },
   });
 
   // ── Grade + Section ──
@@ -156,14 +143,13 @@ async function main() {
   for (let i = 0; i < subjectDefs.length; i++) {
     const s = await prisma.subject.upsert({
       where: { name_gradeId: { name: subjectDefs[i].name, gradeId: grade.id } },
-      update: { creditHour: 4, fullTheoryMarks: 75, fullPracticalMarks: 25, passMarks: 35 },
+      update: { creditHour: 4, fullTheoryMarks: 75, fullPracticalMarks: 25 },
       create: {
         name: subjectDefs[i].name,
         nameNp: subjectDefs[i].nameNp,
         gradeId: grade.id,
         fullTheoryMarks: 75,
         fullPracticalMarks: 25,
-        passMarks: 35,
         creditHour: 4,
         displayOrder: i + 1,
       },
@@ -289,7 +275,6 @@ async function main() {
   console.log(`School:        ${school.name}`);
   console.log(`Academic Year: ${academicYear.yearBS} B.S. (now active)`);
   console.log(`Grade/Section: X / A`);
-  console.log(`Report design: CREDIT_GRADE_BASED (school-wide)`);
   console.log(`Exam:          ${examType.name}\n`);
   console.log("Logins (all password: demo1234):");
   console.log(`  Teacher: sunita.gurung@demo.local`);

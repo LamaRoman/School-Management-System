@@ -3,8 +3,8 @@
  * Mirrors backend/src/services/grading.service.ts — keep both in sync.
  *
  * There is no NG / Non-Graded band: every interval down to 0% carries a grade
- * point, the lowest being E at 0.8. "Fail" therefore cannot be derived from an
- * NG grade and is expressed through isPassingGrade below.
+ * point, the lowest being E at 0.8. There is no pass / fail and no rank; an
+ * absent paper shows "Ab", not E.
  */
 export const GRADING_SCALE = [
   { grade: "A+", range: "90% to 100%", description: "Outstanding", gpa: "4.0" },
@@ -17,27 +17,3 @@ export const GRADING_SCALE = [
   { grade: "D", range: "20% to Below 30%", description: "Insufficient", gpa: "1.2" },
   { grade: "E", range: "0 to Below 20%", description: "Very Insufficient", gpa: "0.8" },
 ];
-
-/**
- * Grades that count as a fail — the two bands the scale itself calls
- * Insufficient and Very Insufficient. D+ ("Partially Acceptable") and above
- * pass. Must match FAILING_GRADES in the backend's grading.service.
- */
-export const FAILING_GRADES = ["D", "E"];
-
-export function isPassingGrade(grade: string): boolean {
-  return !FAILING_GRADES.includes(grade);
-}
-
-/**
- * Overall result: Pass only if the pass mark is reached in EVERY subject (and the overall
- * grade is not D/E). Absent / not-entered subjects are skipped — the page shows "Incomplete"
- * for those first. Must match overallResult in the backend's grading.service.
- */
-export function overallResult(
-  overallGrade: string,
-  subjects: { hasPassed?: boolean; isAbsent?: boolean; notEntered?: boolean }[],
-): "Pass" | "Fail" {
-  const failedSubject = subjects.some((s) => !s.isAbsent && !s.notEntered && s.hasPassed === false);
-  return failedSubject || !isPassingGrade(overallGrade) ? "Fail" : "Pass";
-}

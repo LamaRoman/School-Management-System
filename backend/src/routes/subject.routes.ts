@@ -17,10 +17,7 @@ const subjectSchema = z.object({
   // theory grade for it.
   fullTheoryMarks: z.number().int().min(1),
   fullPracticalMarks: z.number().int().min(0).default(0),
-  passMarks: z.number().int().min(0),
-  // Only used for report rendering when the school's report card design
-  // (ReportCardSettings.gradingStyle) is CREDIT_GRADE_BASED. Harmless default
-  // for everyone else.
+  // Weights the subject's grade point in the report card's GPA.
   creditHour: z.number().int().min(1).default(4),
   isOptional: z.boolean().default(false),
   displayOrder: z.number().int().default(0),
@@ -63,7 +60,6 @@ router.post("/", authenticate, authorize("ADMIN"), async (req, res) => {
     nameNp: data.nameNp,
     fullTheoryMarks: data.fullTheoryMarks,
     fullPracticalMarks: data.fullPracticalMarks,
-    passMarks: data.passMarks,
     creditHour: data.creditHour,
     isOptional: data.isOptional,
     displayOrder: data.displayOrder,
@@ -91,7 +87,6 @@ router.post("/bulk", authenticate, authorize("ADMIN"), async (req, res) => {
           nameNp: sub.nameNp,
           fullTheoryMarks: sub.fullTheoryMarks,
           fullPracticalMarks: sub.fullPracticalMarks,
-          passMarks: sub.passMarks,
           creditHour: sub.creditHour,
           isOptional: sub.isOptional,
           displayOrder: sub.displayOrder || i + 1,
