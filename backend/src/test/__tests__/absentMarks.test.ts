@@ -139,7 +139,11 @@ describe("absent marks in the term report", () => {
     // The whole point: 30 marks beats not turning up.
     expect(ritaReport.overallPercentage).toBeGreaterThan(sitaReport.overallPercentage);
     expect(ritaReport.overallGpa).toBeGreaterThan(sitaReport.overallGpa);
-    expect(ritaReport.rank).toBeLessThan(sitaReport.rank);
+    // Since 2026-10-04 only students who passed are ranked: Rita is under the pass mark
+    // in B (Fail) and Sita was absent (Incomplete), so neither gets a position — the
+    // absence can no longer lift Sita above anyone.
+    expect(ritaReport.rank).toBeNull();
+    expect(sitaReport.rank).toBeNull();
   });
 
   it("still flags the absent subject so the card prints Ab", async () => {
@@ -158,17 +162,16 @@ describe("absent marks in the term report", () => {
     expect(present.percentage).toBe(80);
   });
 
-  it("agrees with the rank it prints beside the percentage", async () => {
-    const ritaReport = await termReport(rita.id);
-    const sitaReport = await termReport(sita.id);
-
-    // Rank is computed from a separate query that has always scored absences
-    // as 0. Now that the printed percentage does too, the ordering the ranks
-    // imply must match the ordering the percentages imply.
-    const byRank = [ritaReport, sitaReport].sort((a, b) => a.rank - b.rank);
-    const byPct = [ritaReport, sitaReport].sort((a, b) => b.overallPercentage - a.overallPercentage);
-    expect(byRank.map((r) => r.rank)).toEqual([1, 2]);
-    expect(byRank[0].overallPercentage).toBe(byPct[0].overallPercentage);
+  it("ranks a student once the absence is replaced by a passing mark", async () => {
+    // Sita sits B after all and passes it: she is now Pass and ranked; Rita (Fail) still is not.
+    const m = await prisma.mark.findFirstOrThrow({ where: { studentId: sita.id, subjectId: subjectB.id } });
+    await prisma.mark.update({ where: { id: m.id }, data: { isAbsent: false, theoryMarks: 50 } });
+    try {
+      expect((await termReport(sita.id)).rank).toBe(1);
+      expect((await termReport(rita.id)).rank).toBeNull();
+    } finally {
+      await prisma.mark.update({ where: { id: m.id }, data: { isAbsent: true, theoryMarks: null } });
+    }
   });
 });
 
@@ -188,7 +191,9 @@ describe("absent marks in the class grade sheet", () => {
     // Same figures the report card gives — the two are printed together.
     expect(sitaRow.percentage).toBe(SITA_PCT);
     expect(ritaRow.percentage).toBe(RITA_PCT);
-    expect(ritaRow.rank).toBeLessThan(sitaRow.rank);
+    // Neither passed (Rita: Fail in B, Sita: absent), so neither is ranked.
+    expect(ritaRow.rank).toBeNull();
+    expect(sitaRow.rank).toBeNull();
 
     // A parent can divide the Total column by hand; it has to land on the
     // Percentage column beside it.

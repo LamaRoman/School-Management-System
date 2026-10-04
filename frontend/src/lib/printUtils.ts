@@ -249,7 +249,7 @@ interface GradeSheetSubjectResult { subjectId: string; obtained?: number; weight
 interface GradeSheetRow {
   studentId: string; studentName: string; rollNo: number | null;
   subjects: GradeSheetSubjectResult[];
-  percentage: number; gpa: number | null; grade: string; rank: number;
+  percentage: number; gpa: number | null; grade: string; rank: number | null;
 }
 
 export async function printGradeSheet(data: {
@@ -271,7 +271,7 @@ export async function printGradeSheet(data: {
     }).join("");
 
     return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9f9f9'}">
-      ${data.showRank ? `<td class="text-center bold">${row.rank}</td>` : ""}
+      ${data.showRank ? `<td class="text-center bold">${row.rank ?? "—"}</td>` : ""}
       <td class="text-center muted">${row.rollNo || "—"}</td>
       <td class="bold">${row.studentName}</td>
       ${subjectCells}

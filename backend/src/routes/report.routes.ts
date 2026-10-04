@@ -10,8 +10,9 @@ import {
   calculateWeightedPercentage,
   calculateOverallGpa,
   hasPassed,
+  totalMarksPercentage,
 } from "../services/grading.service";
-import { computeSectionRanks } from "../services/rank.service";
+import { computeSectionRanks, computeFinalSectionRanks } from "../services/rank.service";
 import {
   isSectionPublished,
   pendingTermsForAnnual,
@@ -29,92 +30,20 @@ async function calculateTermRank(
   sectionId: string,
   examTypeId: string,
   academicYearId: string
-): Promise<{ rank: number; totalStudents: number }> {
+): Promise<{ rank: number | null; totalStudents: number }> {
   const ranking = await computeSectionRanks(sectionId, examTypeId, academicYearId);
-  const entry = ranking.ranks.get(studentId);
-  // rank 0 means "not ranked" to this route's callers — preserved for a student with
-  // no marks at all, who would otherwise be shown as last in the class.
-  if (!entry?.hasAnyMarks) {
-    return { rank: 0, totalStudents: ranking.totalStudents };
-  }
-  return { rank: entry.rank, totalStudents: ranking.totalStudents };
+  // null = not ranked: only students who passed get a position (see rank.service).
+  return { rank: ranking.ranks.get(studentId)?.rank ?? null, totalStudents: ranking.totalStudents };
 }
 
-// Helper: calculate rank for final weighted result
+// Helper: rank for the final weighted result — the shared annual ranking (rank.service).
 async function calculateFinalRank(
   studentId: string,
   sectionId: string,
-  gradeId: string,
   academicYearId: string
-): Promise<{ rank: number; totalStudents: number }> {
-  const sectionStudents = await prisma.student.findMany({
-    where: { sectionId, isActive: true },
-    select: { id: true },
-  });
-
-  const policies = await prisma.gradingPolicy.findMany({
-    where: { gradeId },
-    include: { examType: true },
-  });
-
-  const subjects = await prisma.subject.findMany({
-    where: { gradeId },
-  });
-
-  const allMarks = await prisma.mark.findMany({
-    where: {
-      academicYearId,
-      studentId: { in: sectionStudents.map((s) => s.id) },
-    },
-    include: { subject: true },
-  });
-
-  const studentPercentages: { studentId: string; avgPct: number }[] = [];
-
-  for (const stu of sectionStudents) {
-    const stuMarks = allMarks.filter((m) => m.studentId === stu.id);
-    if (stuMarks.length === 0) continue;
-
-    let totalWeightedPct = 0;
-    let subjectCount = 0;
-
-    for (const subject of subjects) {
-      const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
-      const weightedPct = calculateWeightedPercentage(
-        policies.map((policy) => {
-          const mark = stuMarks.find(
-            (m) => m.subjectId === subject.id && m.examTypeId === policy.examTypeId
-          );
-          const total = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
-          return { obtained: total, fullMarks, weightage: policy.weightagePercent };
-        })
-      );
-      totalWeightedPct += weightedPct;
-      subjectCount++;
-    }
-
-    if (subjectCount > 0) {
-      studentPercentages.push({ studentId: stu.id, avgPct: totalWeightedPct / subjectCount });
-    }
-  }
-
-  studentPercentages.sort((a, b) => b.avgPct - a.avgPct);
-
-  let rank = 0;
-  let prevPct = -1;
-  let actualPosition = 0;
-  for (const sp of studentPercentages) {
-    actualPosition++;
-    if (sp.avgPct !== prevPct) {
-      rank = actualPosition;
-      prevPct = sp.avgPct;
-    }
-    if (sp.studentId === studentId) {
-      return { rank, totalStudents: studentPercentages.length };
-    }
-  }
-
-  return { rank: 0, totalStudents: studentPercentages.length };
+): Promise<{ rank: number | null; totalStudents: number }> {
+  const ranking = await computeFinalSectionRanks(sectionId, academicYearId);
+  return { rank: ranking.ranks.get(studentId)?.rank ?? null, totalStudents: ranking.totalStudents };
 }
 
 // GET /api/reports/term/:studentId/:examTypeId
@@ -223,9 +152,9 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   // included, so a missing paper lowers the result instead of raising it and the
   // figures stay on the same basis as the rank below.
   const overallGpa = calculateOverallGpa(subjects.map((s) => s.gpa));
-  const overallPct = subjects.length > 0
-    ? parseFloat((subjects.reduce((a, s) => a + s.percentage, 0) / subjects.length).toFixed(1))
-    : 0;
+  // Total marks over total full marks (totalMarksPercentage) — the school's method, and
+  // the same figure the rank uses.
+  const overallPct = subjects.length > 0 ? parseFloat(totalMarksPercentage(subjects).toFixed(1)) : 0;
   const overallGrade = subjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
   const attendance = await prisma.attendance.findUnique({
@@ -233,7 +162,7 @@ router.get("/term/:studentId/:examTypeId", authenticate, async (req, res) => {
   });
 
   // Calculate rank if enabled for this exam type
-  let rankData: { rank: number; totalStudents: number } | undefined;
+  let rankData: { rank: number | null; totalStudents: number } | undefined;
   if (examType.showRank) {
     rankData = await calculateTermRank(studentId, student.sectionId, examTypeId, examType.academicYearId);
   }
@@ -383,7 +312,7 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
   // Every subject counts, absent included — same reasoning as the term report.
   const overallGpa = calculateOverallGpa(finalSubjects.map((s) => s.gpa));
   const overallPct = finalSubjects.length > 0
-    ? parseFloat((finalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1))
+    ? parseFloat(totalMarksPercentage(finalSubjects.map((s: any) => ({ percentage: s.weightedPercentage, fullMarks: s.fullMarks }))).toFixed(1))
     : 0;
   const overallGrade = finalSubjects.length > 0 ? getGradeFromPercentage(overallPct) : { grade: "", gpa: null, description: "" };
 
@@ -401,9 +330,9 @@ router.get("/final/:studentId/:academicYearId", authenticate, async (req, res) =
   });
   const showRank = finalExamType?.showRank ?? true;
 
-  let rankData: { rank: number; totalStudents: number } | undefined;
+  let rankData: { rank: number | null; totalStudents: number } | undefined;
   if (showRank) {
-    rankData = await calculateFinalRank(studentId, student.sectionId, gradeId, academicYearId);
+    rankData = await calculateFinalRank(studentId, student.sectionId, academicYearId);
   }
 
   res.json({

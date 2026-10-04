@@ -16,6 +16,7 @@ import {
   calculateOverallGpa,
   calculateOverallGpaWeighted,
   hasPassed,
+  totalMarksPercentage,
 } from "../services/grading.service";
 import {
   generatePdf,
@@ -27,7 +28,7 @@ import type { ReportCardColumnSettings } from "../services/pdf.service";
 import {
   PDF_LINK_TTL_SECONDS, parsePdfPath, signPdfLink, verifyPdfLink, mintShortAccessToken,
 } from "../services/pdfLink.service";
-import { computeSectionRanks } from "../services/rank.service";
+import { computeSectionRanks, computeFinalSectionRanks } from "../services/rank.service";
 import type { SectionRanking } from "../services/rank.service";
 
 const router = Router();
@@ -427,9 +428,7 @@ async function buildTermReportData(
     // raises the average instead of lowering it, and would put this figure on a
     // different basis from the rank below, which scores both as 0.
     overallGpa = calculateOverallGpa(marksSubjects.map((s) => s.gpa));
-    overallPct = marksSubjects.length > 0
-      ? parseFloat((marksSubjects.reduce((a, s) => a + s.percentage, 0) / marksSubjects.length).toFixed(1))
-      : 0;
+    overallPct = marksSubjects.length > 0 ? parseFloat(totalMarksPercentage(marksSubjects).toFixed(1)) : 0;
     overallGradeLabel = marksSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
 
@@ -446,12 +445,10 @@ async function buildTermReportData(
     const ranking =
       batch?.ranking ??
       (await computeSectionRanks(student.sectionId, examTypeId, examType.academicYearId));
+    // Only students who passed are ranked; Fail / Incomplete (which includes a student
+    // with no marks at all) print no rank line.
     const entry = ranking.ranks.get(studentId);
-    // A student with no marks at all sorts last on 0%. That is right for the class
-    // mark sheet, but printing "last of 40" on the report card of someone who
-    // transferred in mid-year and has nothing to be ranked on is not — they get no
-    // rank, exactly as before.
-    if (entry?.hasAnyMarks) {
+    if (entry?.rank != null) {
       rank = entry.rank;
       totalStudents = ranking.totalStudents;
     }
@@ -632,7 +629,7 @@ async function buildFinalReportData(
     // Every subject counts, absent included — same reasoning as the term report.
     overallGpa = calculateOverallGpa(finalSubjects.map((s: any) => s.gpa));
     overallPct = finalSubjects.length > 0
-      ? parseFloat((finalSubjects.reduce((a: number, s: any) => a + s.weightedPercentage, 0) / finalSubjects.length).toFixed(1))
+      ? parseFloat(totalMarksPercentage(finalSubjects.map((s: any) => ({ percentage: s.weightedPercentage, fullMarks: s.fullMarks }))).toFixed(1))
       : 0;
     overallGradeLabel = finalSubjects.length > 0 ? getGradeFromPercentage(overallPct).grade : "";
   }
@@ -650,43 +647,15 @@ async function buildFinalReportData(
   });
   const showRank = finalExamType?.showRank ?? true;
 
-  // Rank
+  // Rank — the shared annual ranking (rank.service); only students who passed are ranked.
   let rank: number | undefined;
   let totalStudents: number | undefined;
   if (showRank) {
-    const sectionStudents = await prisma.student.findMany({
-      where: { sectionId: student.sectionId, isActive: true },
-      select: { id: true },
-    });
-    const allStuMarks = await prisma.mark.findMany({
-      where: { academicYearId, studentId: { in: sectionStudents.map((s) => s.id) } },
-      include: { subject: true },
-    });
-    const studentPercentages: { studentId: string; avgPct: number }[] = [];
-    for (const stu of sectionStudents) {
-      const stuMarks = allStuMarks.filter((m) => m.studentId === stu.id);
-      if (stuMarks.length === 0) continue;
-      let totalWeightedPct = 0, subjectCount = 0;
-      for (const subject of subjects) {
-        const fm = subject.fullTheoryMarks + subject.fullPracticalMarks;
-        const wp = calculateWeightedPercentage(
-          policies.map((policy) => {
-            const mark = stuMarks.find((m) => m.subjectId === subject.id && m.examTypeId === policy.examTypeId);
-            const total = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
-            return { obtained: total, fullMarks: fm, weightage: policy.weightagePercent };
-          })
-        );
-        totalWeightedPct += wp;
-        subjectCount++;
-      }
-      if (subjectCount > 0) studentPercentages.push({ studentId: stu.id, avgPct: totalWeightedPct / subjectCount });
-    }
-    studentPercentages.sort((a, b) => b.avgPct - a.avgPct);
-    let r = 0, prevPct = -1, pos = 0;
-    for (const sp of studentPercentages) {
-      pos++;
-      if (sp.avgPct !== prevPct) { r = pos; prevPct = sp.avgPct; }
-      if (sp.studentId === studentId) { rank = r; totalStudents = studentPercentages.length; break; }
+    const ranking = await computeFinalSectionRanks(student.sectionId, academicYearId);
+    const entry = ranking.ranks.get(studentId);
+    if (entry?.rank != null) {
+      rank = entry.rank;
+      totalStudents = ranking.totalStudents;
     }
   }
 

@@ -1,5 +1,14 @@
 import prisma from "../utils/prisma";
-import { calculatePercentage } from "./grading.service";
+import {
+  calculatePercentage,
+  calculateWeightedPercentage,
+  getGradeFromPercentage,
+  hasPassed,
+  rankPassedOnly,
+  studentResult,
+  totalMarksPercentage,
+  type StudentResult,
+} from "./grading.service";
 
 /**
  * Single source of truth for a section's exam ranking.
@@ -11,9 +20,15 @@ import { calculatePercentage } from "./grading.service";
  *
  * ## The rule
  *
- * A student's score is their average percentage **over every subject in their grade**,
- * with a missing mark row scoring 0 — the same basis the grade sheet's Total and
- * Percentage columns have always used.
+ * **Only students who passed are ranked** (decided 2026-10-04). A student who is below the
+ * pass mark in any subject, or has an absent / not-yet-entered paper, gets no rank (null) —
+ * see `studentResult` / `rankPassedOnly` in grading.service. Among those who passed, the
+ * score is the **total-marks percentage** over every subject in their grade (total obtained
+ * over total full marks, `totalMarksPercentage`), with a missing mark row scoring 0 — the
+ * same figure printed on the report card and the grade sheet.
+ *
+ * (Until 2026-10-04 everyone was ranked, failed or not, on the plain average of subject
+ * percentages; the history below explains why the divisor is every subject.)
  *
  * The report card used to divide by *the number of mark rows that student happened to
  * have*, which is what **R6** describes: a student missing one subject was averaged
@@ -48,11 +63,13 @@ import { calculatePercentage } from "./grading.service";
  * transfer they came last (see `hasAnyMarks`).
  */
 export interface SectionRank {
-  rank: number;
+  /** Position among the students who passed; null for Fail / Incomplete. */
+  rank: number | null;
   /** False when the student has no mark row at all for this exam. */
   hasAnyMarks: boolean;
-  /** The student's average percentage over every subject in the grade. */
-  avgPct: number;
+  /** Total-marks percentage, rounded to 1 decimal as printed. */
+  pct: number;
+  result: StudentResult;
 }
 
 export interface SectionRanking {
@@ -61,8 +78,34 @@ export interface SectionRanking {
   totalStudents: number;
 }
 
+async function gradingStyleOfSection(sectionId: string) {
+  const section = await prisma.section.findUniqueOrThrow({
+    where: { id: sectionId },
+    select: { gradeId: true, grade: { select: { academicYear: { select: { schoolId: true } } } } },
+  });
+  const settings = await prisma.reportCardSettings.findUnique({
+    where: { schoolId: section.grade.academicYear.schoolId },
+    select: { gradingStyle: true },
+  });
+  return { gradeId: section.gradeId, style: settings?.gradingStyle ?? ("MARKS_BASED" as const) };
+}
+
+function finish(
+  scored: { studentId: string; pct: number; result: StudentResult; hasAnyMarks: boolean }[],
+  totalStudents: number,
+): SectionRanking {
+  const positions = rankPassedOnly(scored);
+  const ranks = new Map<string, SectionRank>();
+  for (const s of scored) {
+    ranks.set(s.studentId, { rank: positions.get(s.studentId) ?? null, hasAnyMarks: s.hasAnyMarks, pct: s.pct, result: s.result });
+  }
+  return { ranks, totalStudents };
+}
+
+const round1 = (n: number) => parseFloat(n.toFixed(1));
+
 /**
- * Compute the whole section's ranking in one pass.
+ * Compute the whole section's ranking for one exam in one pass.
  *
  * Deliberately returns the entire section rather than one student's rank: bulk report
  * card generation used to recompute the identical ranking once per student, loading
@@ -74,15 +117,12 @@ export async function computeSectionRanks(
   examTypeId: string,
   academicYearId: string
 ): Promise<SectionRanking> {
-  const [students, section] = await Promise.all([
+  const [students, { gradeId, style }] = await Promise.all([
     prisma.student.findMany({
       where: { sectionId, isActive: true },
       select: { id: true },
     }),
-    prisma.section.findUniqueOrThrow({
-      where: { id: sectionId },
-      select: { gradeId: true },
-    }),
+    gradingStyleOfSection(sectionId),
   ]);
 
   if (students.length === 0) {
@@ -91,8 +131,8 @@ export async function computeSectionRanks(
 
   const [subjects, allMarks, optionalEnrollments] = await Promise.all([
     prisma.subject.findMany({
-      where: { gradeId: section.gradeId },
-      select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true, isOptional: true },
+      where: { gradeId },
+      select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true, isOptional: true },
     }),
     prisma.mark.findMany({
       where: {
@@ -105,6 +145,7 @@ export async function computeSectionRanks(
         subjectId: true,
         theoryMarks: true,
         practicalMarks: true,
+        isAbsent: true,
       },
     }),
     prisma.studentOptionalSubject.findMany({
@@ -138,39 +179,100 @@ export async function computeSectionRanks(
   const scored = students.map((student) => {
     const studentMarks = marksByStudent.get(student.id);
     const takesOptional = optionalByStudent.get(student.id);
-    let pctSum = 0;
-    let counted = 0;
-    for (const subject of subjects) {
+    const counted = subjects
       // An optional subject only counts for the students actually enrolled in it.
       // Everyone takes the compulsory ones, so those always count — a missing mark
       // there means "not entered yet" and scores 0, which is the R7 decision.
-      if (subject.isOptional && !takesOptional?.has(subject.id)) continue;
-      const mark = studentMarks?.get(subject.id);
-      const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
-      pctSum += calculatePercentage(obtained, subject.fullTheoryMarks + subject.fullPracticalMarks);
-      counted++;
-    }
+      .filter((subject) => !subject.isOptional || takesOptional?.has(subject.id))
+      .map((subject) => {
+        const mark = studentMarks?.get(subject.id);
+        const obtained = mark ? (mark.theoryMarks || 0) + (mark.practicalMarks || 0) : 0;
+        const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
+        const exact = calculatePercentage(obtained, fullMarks);
+        return {
+          // Rounded per subject exactly as the report card and grade sheet print it, so the
+          // overall figure here is the printed one to the decimal (no rank split between two
+          // students whose printed percentages are equal).
+          percentage: round1(exact),
+          fullMarks,
+          grade: getGradeFromPercentage(exact).grade,
+          hasPassed: hasPassed(obtained, subject.passMarks),
+          isAbsent: mark?.isAbsent ?? false,
+          notEntered: !mark,
+        };
+      });
+    const pct = round1(totalMarksPercentage(counted));
     return {
       studentId: student.id,
-      avgPct: counted > 0 ? pctSum / counted : 0,
+      pct,
+      result: studentResult(getGradeFromPercentage(pct).grade, counted, style),
       hasAnyMarks: (studentMarks?.size ?? 0) > 0,
     };
   });
 
-  scored.sort((a, b) => b.avgPct - a.avgPct);
+  return finish(scored, students.length);
+}
 
-  const ranks = new Map<string, SectionRank>();
-  let rank = 0;
-  let prevPct = Number.NaN;
-  let position = 0;
-  for (const s of scored) {
-    position++;
-    if (s.avgPct !== prevPct) {
-      rank = position;
-      prevPct = s.avgPct;
-    }
-    ranks.set(s.studentId, { rank, hasAnyMarks: s.hasAnyMarks, avgPct: s.avgPct });
-  }
+/**
+ * The annual (final, weighted) ranking for a section — one implementation for the annual
+ * report card, its PDF and the annual grade sheet, which each used to carry their own copy.
+ * Each subject's percentage is the weighted blend of its terms (GradingPolicy); a subject
+ * is passed if that percentage reaches the pass mark's share of full marks, and counts as
+ * absent only when absent in every term — the same rules the annual report builders use.
+ */
+export async function computeFinalSectionRanks(
+  sectionId: string,
+  academicYearId: string
+): Promise<SectionRanking> {
+  const [students, { gradeId, style }] = await Promise.all([
+    prisma.student.findMany({ where: { sectionId, isActive: true }, select: { id: true } }),
+    gradingStyleOfSection(sectionId),
+  ]);
+  if (students.length === 0) return { ranks: new Map(), totalStudents: 0 };
 
-  return { ranks, totalStudents: students.length };
+  const [subjects, policies, allMarks] = await Promise.all([
+    prisma.subject.findMany({
+      where: { gradeId },
+      select: { id: true, fullTheoryMarks: true, fullPracticalMarks: true, passMarks: true },
+    }),
+    prisma.gradingPolicy.findMany({ where: { gradeId }, select: { examTypeId: true, weightagePercent: true } }),
+    prisma.mark.findMany({
+      where: { academicYearId, studentId: { in: students.map((s) => s.id) } },
+      select: { studentId: true, subjectId: true, examTypeId: true, theoryMarks: true, practicalMarks: true, isAbsent: true },
+    }),
+  ]);
+
+  const markOf = new Map<string, (typeof allMarks)[number]>();
+  for (const m of allMarks) markOf.set(`${m.studentId}|${m.subjectId}|${m.examTypeId}`, m);
+
+  const scored = students.map((student) => {
+    const counted = subjects.map((subject) => {
+      const fullMarks = subject.fullTheoryMarks + subject.fullPracticalMarks;
+      const termMarks = policies.map((p) => markOf.get(`${student.id}|${subject.id}|${p.examTypeId}`));
+      const exact = calculateWeightedPercentage(
+        policies.map((p, i) => ({
+          obtained: termMarks[i] ? (termMarks[i]!.theoryMarks || 0) + (termMarks[i]!.practicalMarks || 0) : 0,
+          fullMarks,
+          weightage: p.weightagePercent,
+        }))
+      );
+      return {
+        percentage: round1(exact),
+        fullMarks,
+        grade: getGradeFromPercentage(exact).grade,
+        hasPassed: fullMarks > 0 && exact >= (subject.passMarks / fullMarks) * 100,
+        // Same as the annual report builders: absent in every weighted term.
+        isAbsent: termMarks.length > 0 && termMarks.every((m) => m?.isAbsent === true),
+      };
+    });
+    const pct = round1(totalMarksPercentage(counted));
+    return {
+      studentId: student.id,
+      pct,
+      result: studentResult(getGradeFromPercentage(pct).grade, counted, style),
+      hasAnyMarks: allMarks.some((m) => m.studentId === student.id),
+    };
+  });
+
+  return finish(scored, students.length);
 }

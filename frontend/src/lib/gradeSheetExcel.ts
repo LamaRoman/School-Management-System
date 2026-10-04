@@ -39,7 +39,7 @@ export interface GradeSheetRow {
   percentage: number;
   gpa: number | null;
   grade: string;
-  rank: number;
+  rank: number | null;
 }
 export interface SheetData {
   gradeName: string;
@@ -138,7 +138,7 @@ export async function buildGradeSheetWorkbook(data: SheetData): Promise<ArrayBuf
   // ── Student rows ───────────────────────────────────────────────────────────
   for (const row of data.rows) {
     const values: (string | number | null)[] = [
-      ...(data.showRank ? [row.rank] : []),
+      ...(data.showRank ? [row.rank ?? "—"] : []),
       row.rollNo ?? "—",
       row.studentName,
       ...row.subjects.map((s) => subjectCell(s, data.isFinal)),

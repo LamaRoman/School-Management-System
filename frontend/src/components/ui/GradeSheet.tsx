@@ -128,7 +128,7 @@ export default function GradeSheet({ sectionId, academicYearId, examTypes }: Gra
                 {data.rows.map((row, i) => (
                   <tr key={row.studentId} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     {data.showRank && (
-                      <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.rank}</td>
+                      <td className="p-2 border border-gray-200 text-center font-bold text-primary">{row.rank ?? "—"}</td>
                     )}
                     <td className="p-2 border border-gray-200 text-center text-gray-400">{row.rollNo || "—"}</td>
                     <td className={`p-2 border border-gray-200 font-medium sticky left-0 z-10 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>{row.studentName}</td>
