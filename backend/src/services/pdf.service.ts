@@ -757,8 +757,11 @@ function buildCreditGradeReportCardHtml(
         midCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${s.practicalGrade === null ? "—" : (s.isAbsent ? "Ab" : esc(s.practicalGrade))}</td>`;
       }
       let resultCols = "";
+      // With no Theory/Practical columns (a school with no practical subjects) the "Ab"
+      // printed there is not on the card at all, so the absence would read as a plain E.
+      // Say it beside the grade it counts as.
       if (cols.showGrade) {
-        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.finalGrade)}</td>`;
+        resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};font-weight:700;color:${t.primary};">${esc(s.finalGrade)}${s.isAbsent && !hasPracticalCol ? " (Ab)" : ""}</td>`;
       }
       if (cols.showGpa) {
         resultCols += `<td style="text-align:center;padding:${pad.cellCenter};border:1px solid ${t.border};font-size:${fs.td};">${esc(s.gradePoint)}</td>`;

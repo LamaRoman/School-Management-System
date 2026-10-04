@@ -67,3 +67,17 @@ describe("an absent subject on the printed card", () => {
     expect(html).not.toContain("Not Graded");
   });
 });
+
+it("credit-grade with no practical columns still shows the absence, beside the E it counts as", () => {
+  const html = buildReportCardHtml({
+    ...card([]), gradingStyle: "CREDIT_GRADE_BASED", hasPracticalSubjects: false, overallGpa: 2,
+    subjects: [
+      { subjectName: "Nepali", creditHour: 4, theoryGrade: "E", practicalGrade: null, finalGrade: "E", gradePoint: 0.8, isAbsent: true, notEntered: false },
+      { subjectName: "English", creditHour: 4, theoryGrade: "B", practicalGrade: null, finalGrade: "B", gradePoint: 2.8, isAbsent: false, notEntered: false },
+    ],
+  }, "color");
+  const row = (name: string) => html.slice(html.indexOf(`>${name}<`), html.indexOf("</tr>", html.indexOf(`>${name}<`)));
+  expect(row("Nepali")).toContain(">E (Ab)<");
+  expect(row("Nepali")).toContain(">0.8<");
+  expect(row("English")).not.toContain("Ab");
+});
