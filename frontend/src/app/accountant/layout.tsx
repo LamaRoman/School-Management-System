@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   FileBarChart,
   KeyRound,
+  ArrowLeft,
 } from "lucide-react";
 
 const tabs = [
@@ -39,6 +40,9 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
   }, [user, loading, router]);
 
   const authorized = !loading && !!user && allowedRoles.includes(user.role);
+  // Admissions and fee collection live here (one home per task, W3), and the admin portal
+  // links in for them — so an admin needs a way back to their own portal.
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <div className="min-h-screen bg-surface">
@@ -48,6 +52,14 @@ export default function AccountantLayout({ children }: { children: React.ReactNo
             <Landmark size={22} />
             <span className="font-display font-bold">Zentara <span className="text-accent-light">शिक्षा</span></span>
             <span className="text-xs bg-amber-400/30 px-2 py-0.5 rounded">Accountant</span>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 text-xs sm:text-sm font-medium bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg whitespace-nowrap"
+              >
+                <ArrowLeft size={14} /> Admin Dashboard
+              </Link>
+            )}
           </div>
           <div className="flex items-center gap-1 sm:gap-4 min-w-0">
             <span className="hidden sm:inline text-sm text-white/70 truncate">{user?.email}</span>
