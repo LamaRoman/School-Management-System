@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma";
 import { authenticate, authorize, invalidateUserCache, getSchoolId } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
+import { afterAdminPasswordReset } from "../utils/passwordReset";
 import { mangleEmail, unmangleEmail } from "../utils/deactivatedEmail";
 
 const router = Router();
@@ -259,6 +260,7 @@ router.post("/:id/reset-password", authenticate, authorize("ADMIN"), async (req,
 
   if (teacher.user) {
     await prisma.user.update({ where: { id: teacher.user.id }, data: { password: hashedPassword } });
+    await afterAdminPasswordReset(teacher.user.id, teacher.user.email);
     res.json({ data: { message: `Password reset for ${teacher.name}` } });
     return;
   }
