@@ -30,7 +30,6 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     { href: "/teacher/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/teacher/marks", label: "Marks Entry", icon: ClipboardList },
     { href: "/teacher/homework", label: "Homework", icon: BookOpen },
-    { href: "/teacher/exam-routine", label: "Exam Routine", icon: CalendarDays },
     { href: "/teacher/notices", label: "Notices", icon: Megaphone },
     // ── Class teachers only ──
     // Report Card, Grade Sheet, and Observations are termly/occasional
@@ -40,6 +39,7 @@ export default function TeacherLayout({ children }: { children: React.ReactNode 
     // most frequent thing a class teacher does.
     ...(isClassTeacher
       ? [
+          { href: "/teacher/exam-routine", label: "Exam Routine", icon: CalendarDays },
           { href: "/teacher/students", label: "My Students", icon: Users },
           { href: "/teacher/attendance", label: "Attendance", icon: CalendarCheck },
           // Results gets a permanent tab despite being termly: it is the
