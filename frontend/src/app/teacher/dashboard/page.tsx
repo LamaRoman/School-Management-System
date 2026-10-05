@@ -3,7 +3,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import { formatGradeSection } from "@/lib/bsDate";
 import { useMyAssignments } from "@/hooks/useReferenceData";
-import { FileText, CalendarCheck, Table, ClipboardList, Users, BookOpen, Megaphone } from "lucide-react";
+import { FileText, CalendarCheck, Table, ClipboardList, Users, BookOpen, Megaphone, CalendarDays } from "lucide-react";
 
 interface Student {
   id: string;
@@ -78,6 +78,9 @@ export default function TeacherDashboardPage() {
             </Link>
             <Link href="/teacher/homework" className="btn-ghost text-xs border border-gray-200">
               <BookOpen size={14} /> Homework
+            </Link>
+            <Link href="/teacher/exam-routine" className="btn-ghost text-xs border border-gray-200">
+              <CalendarDays size={14} /> Exam Routine
             </Link>
             <Link href="/teacher/notices" className="btn-ghost text-xs border border-gray-200">
               <Megaphone size={14} /> Notices

@@ -4,7 +4,7 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { formatGradeSection } from "@/lib/bsDate";
 import { Printer } from "lucide-react";
-import { useMyAssignments, type ClassTeacherSection } from "@/hooks/useReferenceData";
+import { useMyAssignments } from "@/hooks/useReferenceData";
 
 interface ExamType { id: string; name: string }
 interface RoutineEntry {
@@ -17,29 +17,43 @@ interface RoutineEntry {
   grade: { name: string };
 }
 
+// The routine is set per grade, so a teacher picks a grade, not a section —
+// every grade they teach in, as class teacher or as a subject teacher.
+interface GradeOption { gradeId: string; gradeName: string; academicYearId: string; label: string }
+
 export default function TeacherExamRoutinePage() {
-  const { classTeacherSections: sections, loading } = useMyAssignments();
-  const [selectedSection, setSelectedSection] = useState<ClassTeacherSection | null>(null);
+  const { classTeacherSections, subjectAssignments, loading } = useMyAssignments();
+  const [selectedGrade, setSelectedGrade] = useState<GradeOption | null>(null);
   const [selectedExam, setSelectedExam] = useState("");
   const [entries, setEntries] = useState<RoutineEntry[]>([]);
 
   const { data: examTypesData } = useSWR<ExamType[]>(
-    selectedSection ? `/exam-types?academicYearId=${selectedSection.academicYearId}` : null
+    selectedGrade ? `/exam-types?academicYearId=${selectedGrade.academicYearId}` : null
   );
   const examTypes = examTypesData ?? [];
 
-  const handleSectionSelect = (section: ClassTeacherSection) => {
-    setSelectedSection(section);
+  const sectionsByGrade = new Map<string, { gradeName: string; academicYearId: string; sections: Set<string> }>();
+  for (const a of [...classTeacherSections, ...subjectAssignments]) {
+    const g = sectionsByGrade.get(a.gradeId) ?? { gradeName: a.gradeName, academicYearId: a.academicYearId, sections: new Set<string>() };
+    g.sections.add(formatGradeSection(a.gradeName, a.sectionName));
+    sectionsByGrade.set(a.gradeId, g);
+  }
+  const grades: GradeOption[] = [...sectionsByGrade].map(([gradeId, g]) => ({
+    gradeId, gradeName: g.gradeName, academicYearId: g.academicYearId, label: [...g.sections].join(", "),
+  }));
+
+  const handleGradeSelect = (grade: GradeOption) => {
+    setSelectedGrade(grade);
     setSelectedExam("");
     setEntries([]);
   };
 
   const handleExamSelect = async (examTypeId: string) => {
-    if (!selectedSection) return;
+    if (!selectedGrade) return;
     setSelectedExam(examTypeId);
     try {
       const data = await api.get<RoutineEntry[]>(
-        `/exam-routine?examTypeId=${examTypeId}&gradeId=${selectedSection.gradeId}`
+        `/exam-routine?examTypeId=${examTypeId}&gradeId=${selectedGrade.gradeId}`
       );
       setEntries(data);
     } catch { setEntries([]); }
@@ -49,8 +63,8 @@ export default function TeacherExamRoutinePage() {
 
   if (loading) return <div className="card p-8 text-center text-gray-400">Loading...</div>;
 
-  if (sections.length === 0) {
-    return <div className="max-w-6xl mx-auto p-4 sm:p-6"><div className="card p-8 text-center text-gray-400">You are not assigned as a class teacher for any section.</div></div>;
+  if (grades.length === 0) {
+    return <div className="max-w-6xl mx-auto p-4 sm:p-6"><div className="card p-8 text-center text-gray-400">You have no class or subject assignments yet.</div></div>;
   }
 
   return (
@@ -58,25 +72,25 @@ export default function TeacherExamRoutinePage() {
       <div className="flex items-center justify-between mb-6 no-print">
         <div>
           <h1 className="text-xl font-display font-bold text-primary">Exam Routine</h1>
-          <p className="text-sm text-gray-500 mt-1">View exam schedule for your class</p>
+          <p className="text-sm text-gray-500 mt-1">View exam schedule for the classes you teach</p>
         </div>
         {entries.length > 0 && (
-          <button onClick={() => import("@/lib/printUtils").then(({ printExamRoutine }) => printExamRoutine(entries, selectedExamName, selectedSection?.gradeName || ""))} className="btn-outline text-xs">
+          <button onClick={() => import("@/lib/printUtils").then(({ printExamRoutine }) => printExamRoutine(entries, selectedExamName, selectedGrade?.gradeName || ""))} className="btn-outline text-xs">
             <Printer size={14} /> Print
           </button>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 no-print">
-        {sections.map((sec) => (
-          <button key={sec.sectionId} onClick={() => handleSectionSelect(sec)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedSection?.sectionId === sec.sectionId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
-            {formatGradeSection(sec.gradeName, sec.sectionName)}
+        {grades.map((g) => (
+          <button key={g.gradeId} onClick={() => handleGradeSelect(g)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedGrade?.gradeId === g.gradeId ? "bg-primary text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-primary"}`}>
+            {g.label}
           </button>
         ))}
       </div>
 
-      {selectedSection && examTypes.length > 0 && (
+      {selectedGrade && examTypes.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6 no-print">
           {examTypes.map((et) => (
             <button key={et.id} onClick={() => handleExamSelect(et.id)}
